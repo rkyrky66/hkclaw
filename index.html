@@ -61,6 +61,11 @@
     .animate-pop { animation: pop .18s ease-out; }
     @keyframes flicker { 0%,100%{opacity:1} 45%{opacity:.75} 55%{opacity:.9} }
     .flicker { animation: flicker 3s infinite; }
+    @keyframes fadeup { 0%{opacity:0; transform:translateY(8px)} 100%{opacity:1; transform:translateY(0)} }
+    .view-enter { animation: fadeup .22s ease-out; }
+
+    /* 底部導航發光圖標 */
+    .nav-btn.active .nav-ico { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor); }
   </style>
 </head>
 
@@ -77,124 +82,220 @@
         </h1>
         <span class="rounded-full border border-neongreen/50 px-2 py-0.5 text-[10px] text-neongreen glow-green">● LIVE</span>
       </div>
-      <p class="mt-0.5 text-[11px] text-gold/70">香港夾娃娃 · 台主自報實時情報</p>
+      <p id="page-subtitle" class="mt-0.5 text-[11px] text-gold/70">香港夾娃娃 · 台主自報實時情報</p>
     </header>
 
-    <!-- ===== 篩選器 ===== -->
-    <section class="shrink-0 space-y-2 px-4 pb-2">
-      <!-- 品牌 -->
-      <div>
-        <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neonpink neon-pink">品牌</div>
-        <div id="filter-brand" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-      </div>
-      <!-- 特性 -->
-      <div>
-        <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neongreen neon-green">特性</div>
-        <div id="filter-feature" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-      </div>
-      <!-- 福利 -->
-      <div>
-        <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-gold">福利</div>
-        <div id="filter-welfare" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-      </div>
-    </section>
+    <!-- ============================================================
+         內容區：所有分頁都放在這裡，SPA 切換
+    ============================================================ -->
+    <div class="relative flex-1 overflow-hidden">
 
-    <div class="mx-4 h-px shrink-0 bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
-
-    <!-- ===== 中央列表 ===== -->
-    <main id="list" class="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-3 pb-24">
-      <div id="loading" class="pt-10 text-center text-sm text-gold/60">載入機台情報中…</div>
-    </main>
-
-    <!-- ===== 底部回報按鈕 ===== -->
-    <div class="pointer-events-none absolute inset-x-0 bottom-0 mx-auto max-w-md px-4 pb-[max(env(safe-area-inset-bottom),16px)]">
-      <button id="btn-open-form"
-        class="pointer-events-auto flex w-full items-center justify-center gap-2 rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green active:scale-95 transition">
-        📣 台主自報家門 / 回報新台
-      </button>
-    </div>
-  </div>
-
-  <!-- ===== 回報表單彈窗 ===== -->
-  <div id="modal" class="fixed inset-0 z-50 hidden items-end justify-center bg-black/70 backdrop-blur-sm">
-    <div class="animate-pop w-full max-w-md rounded-t-3xl border-t-2 border-neonpink bg-black glow-pink">
-      <div class="no-scrollbar max-h-[88dvh] overflow-y-auto p-5 pb-[max(env(safe-area-inset-bottom),20px)]">
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-lg font-black text-neonpink neon-pink">🕹️ 回報機台情報</h2>
-          <button id="btn-close-form" class="text-2xl text-gold/70 active:text-white">✕</button>
+      <!-- ===== 分頁 1：找店（品牌篩選 + 列表）===== -->
+      <section data-view="store" class="view flex h-full flex-col">
+        <!-- 篩選器 -->
+        <div class="shrink-0 space-y-2 px-4 pb-2">
+          <div>
+            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neonpink neon-pink">品牌</div>
+            <div id="filter-brand" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
+          </div>
+          <div>
+            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neongreen neon-green">特性</div>
+            <div id="filter-feature" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
+          </div>
+          <div>
+            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-gold">福利</div>
+            <div id="filter-welfare" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
+          </div>
         </div>
 
-        <form id="report-form" class="space-y-3.5">
-          <!-- 連鎖品牌 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">連鎖品牌</label>
-            <select name="brand" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
-              <option value="">請選擇…</option>
-              <option>爪玩店</option>
-              <option>SayHi Claw</option>
-              <option>其他</option>
-            </select>
-          </div>
-          <!-- 分店地址 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">分店地址</label>
-            <input name="branch" required placeholder="例：旺角西洋菜南街 XX 號" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-          </div>
-          <!-- 台號 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">台號</label>
-            <input name="machine_no" required placeholder="例：A12" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-          </div>
-          <!-- 機台特性 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">機台特性</label>
-            <select name="feature" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
-              <option value="">請選擇…</option>
-              <option>技術台</option>
-              <option>實爪台</option>
-              <option>山崩台</option>
-            </select>
-          </div>
-          <!-- 福利多選 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">福利（可多選）</label>
-            <div class="flex flex-wrap gap-2">
-              <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
-                <input type="checkbox" name="welfare" value="有保夾" class="accent-neongreen" /> 有保夾
-              </label>
-              <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
-                <input type="checkbox" name="welfare" value="有夾送" class="accent-neonpink" /> 有夾送
-              </label>
+        <div class="mx-4 h-px shrink-0 bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
+
+        <!-- 中央列表 -->
+        <main id="list" class="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-3 pb-28">
+          <div id="loading" class="pt-10 text-center text-sm text-gold/60">載入機台情報中…</div>
+        </main>
+      </section>
+
+      <!-- ===== 分頁 2：找台（機台種類尋寶牆）===== -->
+      <section data-view="find" class="view hidden h-full flex-col">
+        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
+          <h2 class="mb-1 text-lg font-black text-neongreen neon-green">🔎 機台種類尋寶牆</h2>
+          <p class="mb-4 text-[11px] text-gold/60">依玩法選擇你的獵物，賽博朋克發光機台等你來夾。</p>
+          <div id="treasure-wall" class="grid grid-cols-1 gap-3.5"></div>
+        </div>
+      </section>
+
+      <!-- ===== 分頁 3：推廣（台主消耗積分發布宣傳表單）===== -->
+      <section data-view="promote" class="view hidden h-full flex-col">
+        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
+          <div class="mb-3 flex items-center justify-between rounded-2xl border border-neonpink/40 bg-zinc-950 p-3.5 glow-pink">
+            <div>
+              <div class="text-sm font-black text-neonpink neon-pink">📣 發布宣傳</div>
+              <div class="text-[11px] text-gold/60">每次上報消耗 <b class="text-gold">10 積分</b></div>
+            </div>
+            <div class="text-right">
+              <div class="text-[10px] text-white/50">目前積分</div>
+              <div id="promote-points" class="text-lg font-black text-neongreen neon-green">120</div>
             </div>
           </div>
-          <!-- 今日主角 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">今日主角（公仔）</label>
-            <input name="today_prize" required placeholder="例：Chiikawa 大隻毛公仔" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-          </div>
-          <!-- 台主 IG -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">台主 IG</label>
-            <input name="ig" required placeholder="@your_ig" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-          </div>
 
-          <!-- 強制現拍 -->
-          <div>
-            <label class="mb-1 block text-xs font-bold text-gold">現場機台照（必須現拍，禁選相簿）</label>
-            <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
-            <button type="button" id="btn-camera" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 py-3 text-sm font-bold text-neongreen active:scale-95 transition">
-              📷 拍攝現場機台照
+          <form id="report-form" class="space-y-3.5">
+            <!-- 連鎖品牌 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">連鎖品牌</label>
+              <select name="brand" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
+                <option value="">請選擇…</option>
+                <option>爪玩店</option>
+                <option>SayHi Claw</option>
+                <option>其他</option>
+              </select>
+            </div>
+            <!-- 分店地址 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">分店地址</label>
+              <input name="branch" required placeholder="例：旺角西洋菜南街 XX 號" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
+            </div>
+            <!-- 台號 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">台號</label>
+              <input name="machine_no" required placeholder="例：A12" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
+            </div>
+            <!-- 機台特性 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">機台特性</label>
+              <select name="feature" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
+                <option value="">請選擇…</option>
+                <option>技術台</option>
+                <option>實爪台</option>
+                <option>山崩台</option>
+              </select>
+            </div>
+            <!-- 福利多選 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">福利（可多選）</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
+                  <input type="checkbox" name="welfare" value="有保夾" class="accent-neongreen" /> 有保夾
+                </label>
+                <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
+                  <input type="checkbox" name="welfare" value="有夾送" class="accent-neonpink" /> 有夾送
+                </label>
+              </div>
+            </div>
+            <!-- 今日主角 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">今日主角（公仔）</label>
+              <input name="today_prize" required placeholder="例：Chiikawa 大隻毛公仔" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
+            </div>
+            <!-- 台主 IG -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">台主 IG</label>
+              <input name="ig" required placeholder="@your_ig" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
+            </div>
+
+            <!-- 強制現拍 -->
+            <div>
+              <label class="mb-1 block text-xs font-bold text-gold">現場機台照（必須現拍，禁選相簿）</label>
+              <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
+              <button type="button" id="btn-camera" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 py-3 text-sm font-bold text-neongreen active:scale-95 transition">
+                📷 拍攝現場機台照
+              </button>
+              <div id="photo-status" class="mt-2 text-[11px] text-gold/60"></div>
+              <img id="photo-preview" class="mt-2 hidden w-full rounded-xl border border-gold/30" alt="現場機台照預覽" />
+            </div>
+
+            <button type="submit" id="btn-submit" class="mt-2 w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink active:scale-95 transition disabled:opacity-50">
+              🚀 消耗 10 積分提交情報
             </button>
-            <div id="photo-status" class="mt-2 text-[11px] text-gold/60"></div>
-            <img id="photo-preview" class="mt-2 hidden w-full rounded-xl border border-gold/30" alt="現場機台照預覽" />
+          </form>
+        </div>
+      </section>
+
+      <!-- ===== 分頁 4：任務（夾客現場獵人打卡驗證）===== -->
+      <section data-view="task" class="view hidden h-full flex-col">
+        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
+          <h2 class="mb-1 text-lg font-black text-neonpink neon-pink">🎯 獵人打卡任務</h2>
+          <p class="mb-4 text-[11px] text-gold/60">純夾客現場打卡驗證，完成任務賺取積分與稱號。</p>
+          <div id="task-list" class="space-y-3"></div>
+        </div>
+      </section>
+
+      <!-- ===== 分頁 5：我的（個人中心）===== -->
+      <section data-view="profile" class="view hidden h-full flex-col">
+        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
+          <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
+            <div class="flex items-center gap-4">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div>
+              <div>
+                <div id="profile-name" class="text-lg font-black text-white">夾娃娃獵人 #8823</div>
+                <div class="text-[11px] text-gold/70">賽博爪王 · Lv.7</div>
+              </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-2 gap-3">
+              <div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center">
+                <div class="text-[10px] text-white/50">持有積分</div>
+                <div id="profile-points" class="text-2xl font-black text-neongreen neon-green">120</div>
+              </div>
+              <div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center">
+                <div class="text-[10px] text-white/50">打卡次數</div>
+                <div class="text-2xl font-black text-neonpink neon-pink">37</div>
+              </div>
+            </div>
+
+            <button id="btn-redeem" class="mt-5 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold active:scale-95 transition">
+              ✨ 兌換免廣告（80 積分）
+            </button>
+            <p id="redeem-status" class="mt-2 text-center text-[11px] text-gold/60"></p>
           </div>
 
-          <button type="submit" id="btn-submit" class="mt-2 w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink active:scale-95 transition disabled:opacity-50">
-            🚀 提交情報
-          </button>
-        </form>
-      </div>
+          <div class="mt-4 space-y-2">
+            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
+              <span class="text-white/80">我的回報機台</span><span class="text-gold">3 台</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
+              <span class="text-white/80">收藏的機台</span><span class="text-gold">12 台</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
+              <span class="text-white/80">免廣告狀態</span><span id="adfree-badge" class="text-white/40">未開通</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </div>
+
+    <!-- ============================================================
+         底部功能導航欄（常駐 / 半透明霓虹黑金）
+    ============================================================ -->
+    <nav id="bottom-nav"
+      class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
+      <!-- 找店 -->
+      <button data-nav="store" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
+        <span class="nav-ico text-xl">🏪</span>
+        <span class="text-[10px] font-bold">找店</span>
+      </button>
+      <!-- 找台 -->
+      <button data-nav="find" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+        <span class="nav-ico text-xl">🎰</span>
+        <span class="text-[10px] font-bold">找台</span>
+      </button>
+      <!-- 推廣（中央凸起）-->
+      <button data-nav="promote" class="nav-btn relative flex flex-col items-center gap-0.5 text-white/45">
+        <span class="nav-ico -mt-6 flex h-12 w-12 items-center justify-center rounded-full border-2 border-neonpink bg-black text-2xl glow-pink">📣</span>
+        <span class="-mt-1 text-[10px] font-bold">推廣</span>
+      </button>
+      <!-- 任務 -->
+      <button data-nav="task" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+        <span class="nav-ico text-xl">🎯</span>
+        <span class="text-[10px] font-bold">任務</span>
+      </button>
+      <!-- 我的 -->
+      <button data-nav="profile" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+        <span class="nav-ico text-xl">👤</span>
+        <span class="text-[10px] font-bold">我的</span>
+      </button>
+    </nav>
   </div>
 
   <!-- ===== Toast ===== -->
@@ -248,6 +349,43 @@
     const swUrl = URL.createObjectURL(new Blob([swCode], { type: "text/javascript" }));
     navigator.serviceWorker.register(swUrl).catch(() => {});
   }
+
+  /* ============================================================
+     SPA 分頁切換（純原生 JS）
+  ============================================================ */
+  const SUBTITLES = {
+    store:   "香港夾娃娃 · 台主自報實時情報",
+    find:    "機台種類尋寶牆 · 選擇你的獵物",
+    promote: "台主消耗積分 · 發布機台宣傳",
+    task:    "夾客現場獵人 · 打卡驗證任務",
+    profile: "個人中心 · 積分與獎勵",
+  };
+  const NAV_COLOR = {
+    store: "text-neongreen", find: "text-neongreen",
+    promote: "text-neonpink", task: "text-neonpink", profile: "text-gold",
+  };
+
+  function showView(name) {
+    // 切換內容區
+    document.querySelectorAll(".view").forEach(v => {
+      const on = v.getAttribute("data-view") === name;
+      v.classList.toggle("hidden", !on);
+      v.classList.toggle("flex", on);
+      if (on) { v.classList.remove("view-enter"); void v.offsetWidth; v.classList.add("view-enter"); }
+    });
+    // 切換導航高亮
+    document.querySelectorAll(".nav-btn").forEach(b => {
+      const on = b.getAttribute("data-nav") === name;
+      b.classList.toggle("active", on);
+      b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
+      b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
+    });
+    // 更新副標題
+    document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
+  }
+  document.querySelectorAll(".nav-btn").forEach(b => {
+    b.onclick = () => showView(b.getAttribute("data-nav"));
+  });
 
   /* ============================================================
      篩選器狀態
@@ -356,6 +494,103 @@
   }
 
   /* ============================================================
+     找台：機台種類尋寶牆
+  ============================================================ */
+  const TREASURE = [
+    { type:"技術台", color:"green", ico:"🎯", desc:"靠角度與力度的技巧型機台，穩定練習即可攻略。", count:24 },
+    { type:"實爪台", color:"pink",  ico:"🦾", desc:"爪力真實不放水，一夾即中的硬派快感。", count:18 },
+    { type:"技術台", color:"green", ico:"🕹️", desc:"進階平推 / 翻爪玩法，高手向的挑戰機台。", count:11 },
+  ];
+  function buildTreasureWall() {
+    const wrap = document.getElementById("treasure-wall");
+    wrap.innerHTML = TREASURE.map(t => {
+      const glow = t.color === "green" ? "glow-green border-neongreen/50" : "glow-pink border-neonpink/50";
+      const txt  = t.color === "green" ? "text-neongreen neon-green" : "text-neonpink neon-pink";
+      return `
+      <button onclick="jumpFilterFeature('${t.type}')"
+        class="animate-pop w-full rounded-2xl border bg-zinc-950 p-4 text-left transition active:scale-95 ${glow}">
+        <div class="flex items-center gap-3">
+          <div class="flex h-14 w-14 items-center justify-center rounded-xl border ${glow} text-3xl">${t.ico}</div>
+          <div class="flex-1">
+            <div class="text-base font-black ${txt}">${t.type}</div>
+            <div class="mt-0.5 text-[11px] leading-relaxed text-white/60">${t.desc}</div>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5 text-[11px]">
+          <span class="text-gold/70">全港約 <b class="text-gold">${t.count}</b> 台</span>
+          <span class="${txt} font-bold">立即尋寶 →</span>
+        </div>
+      </button>`;
+    }).join("");
+  }
+  // 從尋寶牆點擊 → 切回找店並套用特性篩選
+  window.jumpFilterFeature = (type) => {
+    FILTERS.feature.active = type;
+    buildFilters(); render();
+    showView("store");
+    toast(`已篩選：${type}`);
+  };
+
+  /* ============================================================
+     任務：夾客現場獵人打卡驗證
+  ============================================================ */
+  const TASKS = [
+    { title:"旺角現場打卡", place:"旺角西洋菜南街 · 爪玩店", reward:15, status:"待驗證", hunters:128 },
+    { title:"銅鑼灣獵人集結", place:"銅鑼灣記利佐治街 · SayHi Claw", reward:20, status:"進行中", hunters:96 },
+    { title:"荃灣山崩台挑戰", place:"荃灣南豐中心 · 爪玩店", reward:30, status:"已完成", hunters:64 },
+    { title:"深水埗掃街任務", place:"深水埗鴨寮街 · 綜合機舖", reward:12, status:"進行中", hunters:47 },
+  ];
+  function buildTaskList() {
+    const wrap = document.getElementById("task-list");
+    const stColor = { "待驗證":"text-gold border-gold/50", "進行中":"text-neongreen border-neongreen/50", "已完成":"text-white/40 border-white/20" };
+    wrap.innerHTML = TASKS.map(t => `
+      <div class="animate-pop rounded-2xl border border-white/10 bg-zinc-950 p-4 card-border">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="text-sm font-black text-white">${t.title}</div>
+            <div class="mt-0.5 text-[11px] text-gold/60">📍 ${t.place}</div>
+          </div>
+          <span class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${stColor[t.status]}">${t.status}</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
+          <span class="text-[11px] text-white/50">🧑‍🚀 ${t.hunters} 位獵人參與</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold text-neongreen neon-green">+${t.reward} 積分</span>
+            <button onclick="doCheckIn('${t.title}', ${t.reward})"
+              class="rounded-full bg-neonpink px-3 py-1.5 text-[11px] font-black text-black glow-pink active:scale-95 transition ${t.status==='已完成'?'opacity-40 pointer-events-none':''}">
+              📸 現場打卡
+            </button>
+          </div>
+        </div>
+      </div>`).join("");
+  }
+  window.doCheckIn = (title, reward) => {
+    USER.points += reward;
+    syncUser();
+    toast(`✅ ${title} 打卡成功 +${reward} 積分`);
+  };
+
+  /* ============================================================
+     我的：個人中心 / 積分 / 兌換免廣告
+  ============================================================ */
+  const USER = { name: "夾娃娃獵人 #8823", points: 120, adFree: false };
+  function syncUser() {
+    document.getElementById("profile-name").textContent = USER.name;
+    document.getElementById("profile-points").textContent = USER.points;
+    document.getElementById("promote-points").textContent = USER.points;
+    document.getElementById("adfree-badge").textContent = USER.adFree ? "已開通" : "未開通";
+    document.getElementById("adfree-badge").className = USER.adFree ? "text-neongreen neon-green" : "text-white/40";
+  }
+  document.getElementById("btn-redeem").onclick = () => {
+    const s = document.getElementById("redeem-status");
+    if (USER.adFree) { s.textContent = "你已開通免廣告 ✨"; return; }
+    if (USER.points < 80) { s.textContent = "積分不足，快去完成打卡任務！"; toast("⚠️ 積分不足 80"); return; }
+    USER.points -= 80; USER.adFree = true; syncUser();
+    s.textContent = "🎉 兌換成功，已開通免廣告！";
+    toast("🎉 已兌換免廣告");
+  };
+
+  /* ============================================================
      讀取資料
   ============================================================ */
   const DEMO = [
@@ -387,15 +622,6 @@
       toast("讀取失敗，顯示示範資料");
     }
   }
-
-  /* ============================================================
-     彈窗控制
-  ============================================================ */
-  const modal = document.getElementById("modal");
-  document.getElementById("btn-open-form").onclick = () => { modal.classList.remove("hidden"); modal.classList.add("flex"); };
-  document.getElementById("btn-close-form").onclick = closeModal;
-  modal.onclick = (e) => { if (e.target === modal) closeModal(); };
-  function closeModal() { modal.classList.add("hidden"); modal.classList.remove("flex"); }
 
   /* ============================================================
      強制現拍 + Canvas 壓縮（最大寬 800px，品質 0.6，目標 < 100KB）
@@ -441,10 +667,11 @@
   };
 
   /* ============================================================
-     表單提交 → Insert Supabase
+     表單提交 → Insert Supabase（消耗積分）
   ============================================================ */
   document.getElementById("report-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (USER.points < 10) { toast("⚠️ 積分不足 10，無法發布"); return; }
     if (!compressedBase64) { toast("⚠️ 請先拍攝現場機台照"); return; }
     const form = e.target;
     const fd = new FormData(form);
@@ -468,8 +695,10 @@
       if (!isConfigured()) {
         // 示範模式：直接插入本地
         DATA.unshift({ ...payload, created_at: new Date().toISOString() });
+        USER.points -= 10; syncUser();
         finishSubmit(form);
-        toast("✅ 已回報（示範模式）");
+        toast("✅ 已回報（示範模式）-10 積分");
+        showView("store");
         return;
       }
       const res = await fetch(REST(), {
@@ -480,13 +709,15 @@
       if (!res.ok) throw new Error(await res.text());
       const inserted = await res.json();
       DATA.unshift(inserted[0] || { ...payload, created_at: new Date().toISOString() });
+      USER.points -= 10; syncUser();
       finishSubmit(form);
-      toast("✅ 情報已成功上報！");
+      toast("✅ 情報已成功上報！-10 積分");
+      showView("store");
     } catch (err) {
       console.log("[v0] 提交失敗:", err.message);
       toast("❌ 提交失敗，請稍後再試");
     } finally {
-      btn.disabled = false; btn.textContent = "🚀 提交情報";
+      btn.disabled = false; btn.textContent = "🚀 消耗 10 積分提交情報";
     }
   });
 
@@ -495,7 +726,6 @@
     compressedBase64 = "";
     document.getElementById("photo-status").textContent = "";
     document.getElementById("photo-preview").classList.add("hidden");
-    closeModal();
     render();
   }
 
@@ -515,7 +745,11 @@
      初始化
   ============================================================ */
   buildFilters();
+  buildTreasureWall();
+  buildTaskList();
+  syncUser();
   loadData();
+  showView("store"); // 預設進入「找店」
   </script>
 </body>
 </html>
