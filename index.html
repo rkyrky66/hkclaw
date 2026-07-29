@@ -1,755 +1,793 @@
 ﻿<!DOCTYPE html>
 <html lang="zh-HK" class="bg-black">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>爪爪情報站 | 香港夾娃娃實時情報</title>
-  <meta name="description" content="香港本地夾娃娃店實時情報網頁，台主自報家門，即時掌握技術台、實爪台、有保夾福利。" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>爪爪情報站 | 香港夾娃娃實時情報</title>
+<meta name="description" content="香港本地夾娃娃店實時情報網頁，GPS 找店、任務積分、實時前線戰報，台主與夾客雙向情報平台。" />
 
-  <!-- ===== PWA Meta ===== -->
-  <meta name="theme-color" content="#000000" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="爪爪情報站" />
-  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' rx='40' fill='%23000000'/%3E%3Ctext x='50%25' y='54%25' font-size='90' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E" />
-  <link id="manifest-placeholder" rel="manifest" />
+<!-- ===== PWA Meta ===== -->
+<meta name="theme-color" content="#000000" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="爪爪情報站" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' rx='40' fill='%23000000'/%3E%3Ctext x='50%25' y='54%25' font-size='90' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E" />
+<link id="manifest-placeholder" rel="manifest" />
 
-  <!-- ===== Tailwind CDN ===== -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            gold: '#D4AF37',
-            neongreen: '#00FF00',
-            neonpink: '#FF007F',
-          },
-          fontFamily: {
-            sans: ['"Noto Sans TC"', 'system-ui', 'sans-serif'],
-          },
-        },
+<!-- ===== Tailwind CDN ===== -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: { gold: '#D4AF37', neongreen: '#00FF00', neonpink: '#FF007F' },
+        fontFamily: { sans: ['"Noto Sans TC"', 'system-ui', 'sans-serif'] },
       },
-    };
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet" />
+    },
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet" />
 
-  <style>
-    html, body { height: 100%; overscroll-behavior: none; }
-    body {
-      background:
-        radial-gradient(circle at 20% 0%, rgba(255,0,127,0.10), transparent 40%),
-        radial-gradient(circle at 80% 100%, rgba(0,255,0,0.08), transparent 40%),
-        #000;
-    }
-    /* 隱藏滾動條但保留可捲動 */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+<style>
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(255,0,127,0.10), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(0,255,0,0.08), transparent 40%),
+      #000;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    .neon-green { text-shadow: 0 0 4px #00FF00, 0 0 12px #00FF00; }
-    .neon-pink  { text-shadow: 0 0 4px #FF007F, 0 0 12px #FF007F; }
-    .glow-green { box-shadow: 0 0 6px rgba(0,255,0,.5), inset 0 0 6px rgba(0,255,0,.2); }
-    .glow-pink  { box-shadow: 0 0 6px rgba(255,0,127,.5), inset 0 0 6px rgba(255,0,127,.2); }
-    .glow-gold  { box-shadow: 0 0 8px rgba(212,175,55,.5); }
-    .card-border { border: 1px solid rgba(212,175,55,.35); }
-    .chip-active-green { background:#00FF00; color:#000; box-shadow:0 0 10px #00FF00; }
-    .chip-active-pink  { background:#FF007F; color:#000; box-shadow:0 0 10px #FF007F; }
+  .neon-green { text-shadow: 0 0 4px #00FF00, 0 0 12px #00FF00; }
+  .neon-pink  { text-shadow: 0 0 4px #FF007F, 0 0 12px #FF007F; }
+  .neon-gold  { text-shadow: 0 0 4px #D4AF37, 0 0 10px #D4AF37; }
+  .glow-green { box-shadow: 0 0 6px rgba(0,255,0,.5), inset 0 0 6px rgba(0,255,0,.2); }
+  .glow-pink  { box-shadow: 0 0 6px rgba(255,0,127,.5), inset 0 0 6px rgba(255,0,127,.2); }
+  .glow-gold  { box-shadow: 0 0 8px rgba(212,175,55,.5); }
+  .chip-active-green { background:#00FF00; color:#000; box-shadow:0 0 10px #00FF00; }
+  .chip-active-pink  { background:#FF007F; color:#000; box-shadow:0 0 10px #FF007F; }
+  .chip-active-gold  { background:#D4AF37; color:#000; box-shadow:0 0 10px #D4AF37; }
 
-    @keyframes pop { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
-    .animate-pop { animation: pop .18s ease-out; }
-    @keyframes flicker { 0%,100%{opacity:1} 45%{opacity:.75} 55%{opacity:.9} }
-    .flicker { animation: flicker 3s infinite; }
-    @keyframes fadeup { 0%{opacity:0; transform:translateY(8px)} 100%{opacity:1; transform:translateY(0)} }
-    .view-enter { animation: fadeup .22s ease-out; }
+  @keyframes pop { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .animate-pop { animation: pop .18s ease-out; }
+  @keyframes flicker { 0%,100%{opacity:1} 45%{opacity:.75} 55%{opacity:.9} }
+  .flicker { animation: flicker 3s infinite; }
+  @keyframes fadeup { 0%{opacity:0; transform:translateY(8px)} 100%{opacity:1; transform:translateY(0)} }
+  .view-enter { animation: fadeup .22s ease-out; }
+  @keyframes bounty { 0%,100%{box-shadow:0 0 6px rgba(212,175,55,.6)} 50%{box-shadow:0 0 16px rgba(212,175,55,1)} }
+  .bounty { animation: bounty 1.4s infinite; }
 
-    /* 底部導航發光圖標 */
-    .nav-btn.active .nav-ico { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor); }
-  </style>
+  .nav-btn.active .nav-ico { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor); }
+  .stale { filter: grayscale(1) brightness(.55); opacity:.55; }
+  input, select, textarea { font-size: 16px; }
+</style>
 </head>
 
 <body class="text-white font-sans select-none">
 
-  <!-- App 容器：手機全螢幕，無網頁滾動 -->
-  <div id="app" class="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden">
+<div id="app" class="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden">
 
-    <!-- ===== 頂部標題 ===== -->
-    <header class="shrink-0 px-4 pt-[max(env(safe-area-inset-top),12px)] pb-2">
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-black tracking-tight">
-          <span class="neon-green flicker">爪爪</span><span class="text-gold">情報站</span>
-        </h1>
-        <span class="rounded-full border border-neongreen/50 px-2 py-0.5 text-[10px] text-neongreen glow-green">● LIVE</span>
-      </div>
-      <p id="page-subtitle" class="mt-0.5 text-[11px] text-gold/70">香港夾娃娃 · 台主自報實時情報</p>
-    </header>
-
-    <!-- ============================================================
-         內容區：所有分頁都放在這裡，SPA 切換
-    ============================================================ -->
-    <div class="relative flex-1 overflow-hidden">
-
-      <!-- ===== 分頁 1：找店（品牌篩選 + 列表）===== -->
-      <section data-view="store" class="view flex h-full flex-col">
-        <!-- 篩選器 -->
-        <div class="shrink-0 space-y-2 px-4 pb-2">
-          <div>
-            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neonpink neon-pink">品牌</div>
-            <div id="filter-brand" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-          </div>
-          <div>
-            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-neongreen neon-green">特性</div>
-            <div id="filter-feature" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-          </div>
-          <div>
-            <div class="mb-1 text-[10px] font-bold uppercase tracking-widest text-gold">福利</div>
-            <div id="filter-welfare" class="no-scrollbar flex gap-2 overflow-x-auto pb-1"></div>
-          </div>
-        </div>
-
-        <div class="mx-4 h-px shrink-0 bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
-
-        <!-- 中央列表 -->
-        <main id="list" class="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-3 pb-28">
-          <div id="loading" class="pt-10 text-center text-sm text-gold/60">載入機台情報中…</div>
-        </main>
-      </section>
-
-      <!-- ===== 分頁 2：找台（機台種類尋寶牆）===== -->
-      <section data-view="find" class="view hidden h-full flex-col">
-        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
-          <h2 class="mb-1 text-lg font-black text-neongreen neon-green">🔎 機台種類尋寶牆</h2>
-          <p class="mb-4 text-[11px] text-gold/60">依玩法選擇你的獵物，賽博朋克發光機台等你來夾。</p>
-          <div id="treasure-wall" class="grid grid-cols-1 gap-3.5"></div>
-        </div>
-      </section>
-
-      <!-- ===== 分頁 3：推廣（台主消耗積分發布宣傳表單）===== -->
-      <section data-view="promote" class="view hidden h-full flex-col">
-        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
-          <div class="mb-3 flex items-center justify-between rounded-2xl border border-neonpink/40 bg-zinc-950 p-3.5 glow-pink">
-            <div>
-              <div class="text-sm font-black text-neonpink neon-pink">📣 發布宣傳</div>
-              <div class="text-[11px] text-gold/60">每次上報消耗 <b class="text-gold">10 積分</b></div>
-            </div>
-            <div class="text-right">
-              <div class="text-[10px] text-white/50">目前積分</div>
-              <div id="promote-points" class="text-lg font-black text-neongreen neon-green">120</div>
-            </div>
-          </div>
-
-          <form id="report-form" class="space-y-3.5">
-            <!-- 連鎖品牌 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">連鎖品牌</label>
-              <select name="brand" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
-                <option value="">請選擇…</option>
-                <option>爪玩店</option>
-                <option>SayHi Claw</option>
-                <option>其他</option>
-              </select>
-            </div>
-            <!-- 分店地址 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">分店地址</label>
-              <input name="branch" required placeholder="例：旺角西洋菜南街 XX 號" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-            </div>
-            <!-- 台號 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">台號</label>
-              <input name="machine_no" required placeholder="例：A12" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-            </div>
-            <!-- 機台特性 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">機台特性</label>
-              <select name="feature" required class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-neongreen focus:outline-none">
-                <option value="">請選擇…</option>
-                <option>技術台</option>
-                <option>實爪台</option>
-                <option>山崩台</option>
-              </select>
-            </div>
-            <!-- 福利多選 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">福利（可多選）</label>
-              <div class="flex flex-wrap gap-2">
-                <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
-                  <input type="checkbox" name="welfare" value="有保夾" class="accent-neongreen" /> 有保夾
-                </label>
-                <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2 text-sm">
-                  <input type="checkbox" name="welfare" value="有夾送" class="accent-neonpink" /> 有夾送
-                </label>
-              </div>
-            </div>
-            <!-- 今日主角 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">今日主角（公仔）</label>
-              <input name="today_prize" required placeholder="例：Chiikawa 大隻毛公仔" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-            </div>
-            <!-- 台主 IG -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">台主 IG</label>
-              <input name="ig" required placeholder="@your_ig" class="w-full rounded-xl border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-neongreen focus:outline-none" />
-            </div>
-
-            <!-- 強制現拍 -->
-            <div>
-              <label class="mb-1 block text-xs font-bold text-gold">現場機台照（必須現拍，禁選相簿）</label>
-              <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
-              <button type="button" id="btn-camera" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 py-3 text-sm font-bold text-neongreen active:scale-95 transition">
-                📷 拍攝現場機台照
-              </button>
-              <div id="photo-status" class="mt-2 text-[11px] text-gold/60"></div>
-              <img id="photo-preview" class="mt-2 hidden w-full rounded-xl border border-gold/30" alt="現場機台照預覽" />
-            </div>
-
-            <button type="submit" id="btn-submit" class="mt-2 w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink active:scale-95 transition disabled:opacity-50">
-              🚀 消耗 10 積分提交情報
-            </button>
-          </form>
-        </div>
-      </section>
-
-      <!-- ===== 分頁 4：任務（夾客現場獵人打卡驗證）===== -->
-      <section data-view="task" class="view hidden h-full flex-col">
-        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
-          <h2 class="mb-1 text-lg font-black text-neonpink neon-pink">🎯 獵人打卡任務</h2>
-          <p class="mb-4 text-[11px] text-gold/60">純夾客現場打卡驗證，完成任務賺取積分與稱號。</p>
-          <div id="task-list" class="space-y-3"></div>
-        </div>
-      </section>
-
-      <!-- ===== 分頁 5：我的（個人中心）===== -->
-      <section data-view="profile" class="view hidden h-full flex-col">
-        <div class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
-          <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
-            <div class="flex items-center gap-4">
-              <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div>
-              <div>
-                <div id="profile-name" class="text-lg font-black text-white">夾娃娃獵人 #8823</div>
-                <div class="text-[11px] text-gold/70">賽博爪王 · Lv.7</div>
-              </div>
-            </div>
-
-            <div class="mt-5 grid grid-cols-2 gap-3">
-              <div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center">
-                <div class="text-[10px] text-white/50">持有積分</div>
-                <div id="profile-points" class="text-2xl font-black text-neongreen neon-green">120</div>
-              </div>
-              <div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center">
-                <div class="text-[10px] text-white/50">打卡次數</div>
-                <div class="text-2xl font-black text-neonpink neon-pink">37</div>
-              </div>
-            </div>
-
-            <button id="btn-redeem" class="mt-5 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold active:scale-95 transition">
-              ✨ 兌換免廣告（80 積分）
-            </button>
-            <p id="redeem-status" class="mt-2 text-center text-[11px] text-gold/60"></p>
-          </div>
-
-          <div class="mt-4 space-y-2">
-            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
-              <span class="text-white/80">我的回報機台</span><span class="text-gold">3 台</span>
-            </div>
-            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
-              <span class="text-white/80">收藏的機台</span><span class="text-gold">12 台</span>
-            </div>
-            <div class="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm">
-              <span class="text-white/80">免廣告狀態</span><span id="adfree-badge" class="text-white/40">未開通</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
+  <!-- ===== 頂部標題 ===== -->
+  <header class="shrink-0 px-4 pt-[max(env(safe-area-inset-top),12px)] pb-2">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-black tracking-tight">
+        <span class="neon-green flicker">爪爪</span><span class="text-gold">情報站</span>
+      </h1>
+      <button id="points-badge" onclick="showView('me')" class="flex items-center gap-1 rounded-full border border-gold/50 bg-black/60 px-3 py-1 text-sm font-black text-gold glow-gold">
+        💎 <span id="points-top">0</span>
+      </button>
     </div>
+    <p id="page-subtitle" class="mt-0.5 text-[11px] text-gold/70">香港夾娃娃 · GPS 找店情報</p>
+  </header>
 
-    <!-- ============================================================
-         底部功能導航欄（常駐 / 半透明霓虹黑金）
-    ============================================================ -->
-    <nav id="bottom-nav"
-      class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
-      <!-- 找店 -->
-      <button data-nav="store" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
-        <span class="nav-ico text-xl">🏪</span>
-        <span class="text-[10px] font-bold">找店</span>
-      </button>
-      <!-- 找台 -->
-      <button data-nav="find" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">🎰</span>
-        <span class="text-[10px] font-bold">找台</span>
-      </button>
-      <!-- 推廣（中央凸起）-->
-      <button data-nav="promote" class="nav-btn relative flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico -mt-6 flex h-12 w-12 items-center justify-center rounded-full border-2 border-neonpink bg-black text-2xl glow-pink">📣</span>
-        <span class="-mt-1 text-[10px] font-bold">推廣</span>
-      </button>
-      <!-- 任務 -->
-      <button data-nav="task" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">🎯</span>
-        <span class="text-[10px] font-bold">任務</span>
-      </button>
-      <!-- 我的 -->
-      <button data-nav="profile" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">👤</span>
-        <span class="text-[10px] font-bold">我的</span>
-      </button>
-    </nav>
+  <!-- ===== 內容區 ===== -->
+  <div class="relative flex-1 overflow-hidden">
+    <main id="main" class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28"></main>
   </div>
 
-  <!-- ===== Toast ===== -->
-  <div id="toast" class="pointer-events-none fixed inset-x-0 top-4 z-[60] mx-auto hidden max-w-xs rounded-xl border border-neongreen bg-black px-4 py-2.5 text-center text-sm font-bold text-neongreen glow-green"></div>
+  <!-- ===== 底部導航（四鍵）===== -->
+  <nav id="bottom-nav"
+    class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-4 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
+    <button data-nav="find" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
+      <span class="nav-ico text-xl">🏪</span><span class="text-[10px] font-bold">找店</span>
+    </button>
+    <button data-nav="task" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+      <span class="nav-ico text-xl">🎯</span><span class="text-[10px] font-bold">任務</span>
+    </button>
+    <button data-nav="live" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+      <span class="nav-ico text-xl">⚡</span><span class="text-[10px] font-bold">實時</span>
+    </button>
+    <button data-nav="me" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+      <span class="nav-ico text-xl">👤</span><span class="text-[10px] font-bold">我的</span>
+    </button>
+  </nav>
+</div>
 
-  <script>
-  /* ============================================================
-     Supabase 連線設定（請填入你的專案資料）
-  ============================================================ */
+<!-- ===== Modal ===== -->
+<div id="modal-root" class="pointer-events-none fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center"></div>
+
+<!-- ===== Toast ===== -->
+<div id="toast-root" class="pointer-events-none fixed inset-x-0 top-16 z-[60] mx-auto flex max-w-md flex-col items-center gap-2 px-4"></div>
+
+<script>
+/* ============================================================
+   0. SUPABASE 連線常數（保留位置，填入後自動啟用雲端）
+============================================================ */
   const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co/rest/v1/";          // 例：https://xxxx.supabase.co
   const SUPABASE_KEY = "sb_publishable_CExnnhzqCE_50dlSSHV2FA_QPnnUL3u";     // anon public key
-  const TABLE = "claw_machines";
-  const REST = () => `${SUPABASE_URL}/rest/v1/${TABLE}`;
-  const HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": `Bearer ${SUPABASE_KEY}`,
-    "Content-Type": "application/json",
-  };
-  const isConfigured = () => SUPABASE_URL.startsWith("http") && SUPABASE_KEY && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
 
-  /* ============================================================
-     PWA Manifest（以 data URI 注入，維持單一檔案）
-  ============================================================ */
-  (function injectManifest() {
-    const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
-    const manifest = {
-      name: "爪爪情報站",
-      short_name: "爪爪情報",
-      description: "香港夾娃娃店實時情報",
-      start_url: ".",
-      display: "standalone",
-      background_color: "#000000",
-      theme_color: "#000000",
-      orientation: "portrait",
-      icons: [
-        { src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-        { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" },
-      ],
-    };
-    const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
-    document.getElementById("manifest-placeholder").setAttribute("href", URL.createObjectURL(blob));
-  })();
+const CLOUD_ON = SUPABASE_URL.startsWith("http") && SUPABASE_KEY && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
 
-  /* Service Worker（inline，讓 PWA 可安裝 / 離線殼層）*/
-  if ("serviceWorker" in navigator) {
-    const swCode = `
-      self.addEventListener("install", e => self.skipWaiting());
-      self.addEventListener("activate", e => self.clients.claim());
-      self.addEventListener("fetch", () => {});
-    `;
-    const swUrl = URL.createObjectURL(new Blob([swCode], { type: "text/javascript" }));
-    navigator.serviceWorker.register(swUrl).catch(() => {});
-  }
-
-  /* ============================================================
-     SPA 分頁切換（純原生 JS）
-  ============================================================ */
-  const SUBTITLES = {
-    store:   "香港夾娃娃 · 台主自報實時情報",
-    find:    "機台種類尋寶牆 · 選擇你的獵物",
-    promote: "台主消耗積分 · 發布機台宣傳",
-    task:    "夾客現場獵人 · 打卡驗證任務",
-    profile: "個人中心 · 積分與獎勵",
-  };
-  const NAV_COLOR = {
-    store: "text-neongreen", find: "text-neongreen",
-    promote: "text-neonpink", task: "text-neonpink", profile: "text-gold",
-  };
-
-  function showView(name) {
-    // 切換內容區
-    document.querySelectorAll(".view").forEach(v => {
-      const on = v.getAttribute("data-view") === name;
-      v.classList.toggle("hidden", !on);
-      v.classList.toggle("flex", on);
-      if (on) { v.classList.remove("view-enter"); void v.offsetWidth; v.classList.add("view-enter"); }
-    });
-    // 切換導航高亮
-    document.querySelectorAll(".nav-btn").forEach(b => {
-      const on = b.getAttribute("data-nav") === name;
-      b.classList.toggle("active", on);
-      b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
-      b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
-    });
-    // 更新副標題
-    document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
-  }
-  document.querySelectorAll(".nav-btn").forEach(b => {
-    b.onclick = () => showView(b.getAttribute("data-nav"));
+async function sbFetch(path, opts = {}) {
+  if (!CLOUD_ON) return null;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...(opts.headers || {}),
+    },
   });
+  if (!res.ok) throw new Error("Supabase " + res.status);
+  return res.status === 204 ? null : res.json();
+}
+async function cloudInsert(table, row) {
+  if (!CLOUD_ON) return;
+  try { await sbFetch(table, { method: "POST", body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }]) }); }
+  catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
+}
+/* 預留：Google Cloud Vision 不當圖片過濾接口 */
+async function visionSafeCheck(base64) {
+  // TODO: 接上 Cloud Vision SafeSearch API。未接線時預設放行。
+  return { safe: true };
+}
 
-  /* ============================================================
-     篩選器狀態
-  ============================================================ */
-  const FILTERS = {
-    brand:   { label: "品牌",   color: "pink",  active: "全部", options: ["全部", "爪玩店", "SayHi Claw"] },
-    feature: { label: "特性",   color: "green", active: "全部", options: ["全部", "技術台", "實爪台", "山崩台"] },
-    welfare: { label: "福利",   color: "gold",  active: "全部", options: ["全部", "有保夾", "有夾送"] },
-  };
+/* ============================================================
+   1. 本地狀態引擎（LocalStorage）
+============================================================ */
+const DAY = 86400000, HOUR = 3600000;
+const now = () => Date.now();
+const uid = () => Math.random().toString(36).slice(2, 10);
+const todayKey = () => new Date().toISOString().slice(0, 10);
 
-  let DATA = []; // 全部機台資料
+const DEFAULT_STATE = {
+  user: { name: "夾娃娃獵人 #" + Math.floor(Math.random() * 9000 + 1000), device: uid() },
+  points: 120,
+  filterPassUntil: 0,
+  adFree: false,
+  favStores: [],
+  favMachines: [],
+  myPosts: [],
+  myIntel: [],
+  daily: {},
+};
+let STATE = load();
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("claw_state"));
+    return raw ? { ...structuredClone(DEFAULT_STATE), ...raw } : structuredClone(DEFAULT_STATE);
+  } catch { return structuredClone(DEFAULT_STATE); }
+}
+function save() { localStorage.setItem("claw_state", JSON.stringify(STATE)); renderPoints(); }
+function daily() {
+  const k = todayKey();
+  if (!STATE.daily[k]) STATE.daily[k] = { checkin: 0, review: 0, zombie: 0, ad: 0, adCooldownUntil: 0, live: 0, promoUsed: 0 };
+  return STATE.daily[k];
+}
+function addPoints(n, why) {
+  STATE.points = Math.max(0, STATE.points + n);
+  save();
+  toast(`${n >= 0 ? "+" : ""}${n} 積分 · ${why}`, n >= 0 ? "green" : "pink");
+}
+function renderPoints() {
+  const el = document.getElementById("points-top");
+  if (el) el.textContent = STATE.points;
+}
+const filterActive = () => STATE.filterPassUntil > now();
 
-  function buildFilters() {
-    const map = { brand: "filter-brand", feature: "filter-feature", welfare: "filter-welfare" };
-    Object.keys(FILTERS).forEach(key => {
-      const wrap = document.getElementById(map[key]);
-      wrap.innerHTML = "";
-      FILTERS[key].options.forEach(opt => {
-        const btn = document.createElement("button");
-        const isActive = FILTERS[key].active === opt;
-        const activeClass = FILTERS[key].color === "green" ? "chip-active-green"
-                          : FILTERS[key].color === "pink" ? "chip-active-pink"
-                          : "bg-gold text-black glow-gold";
-        btn.className = "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-bold transition active:scale-95 "
-          + (isActive ? activeClass : "border-white/20 bg-zinc-900 text-white/70");
-        btn.textContent = opt;
-        btn.onclick = () => { FILTERS[key].active = opt; buildFilters(); render(); };
-        wrap.appendChild(btn);
-      });
+/* ============================================================
+   2. 模擬資料
+============================================================ */
+const REGIONS = ["旺角", "銅鑼灣", "尖沙咀", "觀塘", "荃灣", "沙田"];
+const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
+const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
+
+let STORES = seedStores();
+function seedStores() {
+  const base = [
+    { name: "爪玩店 · 旺角旗艦", region: "旺角", addr: "西洋菜南街 2A 好望角大廈", ig: "clawplay.mk", fb: "clawplayHK", verified: "verified", size: "大", token: false, hour24: true, staff: true },
+    { name: "SayHi Claw · 銅鑼灣", region: "銅鑼灣", addr: "記利佐治街 1 號金百利", ig: "sayhi.claw", fb: "sayhiclaw", verified: "verified", size: "中", token: true, hour24: false, staff: true },
+    { name: "夾夾樂 · 觀塘店", region: "觀塘", addr: "開源道 33 號建生廣場", ig: "gigilok", fb: "", verified: "pending", size: "細", token: false, hour24: true, staff: false },
+    { name: "爪玩店 · 荃灣", region: "荃灣", addr: "沙咀道 388 號中國染廠", ig: "clawplay.tw", fb: "", verified: "verified", size: "中", token: true, hour24: false, staff: true },
+    { name: "夾神殿 · 尖沙咀", region: "尖沙咀", addr: "加連威老道 21 號", ig: "clawgod", fb: "clawgodhk", verified: "pending", size: "大", token: false, hour24: true, staff: true },
+  ];
+  return base.map((s, i) => ({ id: "s" + i, ...s, dist: (Math.random() * 2 + 0.1).toFixed(1), machines: seedMachines("s" + i, i) }));
+}
+function seedMachines(sid, seed) {
+  const cnt = [3, 4, 2, 3, 5][seed % 5];
+  const arr = [];
+  for (let i = 0; i < cnt; i++) {
+    const ageH = [2, 10, 60, 400, 26][(seed + i) % 5];
+    arr.push({
+      id: sid + "_m" + i, no: "A" + (i + 1),
+      feats: [FEATURE_TAGS[(seed + i) % FEATURE_TAGS.length], FEATURE_TAGS[(seed + i + 4) % FEATURE_TAGS.length]],
+      plays: [PLAY_TAGS[(seed + i) % PLAY_TAGS.length]],
+      prize: ["chiikawa 公仔", "Sanrio 大布偶", "jellycat 茄子", "一番賞 A賞", "山系毛公仔"][(seed + i) % 5],
+      updated: now() - ageH * HOUR, photo: "",
     });
   }
+  return arr;
+}
 
-  /* ============================================================
-     渲染列表（聯動過濾）
-  ============================================================ */
-  function passFilter(item) {
-    const b = FILTERS.brand.active, f = FILTERS.feature.active, w = FILTERS.welfare.active;
-    if (b !== "全部" && item.brand !== b) return false;
-    if (f !== "全部" && item.feature !== f) return false;
-    if (w !== "全部") {
-      const welfare = Array.isArray(item.welfare) ? item.welfare : (item.welfare ? String(item.welfare).split(",") : []);
-      if (!welfare.map(x => x.trim()).includes(w)) return false;
-    }
-    return true;
-  }
-
-  function timeAgo(ts) {
-    if (!ts) return "剛剛";
-    const d = new Date(ts), diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60) return "剛剛";
-    if (diff < 3600) return Math.floor(diff / 60) + " 分鐘前";
-    if (diff < 86400) return Math.floor(diff / 3600) + " 小時前";
-    return d.toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  }
-
-  function featureColor(f) {
-    if (f === "技術台") return "border-neongreen text-neongreen";
-    if (f === "實爪台") return "border-neonpink text-neonpink";
-    return "border-gold text-gold";
-  }
-
-  function render() {
-    const list = document.getElementById("list");
-    const items = DATA.filter(passFilter);
-    if (!items.length) {
-      list.innerHTML = `<div class="pt-16 text-center text-sm text-gold/50">😿 暫無符合條件的機台情報<br/>做第一個回報的台主吧！</div>`;
-      return;
-    }
-    list.innerHTML = items.map(item => {
-      const welfare = Array.isArray(item.welfare) ? item.welfare : (item.welfare ? String(item.welfare).split(",") : []);
-      const igHandle = (item.ig || "").replace(/^@/, "");
-      const igUrl = igHandle ? `https://instagram.com/${igHandle}` : "#";
-      const photo = item.photo || item.image || "";
-      return `
-      <article class="animate-pop overflow-hidden rounded-2xl bg-zinc-950 card-border">
-        ${photo ? `<img src="${photo}" alt="${item.branch || ''} ${item.machine_no || ''} 機台照" class="h-40 w-full object-cover" />`
-                : `<div class="flex h-24 w-full items-center justify-center bg-zinc-900 text-4xl">🧸</div>`}
-        <div class="p-3.5">
-          <div class="flex items-start justify-between gap-2">
-            <div>
-              <div class="text-xs text-neonpink neon-pink font-bold">${item.brand || "未知品牌"}</div>
-              <div class="text-sm font-bold text-white">${item.branch || "—"}</div>
-            </div>
-            <div class="shrink-0 rounded-lg border border-gold/50 px-2 py-1 text-xs font-black text-gold">台號 ${item.machine_no || "?"}</div>
-          </div>
-
-          <div class="mt-2.5 flex flex-wrap gap-1.5">
-            <span class="rounded-full border px-2 py-0.5 text-[11px] font-bold ${featureColor(item.feature)}">${item.feature || "—"}</span>
-            ${welfare.map(w => `<span class="rounded-full bg-neongreen/15 px-2 py-0.5 text-[11px] font-bold text-neongreen">🎁 ${w.trim()}</span>`).join("")}
-          </div>
-
-          <div class="mt-2.5 text-xs text-white/80">
-            <span class="text-gold/70">今日主角：</span><span class="font-bold text-neongreen neon-green">${item.today_prize || "—"}</span>
-          </div>
-
-          <div class="mt-3 flex items-center justify-between">
-            <span class="text-[11px] text-white/40">🕒 ${timeAgo(item.created_at || item.updated_at)}更新</span>
-            <a href="${igUrl}" target="_blank" rel="noopener"
-               class="rounded-full bg-neonpink px-3 py-1.5 text-[11px] font-black text-black glow-pink active:scale-95 transition">
-              查看官方 IG →
-            </a>
-          </div>
-        </div>
-      </article>`;
-    }).join("");
-  }
-
-  /* ============================================================
-     找台：機台種類尋寶牆
-  ============================================================ */
-  const TREASURE = [
-    { type:"技術台", color:"green", ico:"🎯", desc:"靠角度與力度的技巧型機台，穩定練習即可攻略。", count:24 },
-    { type:"實爪台", color:"pink",  ico:"🦾", desc:"爪力真實不放水，一夾即中的硬派快感。", count:18 },
-    { type:"技術台", color:"green", ico:"🕹️", desc:"進階平推 / 翻爪玩法，高手向的挑戰機台。", count:11 },
+let LIVE = seedLive();
+function seedLive() {
+  const arr = [];
+  const owner = [
+    { tag: "機台介紹", label: "🏬 台主", track: "owner", prize: "全新 chiikawa 系列登場", store: "s0", days: 3 },
+    { tag: "新獎品", label: "🏬 台主", track: "owner", prize: "jellycat 限定進駐 A3", store: "s1", days: 5 },
   ];
-  function buildTreasureWall() {
-    const wrap = document.getElementById("treasure-wall");
-    wrap.innerHTML = TREASURE.map(t => {
-      const glow = t.color === "green" ? "glow-green border-neongreen/50" : "glow-pink border-neonpink/50";
-      const txt  = t.color === "green" ? "text-neongreen neon-green" : "text-neonpink neon-pink";
-      return `
-      <button onclick="jumpFilterFeature('${t.type}')"
-        class="animate-pop w-full rounded-2xl border bg-zinc-950 p-4 text-left transition active:scale-95 ${glow}">
-        <div class="flex items-center gap-3">
-          <div class="flex h-14 w-14 items-center justify-center rounded-xl border ${glow} text-3xl">${t.ico}</div>
-          <div class="flex-1">
-            <div class="text-base font-black ${txt}">${t.type}</div>
-            <div class="mt-0.5 text-[11px] leading-relaxed text-white/60">${t.desc}</div>
-          </div>
-        </div>
-        <div class="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5 text-[11px]">
-          <span class="text-gold/70">全港約 <b class="text-gold">${t.count}</b> 台</span>
-          <span class="${txt} font-bold">立即尋寶 →</span>
-        </div>
-      </button>`;
-    }).join("");
-  }
-  // 從尋寶牆點擊 → 切回找店並套用特性篩選
-  window.jumpFilterFeature = (type) => {
-    FILTERS.feature.active = type;
-    buildFilters(); render();
-    showView("store");
-    toast(`已篩選：${type}`);
-  };
-
-  /* ============================================================
-     任務：夾客現場獵人打卡驗證
-  ============================================================ */
-  const TASKS = [
-    { title:"旺角現場打卡", place:"旺角西洋菜南街 · 爪玩店", reward:15, status:"待驗證", hunters:128 },
-    { title:"銅鑼灣獵人集結", place:"銅鑼灣記利佐治街 · SayHi Claw", reward:20, status:"進行中", hunters:96 },
-    { title:"荃灣山崩台挑戰", place:"荃灣南豐中心 · 爪玩店", reward:30, status:"已完成", hunters:64 },
-    { title:"深水埗掃街任務", place:"深水埗鴨寮街 · 綜合機舖", reward:12, status:"進行中", hunters:47 },
+  const player = [
+    { tag: "出貨", label: "🎯 夾客", track: "player", prize: "10 抽爆機山崩！", days: 1 },
+    { tag: "中獎", label: "🎯 夾客", track: "player", prize: "一番賞 A賞帶走", days: 1 },
   ];
-  function buildTaskList() {
-    const wrap = document.getElementById("task-list");
-    const stColor = { "待驗證":"text-gold border-gold/50", "進行中":"text-neongreen border-neongreen/50", "已完成":"text-white/40 border-white/20" };
-    wrap.innerHTML = TASKS.map(t => `
-      <div class="animate-pop rounded-2xl border border-white/10 bg-zinc-950 p-4 card-border">
+  [...owner, ...player].forEach((x, i) => arr.push({ id: "l" + i, ...x, ts: now() - i * 3 * HOUR, expire: now() + x.days * DAY - i * 3 * HOUR }));
+  return arr;
+}
+
+/* ============================================================
+   3. SPA 導航
+============================================================ */
+let CURRENT = "find";
+let findState = { region: "全部" };
+let liveTrack = "player";
+
+const SUBTITLES = {
+  find: "GPS 找店 · 動態機台情報",
+  task: "現場獵人 · 任務積分板",
+  live: "前線戰報 · 台主 × 夾客",
+  me: "個人中心 · 積分與收藏",
+};
+const NAV_COLOR = { find: "text-neongreen", task: "text-neonpink", live: "text-neongreen", me: "text-gold" };
+const VIEWS = { find: viewFind, task: viewTask, live: viewLive, me: viewMe };
+const AFTER = {};
+
+function showView(name) {
+  CURRENT = name;
+  const main = document.getElementById("main");
+  main.scrollTop = 0;
+  main.classList.remove("view-enter"); void main.offsetWidth; main.classList.add("view-enter");
+  main.innerHTML = VIEWS[name]();
+  document.querySelectorAll(".nav-btn").forEach(b => {
+    const on = b.getAttribute("data-nav") === name;
+    b.classList.toggle("active", on);
+    b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
+    b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
+  });
+  document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
+  if (AFTER[name]) AFTER[name]();
+}
+const go = showView;
+document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.getAttribute("data-nav")));
+
+/* ============================================================
+   4. 【找店】
+============================================================ */
+function viewFind() {
+  return `
+    ${filterActive() ? advFilterPanel() : filterPromoCard()}
+    <div class="mb-3 mt-4 flex items-center justify-between">
+      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> GPS · 附近店舖</div>
+      <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>
+    </div>
+    <div class="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
+      ${["全部", ...REGIONS].map(r => `<button onclick="setRegion('${r}')" class="shrink-0 rounded-full border border-gold/40 px-3 py-1 text-xs ${findState.region === r ? "chip-active-gold" : "text-gold"}">${r}</button>`).join("")}
+    </div>
+    <div id="store-list" class="space-y-3">${renderStoreList()}</div>`;
+}
+function filterPromoCard() {
+  return `
+    <div class="rounded-2xl border border-neonpink/50 bg-zinc-950 p-4 glow-pink">
+      <div class="flex items-center gap-2 font-black text-neonpink neon-pink">🔓 30 天高級 Filter 特權</div>
+      <p class="mt-1 text-[11px] text-gold/70">解鎖地區 / 場務 / 代幣 / 24H / 店鋪規模，及「店內含指定台性或商品」精準過濾並高亮置頂。</p>
+      <div class="mt-3 flex gap-2">
+        <button onclick="buyFilter('points')" class="flex-1 rounded-xl bg-gold py-2 text-sm font-black text-black glow-gold">用 200 積分開啟</button>
+        <button onclick="buyFilter('pay')" class="flex-1 rounded-xl border border-neongreen py-2 text-sm font-black text-neongreen glow-green">HK$15 開啟</button>
+      </div>
+    </div>`;
+}
+function advFilterPanel() {
+  const left = Math.ceil((STATE.filterPassUntil - now()) / DAY);
+  return `
+    <div class="rounded-2xl border border-neongreen/50 bg-zinc-950 p-4 glow-green">
+      <div class="flex items-center justify-between font-black text-neongreen neon-green"><span>⚙️ 高級 Filter 已啟用</span><span class="text-xs">剩 ${left} 天</span></div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+        ${advToggle("f_token", "只看免代幣")}${advToggle("f_24", "只看 24 小時")}
+        ${advToggle("f_staff", "有場務")}${advToggle("f_big", "大型店鋪")}
+      </div>
+      <div class="mt-3">
+        <label class="text-[11px] text-gold/70">精準過濾：店內含指定台性 / 商品</label>
+        <select id="f_tag" onchange="renderStoreListDom()" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-2 py-2 text-xs text-gold">
+          <option value="">— 不限 —</option>${FEATURE_TAGS.map(t => `<option>${t}</option>`).join("")}
+        </select>
+      </div>
+    </div>`;
+}
+function advToggle(id, label) {
+  return `<label class="flex items-center gap-2 rounded-lg border border-gold/30 px-2 py-2"><input id="${id}" type="checkbox" onchange="renderStoreListDom()" class="accent-neongreen" /> ${label}</label>`;
+}
+function setRegion(r) { findState.region = r; showView("find"); }
+function refreshGPS() {
+  toast("定位中…", "green");
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(() => toast("已更新附近店舖", "green"), () => toast("無法定位，顯示預設清單", "pink"));
+  else toast("此裝置不支援定位", "pink");
+}
+function filteredStores() {
+  let list = STORES.slice();
+  if (findState.region !== "全部") list = list.filter(s => s.region === findState.region);
+  list.forEach(s => s._hit = false);
+  if (filterActive()) {
+    const on = id => document.getElementById(id)?.checked;
+    if (on("f_token")) list = list.filter(s => !s.token);
+    if (on("f_24")) list = list.filter(s => s.hour24);
+    if (on("f_staff")) list = list.filter(s => s.staff);
+    if (on("f_big")) list = list.filter(s => s.size === "大");
+    const tag = document.getElementById("f_tag")?.value;
+    if (tag) { list.forEach(s => s._hit = s.machines.some(m => m.feats.includes(tag))); list.sort((a, b) => (b._hit === true) - (a._hit === true)); }
+  }
+  return list.sort((a, b) => (b._hit === true) - (a._hit === true) || a.dist - b.dist);
+}
+function renderStoreListDom() { const el = document.getElementById("store-list"); if (el) el.innerHTML = renderStoreList(); }
+function renderStoreList() {
+  const list = filteredStores();
+  if (!list.length) return `<p class="py-10 text-center text-sm text-white/40">此區暫無店舖情報</p>`;
+  return list.map(s => {
+    const badge = s.verified === "verified"
+      ? `<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">已認證</span>`
+      : `<span class="rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold flicker">審核中</span>`;
+    const hi = s._hit ? "border-neongreen/60 glow-green" : "border-gold/25";
+    return `
+      <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${hi} bg-zinc-950 p-4 text-left">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <div class="text-sm font-black text-white">${t.title}</div>
-            <div class="mt-0.5 text-[11px] text-gold/60">📍 ${t.place}</div>
-          </div>
-          <span class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${stColor[t.status]}">${t.status}</span>
+            <div class="flex items-center gap-2"><h3 class="font-black text-gold">${s.name}</h3>${s._hit ? '<span class="text-[10px] text-neongreen neon-green">命中</span>' : ""}</div>
+            <p class="mt-0.5 text-xs text-white/50">${s.region} · ${s.addr}</p>
+          </div>${badge}
         </div>
-        <div class="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-          <span class="text-[11px] text-white/50">🧑‍🚀 ${t.hunters} 位獵人參與</span>
-          <div class="flex items-center gap-2">
-            <span class="text-[11px] font-bold text-neongreen neon-green">+${t.reward} 積分</span>
-            <button onclick="doCheckIn('${t.title}', ${t.reward})"
-              class="rounded-full bg-neonpink px-3 py-1.5 text-[11px] font-black text-black glow-pink active:scale-95 transition ${t.status==='已完成'?'opacity-40 pointer-events-none':''}">
-              📸 現場打卡
-            </button>
-          </div>
+        <div class="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
+          <span class="text-neonpink neon-pink">📍 ${s.dist} km</span><span>🎰 ${s.machines.length} 部機台</span>
+          <span>${s.size}型${s.hour24 ? " · 24H" : ""}${s.token ? " · 需代幣" : ""}</span>
         </div>
-      </div>`).join("");
-  }
-  window.doCheckIn = (title, reward) => {
-    USER.points += reward;
-    syncUser();
-    toast(`✅ ${title} 打卡成功 +${reward} 積分`);
-  };
+      </button>`;
+  }).join("");
+}
 
-  /* ============================================================
-     我的：個人中心 / 積分 / 兌換免廣告
-  ============================================================ */
-  const USER = { name: "夾娃娃獵人 #8823", points: 120, adFree: false };
-  function syncUser() {
-    document.getElementById("profile-name").textContent = USER.name;
-    document.getElementById("profile-points").textContent = USER.points;
-    document.getElementById("promote-points").textContent = USER.points;
-    document.getElementById("adfree-badge").textContent = USER.adFree ? "已開通" : "未開通";
-    document.getElementById("adfree-badge").className = USER.adFree ? "text-neongreen neon-green" : "text-white/40";
-  }
-  document.getElementById("btn-redeem").onclick = () => {
-    const s = document.getElementById("redeem-status");
-    if (USER.adFree) { s.textContent = "你已開通免廣告 ✨"; return; }
-    if (USER.points < 80) { s.textContent = "積分不足，快去完成打卡任務！"; toast("⚠️ 積分不足 80"); return; }
-    USER.points -= 80; USER.adFree = true; syncUser();
-    s.textContent = "🎉 兌換成功，已開通免廣告！";
-    toast("🎉 已兌換免廣告");
-  };
+/* ---- 店鋪內容頁 ---- */
+function openStore(id) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  const brand = s.name.split(" · ")[0];
+  const others = STORES.filter(x => x.name.split(" · ")[0] === brand && x.id !== s.id);
+  const fav = STATE.favStores.includes(s.id);
+  openModal(`
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3">
+      <div><h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2><p class="text-xs text-white/50">${s.region} · ${s.addr}</p></div>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
+      ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
+      <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
+    </div>
+    ${others.length ? `<div class="mt-4"><p class="mb-2 text-xs text-white/50">其他分店</p><div class="flex flex-wrap gap-2">${others.map(o => `<button onclick="openStore('${o.id}')" class="rounded-lg border border-gold/30 px-3 py-1.5 text-xs text-gold">${o.region}店</button>`).join("")}</div></div>` : ""}
+    <div class="mt-5 flex items-center justify-between">
+      <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
+      <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
+    </div>
+    <div class="mt-3 grid grid-cols-2 gap-3">${s.machines.length ? s.machines.map(machineCell).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台，成為第一個共享的人！</p>'}</div>
+    <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
+  `);
+}
+function machineCell(m) {
+  const fresh = now() - m.updated < 2 * DAY;
+  const frame = fresh ? "border-neongreen/70 glow-green" : "border-white/20 stale";
+  const img = m.photo ? `<img src="${m.photo}" class="h-24 w-full rounded-lg object-cover" alt="機台 ${m.no}" />` : `<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>`;
+  return `
+    <button onclick="toggleFav('machine','${m.id}')" class="rounded-xl border ${frame} bg-zinc-950 p-2 text-left">
+      ${img}
+      <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ${m.no}</b>${fresh ? "" : '<span class="text-[9px] text-white/40">[存疑]</span>'}</div>
+      <div class="mt-1 flex flex-wrap gap-1">${m.feats.slice(0, 2).map(f => `<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">${f}</span>`).join("")}</div>
+      <p class="mt-1 truncate text-[10px] text-white/50">🎁 ${m.prize}</p>
+      <p class="text-[9px] text-white/40">${timeAgo(m.updated)}</p>
+    </button>`;
+}
+function openMachineForm(sid) {
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
+      <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台（0字手打）</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    <label class="mt-4 block text-xs font-bold text-gold">📷 強制現場現拍機台照（禁相簿）</label>
+    ${cameraBlock("mf")}
+    <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>
+    <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">${FEATURE_TAGS.map(tagChip).join("")}</div>
+    <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>
+    <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">${PLAY_TAGS.map(tagChip).join("")}</div>
+    <button onclick="submitMachine('${sid}')" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交機台情報</button>
+  `);
+  bindCamera("mf");
+}
+function submitMachine(sid) {
+  const photo = window._cam?.mf;
+  if (!photo) return toast("請先現拍機台照", "pink");
+  const feats = selectedTags("mf-feats");
+  if (!feats.length) return toast("請至少選一個台性標籤", "pink");
+  const s = STORES.find(x => x.id === sid);
+  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats, plays: selectedTags("mf-plays"), prize: "台主自報", updated: now(), photo });
+  cloudInsert("claw_machines", { store_id: sid, feats, photo });
+  toast("機台已上架，相片成為識別", "green");
+  closeModal(); openStore(sid);
+}
+function buyFilter(mode) {
+  if (mode === "points") { if (STATE.points < 200) return toast("積分不足 200", "pink"); addPoints(-200, "開啟高級 Filter"); }
+  else toast("模擬支付 HK$15 成功", "green");
+  STATE.filterPassUntil = now() + 30 * DAY; save(); showView("find");
+}
 
-  /* ============================================================
-     讀取資料
-  ============================================================ */
-  const DEMO = [
-    { brand:"爪玩店", branch:"旺角西洋菜南街 55 號", machine_no:"A12", feature:"技術台", welfare:["有保夾"], today_prize:"Chiikawa 大隻毛公仔", ig:"@claw_play_hk", created_at:new Date(Date.now()-1000*60*8).toISOString(), photo:"" },
-    { brand:"SayHi Claw", branch:"銅鑼灣記利佐治街 1 號", machine_no:"B07", feature:"實爪台", welfare:["有保夾","有夾送"], today_prize:"三麗鷗 Kuromi 公仔", ig:"@sayhi_claw", created_at:new Date(Date.now()-1000*60*45).toISOString(), photo:"" },
-    { brand:"爪玩店", branch:"荃灣南豐中心", machine_no:"C21", feature:"山崩台", welfare:["有夾送"], today_prize:"寶可夢 卡比獸", ig:"@claw_play_hk", created_at:new Date(Date.now()-1000*60*60*3).toISOString(), photo:"" },
-  ];
+/* ============================================================
+   5. 【任務】
+============================================================ */
+function viewTask() {
+  const d = daily();
+  const adCd = d.adCooldownUntil > now();
+  return `
+    <div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">
+      <p class="text-xs text-white/50">目前積分</p>
+      <p class="text-3xl font-black text-gold neon-gold">💎 ${STATE.points}</p>
+      <p class="mt-1 text-[11px] text-neongreen">完成現場任務賺積分 · 消耗積分發布宣傳</p>
+    </div>
+    ${taskGroup("🧭 遊歷（提交店鋪情報）", "green", `
+      ${taskRow("提交新店鋪情報", "現拍店鋪 + 自動 GPS，壓縮 ~80KB", "+10", "審核成功再+40", "openIntelForm()")}
+      <p class="px-1 text-[11px] text-white/40">審核機制：2 位不同裝置用戶現場 GPS 現拍認證後追加 +40 分（另預留管理員人工審批接口）。</p>
+    `)}
+    ${taskGroup("🔍 審核與刷新任務", "pink", `
+      ${taskRow("現拍審核任務", `核實審核中店鋪 · 今日 ${d.review}/3`, "+10", "滿3再+30", "doReview()")}
+      ${taskRow("刷新殭屍店任務", `>14天久未更新現場 · 今日 ${d.zombie}/3`, "+30", "滿3再+20", "doZombie()")}
+      ${taskRow("日常現拍打卡", `GPS 打卡 · 今日 ${d.checkin}/6（上限30分）`, "+5", "", "doCheckin()")}
+    `)}
+    ${taskGroup("📺 每日看廣告領積分", "gold", `
+      ${taskRow("觀看廣告", `今日 ${d.ad}/3${adCd ? " · 冷卻中" : ""}`, "+10", "每次2H冷卻", adCd ? "" : "watchAd()", adCd || STATE.adFree)}
+      ${STATE.adFree ? '<p class="px-1 text-[11px] text-gold">你已兌換免廣告，此任務已停用。</p>' : ""}
+    `)}
+    ${taskGroup("⚡ 實時發布出貨照獎勵", "green", `
+      ${taskRow("前往實時頁發出貨照", `每次 +5 · 今日 ${d.live}/5`, "+5", "", "go('live')")}
+    `)}`;
+}
+function taskGroup(title, color, inner) {
+  const c = color === "gold" ? "text-gold neon-gold" : color === "pink" ? "text-neonpink neon-pink" : "text-neongreen neon-green";
+  return `<div class="mt-5"><h3 class="mb-2 text-sm font-black ${c}">${title}</h3><div class="space-y-2">${inner}</div></div>`;
+}
+function taskRow(title, desc, pts, extra, action, disabled = false) {
+  return `
+    <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+      <div class="pr-2"><p class="text-sm font-bold text-white/90">${title}</p><p class="text-[11px] text-white/50">${desc}</p></div>
+      <div class="flex flex-col items-end gap-1">
+        <button ${disabled ? "disabled" : `onclick="${action}"`} class="rounded-lg ${disabled ? "bg-white/10 text-white/40" : "bg-gold text-black glow-gold"} px-3 py-1.5 text-xs font-black">${pts}</button>
+        ${extra ? `<span class="text-[9px] text-neongreen">${extra}</span>` : ""}
+      </div>
+    </div>`;
+}
+function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("今日打卡已達上限（30分）", "pink"); d.checkin++; addPoints(5, "現場打卡"); showView("task"); }
+function doReview() { const d = daily(); if (d.review >= 3) return toast("今日審核已滿 3 次", "pink"); d.review++; addPoints(10, "現拍審核"); if (d.review === 3) addPoints(30, "審核滿3追加"); showView("task"); }
+function doZombie() { const d = daily(); if (d.zombie >= 3) return toast("今日殭屍刷新已滿 3 次", "pink"); d.zombie++; addPoints(30, "刷新殭屍店"); if (d.zombie === 3) addPoints(20, "殭屍滿3追加"); showView("task"); }
+function watchAd() {
+  const d = daily();
+  if (STATE.adFree) return toast("你已免廣告", "pink");
+  if (d.ad >= 3) return toast("今日廣告已看 3 次", "pink");
+  if (d.adCooldownUntil > now()) return toast("冷卻中，稍後再看", "pink");
+  adCountdown(5, () => { d.ad++; d.adCooldownUntil = now() + 2 * HOUR; addPoints(10, "觀看廣告"); showView("task"); });
+}
+function adCountdown(sec, done) {
+  let n = sec;
+  openModal(`<div class="py-10 text-center"><p class="text-neongreen neon-green">📺 廣告播放中…</p><p id="ad-num" class="mt-4 text-5xl font-black text-gold neon-gold">${n}</p><p class="mt-2 text-xs text-white/40">看完自動發放 +10 積分</p></div>`);
+  const t = setInterval(() => { n--; const el = document.getElementById("ad-num"); if (el) el.textContent = n; if (n <= 0) { clearInterval(t); closeModal(); done(); } }, 1000);
+}
+function openIntelForm() {
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
+      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2><button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    <input id="nt-name" placeholder="店名（必填）" class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    <select id="nt-region" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-gold">${REGIONS.map(r => `<option>${r}</option>`).join("")}</select>
+    <input id="nt-addr" placeholder="詳細地址（選填）" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    <div class="mt-3 flex items-center gap-2 text-xs text-neongreen"><span class="flicker">📍</span><span id="nt-gps">自動抓取 GPS 中…</span></div>
+    <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>
+    ${cameraBlock("nt", 80)}
+    <button onclick="submitIntel()" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交（+10 積分）</button>
+  `);
+  bindCamera("nt", 80); grabGPS("nt-gps");
+}
+function grabGPS(elId) {
+  const el = document.getElementById(elId);
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => el && (el.textContent = `已定位 ${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`), () => el && (el.textContent = "定位失敗（可手動填地址）"));
+  else if (el) el.textContent = "裝置不支援定位";
+}
+async function submitIntel() {
+  const name = document.getElementById("nt-name").value.trim();
+  const photo = window._cam?.nt;
+  if (!name) return toast("請填店名", "pink");
+  if (!photo) return toast("請現拍店鋪照", "pink");
+  const chk = await visionSafeCheck(photo);
+  if (!chk.safe) return toast("圖片未通過內容審查", "pink");
+  const store = { id: "s" + uid(), name, region: document.getElementById("nt-region").value, addr: document.getElementById("nt-addr").value.trim() || "（未填）", ig: "", fb: "", verified: "pending", size: "中", token: false, hour24: false, staff: false, dist: (Math.random() * 2).toFixed(1), machines: [] };
+  STORES.unshift(store);
+  STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
+  addPoints(10, "提交店鋪情報");
+  cloudInsert("claw_stores", { name, region: store.region, addr: store.addr, photo, status: "pending" });
+  toast("已提交！狀態：審核中（2位現場認證後+40）", "green");
+  closeModal(); showView("find");
+}
 
-  async function loadData() {
-    const loading = document.getElementById("loading");
-    if (!isConfigured()) {
-      DATA = DEMO;
-      loading?.remove();
-      render();
-      toast("示範模式：請填入 Supabase 設定");
-      return;
-    }
-    try {
-      const res = await fetch(`${REST()}?select=*&order=created_at.desc`, { headers: HEADERS });
-      if (!res.ok) throw new Error(await res.text());
-      DATA = await res.json();
-      loading?.remove();
-      render();
-    } catch (err) {
-      console.log("[v0] 讀取失敗:", err.message);
-      DATA = DEMO;
-      loading?.remove();
-      render();
-      toast("讀取失敗，顯示示範資料");
-    }
-  }
+/* ============================================================
+   6. 【實時】雙軌戰報
+============================================================ */
+function viewLive() {
+  return `
+    <div class="flex gap-2">
+      <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客出貨</button>
+      <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主宣傳</button>
+    </div>
+    <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
+      ${liveTrack === "player"
+        ? "🎯 現拍鎖死＋GPS · 免費發布得 +5 分 · 每日上限 5 · 只保留 1 天 · <b class='text-neongreen'>不連結店鋪</b>（防白嫖廣告）"
+        : "🏬 可上傳海報 · <b class='text-neonpink'>可連結店鋪引流</b> · 每日限 1 次 · 依保留天數扣 30/80/120 分，超時自動下架"}
+    </div>
+    <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
+      ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
+    </button>
+    <div class="mt-4 columns-2 gap-3 [&>*]:mb-3">
+      ${LIVE.filter(x => x.track === liveTrack && x.expire > now()).map(livePost).join("") || `<p class="text-center text-sm text-white/40">暫無戰報</p>`}
+    </div>`;
+}
+function setLiveTrack(t) { liveTrack = t; showView("live"); }
+function livePost(p) {
+  const isPlayer = p.track === "player";
+  const color = isPlayer ? "neongreen" : "neonpink";
+  const glow = isPlayer ? "glow-green" : "glow-pink";
+  const photo = p.photo ? `<img src="${p.photo}" class="h-28 w-full rounded-lg object-cover" alt="戰報" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${isPlayer ? "🎉" : "🖼️"}</div>`;
+  return `
+    <div class="break-inside-avoid rounded-2xl border border-${color}/40 bg-zinc-950 p-3 ${glow}">
+      ${photo}
+      <div class="mt-2 flex flex-wrap gap-1">
+        <span class="rounded bg-${color}/15 px-2 py-0.5 text-[10px] text-${color}">${p.label}</span>
+        <span class="rounded border border-${color}/40 px-2 py-0.5 text-[10px] text-${color}">${p.tag}</span>
+      </div>
+      <p class="mt-2 text-xs text-white/80">${p.prize}</p>
+      <p class="mt-1 text-[9px] text-white/40">${timeAgo(p.ts)} · 剩 ${Math.max(1, Math.ceil((p.expire - now()) / DAY))} 天</p>
+      ${!isPlayer && p.store ? `<button onclick="openStore('${p.store}')" class="mt-2 w-full rounded-lg border border-neonpink/50 py-1.5 text-[11px] text-neonpink">🔗 前往店鋪引流</button>` : (isPlayer ? `<p class="mt-2 text-[9px] text-white/30">🚫 出貨軌道不連結店鋪</p>` : "")}
+    </div>`;
+}
+function openPlayerPost() {
+  const d = daily();
+  if (d.live >= 5) return toast("今日出貨發布已達 5 次", "pink");
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3"><h2 class="font-black text-neongreen neon-green">🎯 夾客出貨戰報</h2><button onclick="closeModal()" class="text-2xl text-white/50">✕</button></div>
+    <label class="mt-4 block text-xs font-bold text-gold">📷 鎖死現拍（禁相簿）</label>
+    ${cameraBlock("lp")}
+    <div class="mt-2 flex items-center gap-2 text-xs text-neongreen"><span class="flicker">📍</span><span id="lp-gps">GPS 抓取中…</span></div>
+    <p class="mt-3 text-xs font-bold text-gold">標籤（單選）</p>
+    <div id="lp-tag" class="mt-2 flex gap-2">${["出貨", "中獎"].map(tagChip).join("")}</div>
+    <button onclick="submitPlayer()" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">免費發布（+5 積分）</button>
+  `);
+  bindCamera("lp"); grabGPS("lp-gps");
+}
+function submitPlayer() {
+  const d = daily();
+  const photo = window._cam?.lp;
+  if (!photo) return toast("請現拍出貨照", "pink");
+  const tag = selectedTags("lp-tag")[0] || "出貨";
+  const post = { id: "l" + uid(), track: "player", label: "🎯 夾客", tag, prize: "現場出貨！", photo, ts: now(), expire: now() + DAY, days: 1 };
+  LIVE.unshift(post); STATE.myPosts.unshift({ ...post, photo: "" });
+  d.live++; addPoints(5, "發布出貨照");
+  cloudInsert("claw_live", { track: "player", tag, photo });
+  closeModal(); showView("live");
+}
+function openOwnerPost() {
+  const d = daily();
+  if (d.promoUsed >= 1) return toast("台主每日限發 1 次", "pink");
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3"><h2 class="font-black text-neonpink neon-pink">🏬 台主宣傳發布</h2><button onclick="closeModal()" class="text-2xl text-white/50">✕</button></div>
+    <label class="mt-4 block text-xs font-bold text-gold">🖼️ 上傳精美海報（可選相簿）</label>
+    <input id="op-photo" type="file" accept="image/*" onchange="compressTo(this,'op',800,0.6,200)" class="mt-2 w-full text-xs text-white/60 file:mr-3 file:rounded-lg file:border-0 file:bg-neonpink file:px-3 file:py-2 file:font-bold file:text-black" />
+    <img id="op-preview" class="mt-2 hidden w-full rounded-lg" alt="海報預覽" />
+    <p id="op-size" class="mt-1 text-[10px] text-white/40"></p>
+    <p class="mt-3 text-xs font-bold text-gold">標籤</p>
+    <div id="op-tag" class="mt-2 flex flex-wrap gap-2">${["機台介紹", "新獎品", "新玩法"].map(tagChip).join("")}</div>
+    <p class="mt-3 text-xs font-bold text-gold">引流連結店鋪</p>
+    <select id="op-store" class="mt-1 w-full rounded-lg border border-neonpink/40 bg-zinc-900 px-3 py-2.5 text-sm text-neonpink">${STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join("")}</select>
+    <p class="mt-4 text-xs font-bold text-gold">保留天數（熔斷扣分）</p>
+    <div id="op-days" class="mt-2 grid grid-cols-3 gap-2">
+      ${[[1, 30], [3, 80], [5, 120]].map(([dd, c]) => `<button onclick="pickDays(${dd},${c})" data-days="${dd}" class="op-day rounded-xl border border-neonpink/40 py-2 text-center text-xs text-neonpink"><b>${dd} 天</b><br><span class="text-[10px]">扣 ${c} 分</span></button>`).join("")}
+    </div>
+    <button onclick="submitOwner()" class="mt-5 w-full rounded-2xl bg-neonpink py-3 font-black text-black glow-pink">確認發布（扣積分）</button>
+  `);
+}
+let opPick = { days: 0, cost: 0 };
+function pickDays(dd, c) { opPick = { days: dd, cost: c }; document.querySelectorAll(".op-day").forEach(b => b.classList.toggle("chip-active-pink", +b.dataset.days === dd)); }
+function submitOwner() {
+  const d = daily();
+  const img = document.getElementById("op-preview");
+  if (!img || img.classList.contains("hidden")) return toast("請上傳海報", "pink");
+  if (!opPick.days) return toast("請選擇保留天數", "pink");
+  if (STATE.points < opPick.cost) return toast(`積分不足 ${opPick.cost}`, "pink");
+  const tag = selectedTags("op-tag")[0] || "機台介紹";
+  const store = document.getElementById("op-store").value;
+  const post = { id: "l" + uid(), track: "owner", label: "🏬 台主", tag, prize: "台主宣傳上架", store, photo: img.src, ts: now(), expire: now() + opPick.days * DAY, days: opPick.days };
+  LIVE.unshift(post); STATE.myPosts.unshift({ ...post, photo: "" });
+  d.promoUsed++; addPoints(-opPick.cost, `發布宣傳 ${opPick.days} 天`);
+  cloudInsert("claw_live", { track: "owner", tag, store_id: store, days: opPick.days });
+  toast(`宣傳已上架，${opPick.days} 天後自動下架`, "green");
+  closeModal(); showView("live");
+}
 
-  /* ============================================================
-     強制現拍 + Canvas 壓縮（最大寬 800px，品質 0.6，目標 < 100KB）
-  ============================================================ */
-  let compressedBase64 = "";
-  const cameraInput = document.getElementById("camera-input");
-  document.getElementById("btn-camera").onclick = () => cameraInput.click();
+/* ============================================================
+   7. 【我的】
+============================================================ */
+function viewMe() {
+  const favS = STORES.filter(s => STATE.favStores.includes(s.id));
+  const favM = [];
+  STORES.forEach(s => s.machines.forEach(m => { if (STATE.favMachines.includes(m.id)) favM.push({ ...m, store: s.name }); }));
+  return `
+    <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
+      <div class="flex items-center gap-4">
+        <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div>
+        <div><div class="text-lg font-black">${STATE.user.name}</div><div class="text-[11px] text-gold/70">賽博爪王 · 裝置 ${STATE.user.device}</div></div>
+      </div>
+      <div class="mt-5 grid grid-cols-2 gap-3">
+        <div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">${STATE.points}</div></div>
+        <div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter 特權</div><div class="text-sm font-black text-neonpink neon-pink">${filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通"}</div></div>
+      </div>
+      <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ${STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold"} py-3.5 text-base font-black">
+        ${STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）"}
+      </button>
+    </div>
+    ${meSection("⭐ 收藏店鋪", favS.length ? favS.map(s => `<button onclick="openStore('${s.id}')" class="w-full rounded-xl border border-gold/25 bg-zinc-950 p-3 text-left text-sm text-gold">${s.name} <span class="text-[10px] text-white/40">· ${s.region}</span></button>`).join("") : emptyRow("尚無收藏店鋪"))}
+    ${meSection("🎰 收藏機台", favM.length ? favM.map(m => `<div class="rounded-xl border border-neonpink/25 bg-zinc-950 p-3 text-sm text-neonpink">台號 ${m.no} <span class="text-[10px] text-white/40">· ${m.store}</span></div>`).join("") : emptyRow("尚無收藏機台"))}
+    ${meSection("⚡ 我的實時戰報", STATE.myPosts.length ? STATE.myPosts.map(p => `<div class="rounded-xl border border-gold/25 bg-zinc-950 p-3 text-xs"><b class="${p.track === "player" ? "text-neongreen" : "text-neonpink"}">${p.label} · ${p.tag}</b><span class="ml-2 text-white/40">${timeAgo(p.ts)}</span></div>`).join("") : emptyRow("尚未發布戰報"))}
+    ${meSection("🧭 我的情報歷史", STATE.myIntel.length ? STATE.myIntel.map(i => `<div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3 text-xs"><span class="text-gold">${i.name}</span><span class="text-gold/70">${i.status}</span></div>`).join("") : emptyRow("尚未提交情報"))}
+    <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置本地資料</button>`;
+}
+function meSection(title, inner) { return `<div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">${title}</h3><div class="space-y-2">${inner}</div></div>`; }
+function emptyRow(t) { return `<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">${t}</p>`; }
+function redeemAdFree() {
+  if (STATE.adFree) return toast("你已兌換免廣告", "pink");
+  if (STATE.points < 80) return toast("積分不足 80", "pink");
+  addPoints(-80, "兌換免廣告"); STATE.adFree = true; save(); showView("me");
+}
+function resetAll() { if (confirm("確定重置所有本地資料？")) { localStorage.removeItem("claw_state"); STATE = load(); save(); showView("me"); } }
+function toggleFav(type, id) {
+  const key = type === "store" ? "favStores" : "favMachines";
+  const arr = STATE[key], i = arr.indexOf(id);
+  if (i >= 0) arr.splice(i, 1); else arr.push(id);
+  save(); toast(i >= 0 ? "已取消收藏" : "已收藏", "green");
+  if (type === "store") openStore(id);
+}
 
-  cameraInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const status = document.getElementById("photo-status");
-    status.textContent = "壓縮中…";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX_W = 800;
-        const scale = Math.min(1, MAX_W / img.width);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // 以品質 0.6 輸出，若仍過大則逐步降質
-        let quality = 0.6;
-        let out = canvas.toDataURL("image/jpeg", quality);
-        while (out.length > 100 * 1024 * 1.37 && quality > 0.3) { // base64 約 1.37x
-          quality -= 0.1;
-          out = canvas.toDataURL("image/jpeg", quality);
-        }
-        compressedBase64 = out;
-        const kb = Math.round((out.length * 0.75) / 1024);
-        status.innerHTML = `✅ 已現拍並壓縮：約 <b class="text-neongreen">${kb}KB</b>（${canvas.width}×${canvas.height}）`;
-        const preview = document.getElementById("photo-preview");
-        preview.src = out;
-        preview.classList.remove("hidden");
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  /* ============================================================
-     表單提交 → Insert Supabase（消耗積分）
-  ============================================================ */
-  document.getElementById("report-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (USER.points < 10) { toast("⚠️ 積分不足 10，無法發布"); return; }
-    if (!compressedBase64) { toast("⚠️ 請先拍攝現場機台照"); return; }
-    const form = e.target;
-    const fd = new FormData(form);
-    const welfare = fd.getAll("welfare");
-
-    const payload = {
-      brand: fd.get("brand"),
-      branch: fd.get("branch"),
-      machine_no: fd.get("machine_no"),
-      feature: fd.get("feature"),
-      welfare: welfare,               // 若欄位為 text 可改成 welfare.join(",")
-      today_prize: fd.get("today_prize"),
-      ig: fd.get("ig"),
-      photo: compressedBase64,        // Base64 圖片
-    };
-
-    const btn = document.getElementById("btn-submit");
-    btn.disabled = true; btn.textContent = "提交中…";
-
-    try {
-      if (!isConfigured()) {
-        // 示範模式：直接插入本地
-        DATA.unshift({ ...payload, created_at: new Date().toISOString() });
-        USER.points -= 10; syncUser();
-        finishSubmit(form);
-        toast("✅ 已回報（示範模式）-10 積分");
-        showView("store");
-        return;
-      }
-      const res = await fetch(REST(), {
-        method: "POST",
-        headers: { ...HEADERS, "Prefer": "return=representation" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const inserted = await res.json();
-      DATA.unshift(inserted[0] || { ...payload, created_at: new Date().toISOString() });
-      USER.points -= 10; syncUser();
-      finishSubmit(form);
-      toast("✅ 情報已成功上報！-10 積分");
-      showView("store");
-    } catch (err) {
-      console.log("[v0] 提交失敗:", err.message);
-      toast("❌ 提交失敗，請稍後再試");
-    } finally {
-      btn.disabled = false; btn.textContent = "🚀 消耗 10 積分提交情報";
-    }
+/* ============================================================
+   8. 相機現拍 + Canvas 壓縮
+============================================================ */
+window._cam = {};
+function cameraBlock(key, targetKB = 100) {
+  return `
+    <div class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+      <input id="${key}-photo" type="file" accept="image/*" capture="environment" class="hidden" />
+      <button type="button" onclick="document.getElementById('${key}-photo').click()" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 拍攝現場照（禁相簿）</button>
+      <img id="${key}-preview" class="mt-2 hidden w-full rounded-lg" alt="現拍預覽" />
+      <p id="${key}-size" class="mt-1 text-[10px] text-gold/60">目標 &lt; ${targetKB}KB</p>
+    </div>`;
+}
+function bindCamera(key, targetKB = 100) {
+  const input = document.getElementById(`${key}-photo`);
+  if (!input) return;
+  input.addEventListener("change", e => {
+    const file = e.target.files[0]; if (!file) return;
+    compressImage(file, 800, 0.6, targetKB, (dataUrl, kb) => {
+      window._cam[key] = dataUrl;
+      const img = document.getElementById(`${key}-preview`), sz = document.getElementById(`${key}-size`);
+      if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
+      if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = "mt-1 text-[10px] text-neongreen"; }
+    });
   });
+}
+function compressTo(input, key, maxW, q, targetKB) {
+  const file = input.files[0]; if (!file) return;
+  compressImage(file, maxW, q, targetKB, (dataUrl, kb) => {
+    const img = document.getElementById(`${key}-preview`), sz = document.getElementById(`${key}-size`);
+    if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
+    if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = "mt-1 text-[10px] text-neonpink"; }
+  });
+}
+/* 核心：Canvas 壓縮，最大寬 maxW、初始品質 q，逐步降質直到 < targetKB */
+function compressImage(file, maxW, quality, targetKB, cb) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      let q = quality, out = canvas.toDataURL("image/jpeg", q);
+      while (out.length / 1024 > targetKB && q > 0.2) { q -= 0.1; out = canvas.toDataURL("image/jpeg", q); }
+      cb(out, Math.round(out.length / 1024));
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 
-  function finishSubmit(form) {
-    form.reset();
-    compressedBase64 = "";
-    document.getElementById("photo-status").textContent = "";
-    document.getElementById("photo-preview").classList.add("hidden");
-    render();
-  }
+/* ============================================================
+   9. 標籤 chip / 工具 / Modal / Toast
+============================================================ */
+function tagChip(t) { return `<button type="button" onclick="this.classList.toggle('chip-active-green')" data-tag="${t}" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">${t}</button>`; }
+function selectedTags(containerId) { return [...document.querySelectorAll(`#${containerId} .chip-active-green`)].map(b => b.dataset.tag); }
+function timeAgo(ts) {
+  const diff = now() - ts;
+  if (diff < HOUR) return Math.max(1, Math.floor(diff / 60000)) + " 分鐘前";
+  if (diff < DAY) return Math.floor(diff / HOUR) + " 小時前";
+  return Math.floor(diff / DAY) + " 天前";
+}
+function openModal(html) {
+  const root = document.getElementById("modal-root");
+  root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
+  root.innerHTML = `<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative max-h-[88vh] w-full overflow-y-auto rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold">${html}<div class="h-4"></div></div>`;
+}
+function closeModal() { const root = document.getElementById("modal-root"); root.className = "pointer-events-none fixed inset-0 z-50"; root.innerHTML = ""; }
+function toast(msg, color = "green") {
+  const root = document.getElementById("toast-root");
+  const c = color === "pink" ? "border-neonpink text-neonpink glow-pink" : "border-neongreen text-neongreen glow-green";
+  const el = document.createElement("div");
+  el.className = `animate-pop pointer-events-auto rounded-full border ${c} bg-black px-4 py-2 text-sm font-bold`;
+  el.textContent = msg; root.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
 
-  /* ============================================================
-     Toast
-  ============================================================ */
-  let toastTimer;
-  function toast(msg) {
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.classList.remove("hidden");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.add("hidden"), 2600);
-  }
+/* ============================================================
+   10. 雲端讀取（Supabase）
+============================================================ */
+async function loadCloud() {
+  if (!CLOUD_ON) { console.log("[v0] 示範模式：未設定 Supabase 常數"); return; }
+  try {
+    const stores = await sbFetch("claw_stores?select=*&order=created_at.desc");
+    if (Array.isArray(stores) && stores.length) console.log("[v0] 已從 Supabase 載入", stores.length, "間店");
+    // 可在此把雲端資料映射進 STORES 後 showView(CURRENT)
+  } catch (e) { console.log("[v0] loadCloud 失敗:", e.message); }
+}
 
-  /* ============================================================
-     初始化
-  ============================================================ */
-  buildFilters();
-  buildTreasureWall();
-  buildTaskList();
-  syncUser();
-  loadData();
-  showView("store"); // 預設進入「找店」
-  </script>
+/* ============================================================
+   11. PWA Manifest + Service Worker（維持單一檔案）
+============================================================ */
+(function injectManifest() {
+  const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
+  const manifest = { name: "爪爪情報站", short_name: "爪爪情報", description: "香港夾娃娃店實時情報", start_url: ".", display: "standalone", background_color: "#000000", theme_color: "#000000", orientation: "portrait", icons: [{ src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" }, { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }] };
+  document.getElementById("manifest-placeholder").setAttribute("href", URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" })));
+})();
+if ("serviceWorker" in navigator) {
+  const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
+  navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" }))).catch(() => {});
+}
+
+/* ============================================================
+   12. 啟動
+============================================================ */
+renderPoints();
+showView("find");
+loadCloud();
+</script>
 </body>
 </html>
