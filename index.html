@@ -138,7 +138,15 @@ async function sbFetch(path, opts = {}) {
 }
 async function cloudInsert(table, row) {
   if (!CLOUD_ON) return;
-  try { await sbFetch(table, { method: "POST", body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }]) }); }
+  try { 
+    await sbFetch(table, { 
+      method: "POST", 
+      headers: {
+        Prefer: "return=minimal" // 確保使用 minimal，不要求 Supabase 回傳資料
+      },
+      body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }]) 
+    }); 
+  }
   catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
 }
 /* 預留：Google Cloud Vision 不當圖片過濾接口 */
@@ -521,15 +529,44 @@ async function submitIntel() {
   const photo = window._cam?.nt;
   if (!name) return toast("請填店名", "pink");
   if (!photo) return toast("請現拍店鋪照", "pink");
+  
   const chk = await visionSafeCheck(photo);
   if (!chk.safe) return toast("圖片未通過內容審查", "pink");
-  const store = { id: "s" + uid(), name, region: document.getElementById("nt-region").value, addr: document.getElementById("nt-addr").value.trim() || "（未填）", ig: "", fb: "", verified: "pending", size: "中", token: false, hour24: false, staff: false, dist: (Math.random() * 2).toFixed(1), machines: [] };
+
+  const region = document.getElementById("nt-region").value;
+  const addr = document.getElementById("nt-addr").value.trim() || "（未填）";
+
+  const store = { 
+    id: "s" + uid(), 
+    name, 
+    region, 
+    addr, 
+    ig: "", 
+    fb: "", 
+    verified: "pending", 
+    size: "中", 
+    token: false, 
+    hour24: false, 
+    staff: false, 
+    dist: (Math.random() * 2).toFixed(1), 
+    machines: [] 
+  };
+
+  // 1. 寫入雲端（使用 minimal，不依賴後端回傳）
+  cloudInsert("claw_stores", { name, region, addr, photo, status: "pending" });
+
+  // 2. 【關鍵】手動 Push / unshift 到前端本地的 STORES 陣列最前方
   STORES.unshift(store);
+
+  // 3. 記錄到使用者的情報歷史
   STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
   addPoints(10, "提交店鋪情報");
-  cloudInsert("claw_stores", { name, region: store.region, addr: store.addr, photo, status: "pending" });
+
   toast("已提交！狀態：審核中（2位現場認證後+40）", "green");
-  closeModal(); showView("find");
+  closeModal(); 
+  
+  // 4. 即時重新渲染找店頁面，讓用家立刻看到新店鋪！
+  showView("find");
 }
 
 /* ============================================================
