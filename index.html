@@ -820,7 +820,6 @@ async function loadCloud() {
   console.log("[v0] 直接從 Supabase 讀取資料...");
   
   try {
-    // 你的 Supabase 連線資訊（已經在檔案開頭定義了）
     const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
     
@@ -842,13 +841,13 @@ async function loadCloud() {
     
     if (!stores || stores.length === 0) {
       console.warn('⚠️ 沒有資料，使用模擬資料');
-      loadMockData(); // 需要先定義這個函數
+      loadMockData();
       return;
     }
     
-    // 轉換資料格式（和之前一樣）
+    // ===== 關鍵修改：直接使用 Supabase 的 id =====
     STORES = stores.map(s => ({
-      id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
+      id: s.id,  // 直接使用資料庫的 id，不要重新產生！
       name: s.name || "未命名店鋪",
       region: s.region || "旺角",
       addr: s.addr || "（未填地址）",
@@ -863,6 +862,8 @@ async function loadCloud() {
       machines: s.machines || []
     }));
 
+    console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
+    
     if (CURRENT === "find") {
       showView("find");
     }
@@ -870,46 +871,8 @@ async function loadCloud() {
   } catch (e) { 
     console.error("[v0] 讀取失敗:", e.message);
     console.warn("🔄 切換到模擬資料模式");
-    loadMockData(); // 需要先定義這個函數
+    loadMockData();
   }
-}
-// ===== 模擬資料函數（備用） =====
-function loadMockData() {
-  console.log("📝 使用模擬資料");
-  
-  STORES = [
-    { 
-      id: "mock1", 
-      name: "🛠️ 測試店鋪 A", 
-      region: "旺角", 
-      addr: "彌敦道 123 號", 
-      verified: "pending",
-      size: "中",
-      token: false,
-      hour24: false,
-      staff: false,
-      dist: "0.5",
-      machines: []
-    },
-    { 
-      id: "mock2", 
-      name: "🛠️ 測試店鋪 B", 
-      region: "銅鑼灣", 
-      addr: "軒尼詩道 456 號", 
-      verified: "pending",
-      size: "大",
-      token: true,
-      hour24: true,
-      staff: true,
-      dist: "1.2",
-      machines: []
-    }
-  ];
-
-  if (CURRENT === "find") {
-    showView("find");
-  }
-  toast("使用模擬資料 (備用模式)", "pink");
 }
 /* ============================================================
    11. PWA Manifest + Service Worker（維持單一檔案）
