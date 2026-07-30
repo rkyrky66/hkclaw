@@ -798,15 +798,24 @@ function toast(msg, color = "green") {
    10. 雲端讀取（Supabase）- 改為直接載入真實資料
 ============================================================ */
 async function loadCloud() {
-  if (!CLOUD_ON) { console.log("[v0] 示範模式：未設定 Supabase 常數"); return; }
+  console.log("[v0] 正在嘗試從 Vercel 後端 API 載入雲端資料...");
+  
   try {
-    // 從 Supabase 的 claw_stores 撈取所有資料，按照創建時間排序
-    const stores = await sbFetch("claw_stores?select=*&order=created_at.desc");
+    // 呼叫您的 Vercel 後端 API
+    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores");
+    
+    console.log("[v0] API 回應狀態碼 (status):", res.status);
+    
+    if (!res.ok) {
+      throw new Error("無法取得後端資料，Status: " + res.status);
+    }
+    
+    const stores = await res.json();
+    console.log("[v0] 成功取得後端回傳的原始資料:", stores);
     
     if (Array.isArray(stores) && stores.length > 0) {
-      console.log("[v0] 已從 Supabase 載入", stores.length, "間真實店鋪");
+      console.log("[v0] 成功載入店鋪數量:", stores.length);
       
-      // 將 Supabase 的欄位格式對應到您的前端 STORES 結構
       STORES = stores.map(s => ({
         id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
         name: s.name,
@@ -814,22 +823,25 @@ async function loadCloud() {
         addr: s.addr || "（未填地址）",
         ig: s.ig || "",
         fb: s.fb || "",
-        verified: s.status === "verified" ? "verified" : "pending", // 對應您審核狀態
+        verified: s.status === "verified" ? "verified" : "pending",
         size: s.size || "中",
         token: s.token || false,
         hour24: s.hour24 || false,
         staff: s.staff || false,
-        dist: (Math.random() * 2 + 0.1).toFixed(1), // 模擬距離
-        machines: [] // 這裡可以根據需要擴充機台關聯
+        dist: (Math.random() * 2 + 0.1).toFixed(1),
+        machines: []
       }));
 
-      // 如果當前人在「找店」頁面，重新整理畫面以顯示真實資料
+      // 重新整理畫面以顯示最新資料
       if (CURRENT === "find") {
         showView("find");
       }
+      console.log("[v0] 畫面已成功更新為雲端真實資料！");
+    } else {
+      console.log("[v0] 警告：API 回傳的資料是空的（陣列長度為 0）");
     }
   } catch (e) { 
-    console.log("[v0] loadCloud 失敗:", e.message); 
+    console.error("[v0] loadCloud 發生錯誤:", e.message); 
   }
 }
 
