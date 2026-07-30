@@ -854,8 +854,12 @@ if ("serviceWorker" in navigator) {
    12. 啟動
 ============================================================ */
 renderPoints();
-showView("find");
-loadCloud();
+
+// 改為非同步初始化：確保先抓到雲端真實資料，才第一次渲染畫面！
+(async function initApp() {
+  await loadCloud();
+  showView("find");
+})();
 </script>
 </body>
 </html>
