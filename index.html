@@ -777,39 +777,63 @@ async function loadCloud() {
   console.log("[v0] 正在嘗試從 Vercel 後端 API 載入雲端資料...");
   
   try {
-    // 直接發送單純的 GET 請求，不夾帶多餘的 Headers，避免觸發瀏覽器 CORS 預檢限制
-    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超時
     
-    if (!res.ok) throw new Error("無法取得後端資料，Status: " + res.status);
+    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores", {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: controller.signal,
+      mode: 'cors',
+    });
+    
+    clearTimeout(timeoutId);
+    
+    console.log(`📊 回應狀態: ${res.status}`);
+    console.log('📋 回應標頭:', [...res.headers.entries()]);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     
     const stores = await res.json();
+    console.log(`✅ 成功載入 ${stores.length} 筆資料`);
     
-    if (Array.isArray(stores) && stores.length > 0) {
-      console.log("[v0] 成功載入真實店鋪數量:", stores.length);
-      
-      STORES = stores.map(s => ({
-        id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
-        name: s.name,
-        region: s.region || "旺角",
-        addr: s.addr || "（未填地址）",
-        ig: s.ig || "",
-        fb: s.fb || "",
-        verified: s.status === "verified" ? "verified" : "pending",
-        size: s.size || "中",
-        token: s.token || false,
-        hour24: s.hour24 || false,
-        staff: s.staff || false,
-        dist: (Math.random() * 2 + 0.1).toFixed(1),
-        machines: []
-      }));
-
-      // 如果目前停留在找店頁面，立刻重新渲染畫面
-      if (CURRENT === "find") {
-        showView("find");
-      }
+    if (!Array.isArray(stores) || stores.length === 0) {
+      console.warn('⚠️ 沒有資料，使用模擬資料');
+      loadMockData();
+      return;
     }
+    
+    STORES = stores.map(s => ({
+      id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
+      name: s.name || "未命名店鋪",
+      region: s.region || "旺角",
+      addr: s.addr || "（未填地址）",
+      ig: s.ig || "",
+      fb: s.fb || "",
+      verified: s.status === "verified" ? "verified" : "pending",
+      size: s.size || "中",
+      token: s.token || false,
+      hour24: s.hour24 || false,
+      staff: s.staff || false,
+      dist: (Math.random() * 2 + 0.1).toFixed(1),
+      machines: s.machines || []
+    }));
+
+    if (CURRENT === "find") {
+      showView("find");
+    }
+    
   } catch (e) { 
-    console.error("[v0] loadCloud 發生錯誤:", e.message); 
+    console.error("[v0] 錯誤:", e.message);
+    if (e.name === 'AbortError') {
+      console.warn('⏰ 請求超時');
+    }
+    console.warn("🔄 切換到模擬資料模式");
+    loadMockData();
   }
 }
 
