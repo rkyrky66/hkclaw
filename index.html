@@ -795,15 +795,42 @@ function toast(msg, color = "green") {
 }
 
 /* ============================================================
-   10. 雲端讀取（Supabase）
+   10. 雲端讀取（Supabase）- 改為直接載入真實資料
 ============================================================ */
 async function loadCloud() {
   if (!CLOUD_ON) { console.log("[v0] 示範模式：未設定 Supabase 常數"); return; }
   try {
+    // 從 Supabase 的 claw_stores 撈取所有資料，按照創建時間排序
     const stores = await sbFetch("claw_stores?select=*&order=created_at.desc");
-    if (Array.isArray(stores) && stores.length) console.log("[v0] 已從 Supabase 載入", stores.length, "間店");
-    // 可在此把雲端資料映射進 STORES 後 showView(CURRENT)
-  } catch (e) { console.log("[v0] loadCloud 失敗:", e.message); }
+    
+    if (Array.isArray(stores) && stores.length > 0) {
+      console.log("[v0] 已從 Supabase 載入", stores.length, "間真實店鋪");
+      
+      // 將 Supabase 的欄位格式對應到您的前端 STORES 結構
+      STORES = stores.map(s => ({
+        id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
+        name: s.name,
+        region: s.region || "旺角",
+        addr: s.addr || "（未填地址）",
+        ig: s.ig || "",
+        fb: s.fb || "",
+        verified: s.status === "verified" ? "verified" : "pending", // 對應您審核狀態
+        size: s.size || "中",
+        token: s.token || false,
+        hour24: s.hour24 || false,
+        staff: s.staff || false,
+        dist: (Math.random() * 2 + 0.1).toFixed(1), // 模擬距離
+        machines: [] // 這裡可以根據需要擴充機台關聯
+      }));
+
+      // 如果當前人在「找店」頁面，重新整理畫面以顯示真實資料
+      if (CURRENT === "find") {
+        showView("find");
+      }
+    }
+  } catch (e) { 
+    console.log("[v0] loadCloud 失敗:", e.message); 
+  }
 }
 
 /* ============================================================
