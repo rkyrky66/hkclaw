@@ -799,39 +799,36 @@ function toast(msg, color = "green") {
    10. 雲端讀取（Supabase）- 改為直接載入真實資料
 ============================================================ */
 async function loadCloud() {
-  console.log("[v0] 正在嘗試從 Vercel 後端 API 載入雲端資料...");
+  console.log("[v0] 直接從 Supabase 讀取資料...");
   
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超時
+    // 你的 Supabase 連線資訊（已經在檔案開頭定義了）
+    const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
     
-    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/cors-stores", {
-      method: 'GET',
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
       headers: {
-        'Accept': 'application/json',
-      },
-      signal: controller.signal,
-      mode: 'cors',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      }
     });
     
-    clearTimeout(timeoutId);
-    
-    console.log(`📊 回應狀態: ${res.status}`);
-    console.log('📋 回應標頭:', [...res.headers.entries()]);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!response.ok) {
+      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
-    const stores = await res.json();
+    const stores = await response.json();
     console.log(`✅ 成功載入 ${stores.length} 筆資料`);
     
-    if (!Array.isArray(stores) || stores.length === 0) {
+    if (!stores || stores.length === 0) {
       console.warn('⚠️ 沒有資料，使用模擬資料');
-      loadMockData();
+      loadMockData(); // 需要先定義這個函數
       return;
     }
     
+    // 轉換資料格式（和之前一樣）
     STORES = stores.map(s => ({
       id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
       name: s.name || "未命名店鋪",
@@ -853,15 +850,49 @@ async function loadCloud() {
     }
     
   } catch (e) { 
-    console.error("[v0] 錯誤:", e.message);
-    if (e.name === 'AbortError') {
-      console.warn('⏰ 請求超時');
-    }
+    console.error("[v0] 讀取失敗:", e.message);
     console.warn("🔄 切換到模擬資料模式");
-    loadMockData();
+    loadMockData(); // 需要先定義這個函數
   }
 }
+// ===== 模擬資料函數（備用） =====
+function loadMockData() {
+  console.log("📝 使用模擬資料");
+  
+  STORES = [
+    { 
+      id: "mock1", 
+      name: "🛠️ 測試店鋪 A", 
+      region: "旺角", 
+      addr: "彌敦道 123 號", 
+      verified: "pending",
+      size: "中",
+      token: false,
+      hour24: false,
+      staff: false,
+      dist: "0.5",
+      machines: []
+    },
+    { 
+      id: "mock2", 
+      name: "🛠️ 測試店鋪 B", 
+      region: "銅鑼灣", 
+      addr: "軒尼詩道 456 號", 
+      verified: "pending",
+      size: "大",
+      token: true,
+      hour24: true,
+      staff: true,
+      dist: "1.2",
+      machines: []
+    }
+  ];
 
+  if (CURRENT === "find") {
+    showView("find");
+  }
+  toast("使用模擬資料 (備用模式)", "pink");
+}
 /* ============================================================
    11. PWA Manifest + Service Worker（維持單一檔案）
 ============================================================ */
