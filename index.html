@@ -774,42 +774,60 @@ function toast(msg, color = "green") {
    10. 雲端讀取（Supabase）- 改為直接載入真實資料
 ============================================================ */
 async function loadCloud() {
-  console.log("[v0] 正在嘗試從 Vercel 後端 API 載入雲端資料...");
+  console.log("[v0] 直接從 Supabase 讀取資料...");
   
   try {
-    // 直接發送單純的 GET 請求，不夾帶多餘的 Headers，避免觸發瀏覽器 CORS 預檢限制
-    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores");
+    const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
     
-    if (!res.ok) throw new Error("無法取得後端資料，Status: " + res.status);
-    
-    const stores = await res.json();
-    
-    if (Array.isArray(stores) && stores.length > 0) {
-      console.log("[v0] 成功載入真實店鋪數量:", stores.length);
-      
-      STORES = stores.map(s => ({
-        id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
-        name: s.name,
-        region: s.region || "旺角",
-        addr: s.addr || "（未填地址）",
-        ig: s.ig || "",
-        fb: s.fb || "",
-        verified: s.status === "verified" ? "verified" : "pending",
-        size: s.size || "中",
-        token: s.token || false,
-        hour24: s.hour24 || false,
-        staff: s.staff || false,
-        dist: (Math.random() * 2 + 0.1).toFixed(1),
-        machines: []
-      }));
-
-      // 如果目前停留在找店頁面，立刻重新渲染畫面
-      if (CURRENT === "find") {
-        showView("find");
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
       }
+    });
+    
+    if (!response.ok) {
+      console.error(`❌ HTTP ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
+    
+    const stores = await response.json();
+    console.log(`✅ 成功載入 ${stores.length} 筆資料`);
+    
+    // 如果沒有資料，使用模擬資料
+    if (!stores || stores.length === 0) {
+      console.warn('⚠️ 沒有資料，使用模擬資料');
+      loadMockData();
+      return;
+    }
+    
+    // 轉換資料格式
+    STORES = stores.map(s => ({
+      id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
+      name: s.name || "未命名店鋪",
+      region: s.region || "旺角",
+      addr: s.addr || "（未填地址）",
+      ig: s.ig || "",
+      fb: s.fb || "",
+      verified: s.status === "verified" ? "verified" : "pending",
+      size: s.size || "中",
+      token: s.token || false,
+      hour24: s.hour24 || false,
+      staff: s.staff || false,
+      dist: (Math.random() * 2 + 0.1).toFixed(1),
+      machines: s.machines || []
+    }));
+
+    if (CURRENT === "find") {
+      showView("find");
+    }
+    
   } catch (e) { 
-    console.error("[v0] loadCloud 發生錯誤:", e.message); 
+    console.error("[v0] 讀取失敗:", e.message);
+    console.warn("🔄 切換到模擬資料模式");
+    loadMockData();
   }
 }
 
