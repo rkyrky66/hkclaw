@@ -820,9 +820,6 @@ async function loadCloud() {
   console.log("[v0] 直接從 Supabase 讀取資料...");
   
   try {
-    const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
-    
     const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
       headers: {
         'apikey': SUPABASE_KEY,
@@ -832,16 +829,15 @@ async function loadCloud() {
     });
     
     if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
       throw new Error(`HTTP ${response.status}`);
     }
     
     const stores = await response.json();
     console.log(`✅ 成功載入 ${stores.length} 筆資料`);
     
-    // 直接使用 Supabase 的資料，不需要模擬資料
+    // ===== 關鍵修改：將 id 轉為字串 =====
     STORES = stores.map(s => ({
-      id: s.id,  // 直接使用資料庫的 id
+      id: String(s.id),  // ← 強制轉為字串！
       name: s.name || "未命名店鋪",
       region: s.region || "旺角",
       addr: s.addr || "（未填地址）",
@@ -858,14 +854,12 @@ async function loadCloud() {
 
     console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
     
-    // 重新渲染找店頁面
     if (CURRENT === "find") {
       showView("find");
     }
     
   } catch (e) { 
     console.error("[v0] 讀取失敗:", e.message);
-    // 如果載入失敗，直接顯示空列表，不切換到模擬資料
     STORES = [];
     if (CURRENT === "find") {
       showView("find");
