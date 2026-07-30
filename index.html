@@ -801,20 +801,15 @@ async function loadCloud() {
   console.log("[v0] 正在嘗試從 Vercel 後端 API 載入雲端資料...");
   
   try {
-    // 呼叫您的 Vercel 後端 API
+    // 直接發送單純的 GET 請求，不夾帶多餘的 Headers，避免觸發瀏覽器 CORS 預檢限制
     const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores");
     
-    console.log("[v0] API 回應狀態碼 (status):", res.status);
-    
-    if (!res.ok) {
-      throw new Error("無法取得後端資料，Status: " + res.status);
-    }
+    if (!res.ok) throw new Error("無法取得後端資料，Status: " + res.status);
     
     const stores = await res.json();
-    console.log("[v0] 成功取得後端回傳的原始資料:", stores);
     
     if (Array.isArray(stores) && stores.length > 0) {
-      console.log("[v0] 成功載入店鋪數量:", stores.length);
+      console.log("[v0] 成功載入真實店鋪數量:", stores.length);
       
       STORES = stores.map(s => ({
         id: s.id || "s_" + Math.random().toString(36).slice(2, 8),
@@ -832,13 +827,10 @@ async function loadCloud() {
         machines: []
       }));
 
-      // 重新整理畫面以顯示最新資料
+      // 如果目前停留在找店頁面，立刻重新渲染畫面
       if (CURRENT === "find") {
         showView("find");
       }
-      console.log("[v0] 畫面已成功更新為雲端真實資料！");
-    } else {
-      console.log("[v0] 警告：API 回傳的資料是空的（陣列長度為 0）");
     }
   } catch (e) { 
     console.error("[v0] loadCloud 發生錯誤:", e.message); 
