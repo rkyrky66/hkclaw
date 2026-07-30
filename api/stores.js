@@ -1,17 +1,25 @@
 export default async function handler(req, res) {
-  // 1. 【選配防禦】檢查是不是從您的官方網站發過來的請求 (CORS 限制)
   const origin = req.headers.origin;
-  // 替換成您的 GitHub Pages 正式網址，防止別人直接用其他網域偷打您的 API
+
+  // 1. 嚴格檢查：只允許從你的官方 GitHub Pages 發出的請求通過
   if (origin && origin !== "https://rkyrky66.github.io") {
     return res.status(403).json({ error: "Access Denied" });
   }
 
-  // 2. 從環境變數安全地讀取 Supabase 網址與高權限 Key
+  // 2. 通過檢查後，在標頭中明確告訴瀏覽器：「這個網域是合法的，可以存取」
+  res.setHeader('Access-Control-Allow-Origin', 'https://rkyrky66.github.io');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // 3. 安全地讀取環境變數去跟 Supabase 要資料
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   try {
-    // 3. 由後端伺服器出面，去跟 Supabase 拿資料
     const response = await fetch(`${supabaseUrl}/rest/v1/claw_stores?select=*&order=created_at.desc`, {
       headers: {
         apikey: serviceRoleKey,
@@ -22,8 +30,6 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error("Supabase fetch failed");
 
     const data = await response.json();
-
-    // 4. 把資料乾淨地回傳給您的前端網頁
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ error: "Internal Server Error" });
