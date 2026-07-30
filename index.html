@@ -805,7 +805,7 @@ async function loadCloud() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超時
     
-    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/stores", {
+    const res = await fetch("https://hkclaw-h81pn8or3-rkyrky66-9802s-projects.vercel.app/api/cors-stores", {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
