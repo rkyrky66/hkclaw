@@ -1,26 +1,11 @@
 export default async function handler(req, res) {
-  const origin = req.headers.origin;
+  const origin = req.headers.origin || '*';
 
-  // 1. 允許的白名單網域清單（包含你的 GitHub Pages 正式網址）
-  const allowedOrigins = [
-    "https://rkyrky66.github.io",
-    "https://hkclaw.vercel.app"
-  ];
-
-  // 2. 嚴格檢查：如果來源不在白名單內（且不是本地端測試），直接拒絕 (403)
-  if (origin && !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ error: "Access Denied" });
-  }
-
-  // 3. 動態設定 CORS 通行證（直接回傳當下的請求來源，完美匹配）
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  
+  // 允許來自你的 GitHub Pages 或任何來源（開發階段先用 '*' 測試最保險）
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // 4. 處理瀏覽器的 OPTIONS 預檢請求
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
