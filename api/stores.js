@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   // 1. 【選配防禦】檢查是不是從您的官方網站發過來的請求 (CORS 限制)
   const origin = req.headers.origin;
   // 替換成您的 GitHub Pages 正式網址，防止別人直接用其他網域偷打您的 API
-  if (origin && origin !== "https://您的GitHub帳號.github.io") {
+  if (origin && origin !== "https://rkyrky66.github.io") {
     return res.status(403).json({ error: "Access Denied" });
   }
 
