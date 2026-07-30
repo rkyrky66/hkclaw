@@ -355,23 +355,35 @@ function renderStoreList() {
   const list = filteredStores();
   if (!list.length) return `<p class="py-10 text-center text-sm text-white/40">此區暫無店舖情報</p>`;
   return list.map(s => {
-    const badge = s.verified === "verified"
-      ? `<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">已認證</span>`
-      : `<span class="rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold flicker">審核中</span>`;
-    const hi = s._hit ? "border-neongreen/60 glow-green" : "border-gold/25";
+    // 1. 定義徽章 (Badge) 的樣式
+    const isVerified = s.verified === "verified";
+    const badge = isVerified
+      ? `<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">✅ 已認證</span>`
+      : `<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400">⏳ 審核中</span>`;
+    
+    // 2. 如果是「審核中」的店鋪，邊框顏色調整為黃色，提醒用戶注意
+    const borderClass = isVerified ? "border-gold/25" : "border-yellow-400/30 border-dashed";
+
     return `
-      <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${hi} bg-zinc-950 p-4 text-left">
+      <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${borderClass} bg-zinc-950 p-4 text-left transition-all hover:border-gold/60">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <div class="flex items-center gap-2"><h3 class="font-black text-gold">${s.name}</h3>${s._hit ? '<span class="text-[10px] text-neongreen neon-green">命中</span>' : ""}</div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-black text-gold">${s.name}</h3>
+              ${s._hit ? '<span class="text-[10px] text-neongreen neon-green">🎯 命中</span>' : ""}
+            </div>
             <p class="mt-0.5 text-xs text-white/50">${s.region} · ${s.addr}</p>
-          </div>${badge}
+          </div>
+          ${badge}
         </div>
         <div class="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
-          <span class="text-neonpink neon-pink">📍 ${s.dist} km</span><span>🎰 ${s.machines.length} 部機台</span>
+          <span class="text-neonpink neon-pink">📍 ${s.dist} km</span>
+          <span>🎰 ${s.machines.length} 部機台</span>
           <span>${s.size}型${s.hour24 ? " · 24H" : ""}${s.token ? " · 需代幣" : ""}</span>
         </div>
-      </button>`;
+        ${!isVerified ? `<p class="mt-2 text-[10px] text-yellow-400/60">⚠️ 此店鋪資訊由用戶提供，尚未經官方審核</p>` : ""}
+      </button>
+    `;
   }).join("");
 }
 
