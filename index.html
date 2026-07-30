@@ -205,7 +205,32 @@ const REGIONS = ["旺角", "銅鑼灣", "尖沙咀", "觀塘", "荃灣", "沙田
 const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
 const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
 
-let STORES = []
+let STORES = seedStores();
+function seedStores() {
+  const base = [
+    { name: "爪玩店 · 旺角旗艦", region: "旺角", addr: "西洋菜南街 2A 好望角大廈", ig: "clawplay.mk", fb: "clawplayHK", verified: "verified", size: "大", token: false, hour24: true, staff: true },
+    { name: "SayHi Claw · 銅鑼灣", region: "銅鑼灣", addr: "記利佐治街 1 號金百利", ig: "sayhi.claw", fb: "sayhiclaw", verified: "verified", size: "中", token: true, hour24: false, staff: true },
+    { name: "夾夾樂 · 觀塘店", region: "觀塘", addr: "開源道 33 號建生廣場", ig: "gigilok", fb: "", verified: "pending", size: "細", token: false, hour24: true, staff: false },
+    { name: "爪玩店 · 荃灣", region: "荃灣", addr: "沙咀道 388 號中國染廠", ig: "clawplay.tw", fb: "", verified: "verified", size: "中", token: true, hour24: false, staff: true },
+    { name: "夾神殿 · 尖沙咀", region: "尖沙咀", addr: "加連威老道 21 號", ig: "clawgod", fb: "clawgodhk", verified: "pending", size: "大", token: false, hour24: true, staff: true },
+  ];
+  return base.map((s, i) => ({ id: "s" + i, ...s, dist: (Math.random() * 2 + 0.1).toFixed(1), machines: seedMachines("s" + i, i) }));
+}
+function seedMachines(sid, seed) {
+  const cnt = [3, 4, 2, 3, 5][seed % 5];
+  const arr = [];
+  for (let i = 0; i < cnt; i++) {
+    const ageH = [2, 10, 60, 400, 26][(seed + i) % 5];
+    arr.push({
+      id: sid + "_m" + i, no: "A" + (i + 1),
+      feats: [FEATURE_TAGS[(seed + i) % FEATURE_TAGS.length], FEATURE_TAGS[(seed + i + 4) % FEATURE_TAGS.length]],
+      plays: [PLAY_TAGS[(seed + i) % PLAY_TAGS.length]],
+      prize: ["chiikawa 公仔", "Sanrio 大布偶", "jellycat 茄子", "一番賞 A賞", "山系毛公仔"][(seed + i) % 5],
+      updated: now() - ageH * HOUR, photo: "",
+    });
+  }
+  return arr;
+}
 
 
 let LIVE = seedLive();
