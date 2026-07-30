@@ -1,12 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
-  // 1. CORS 設定（允許所有來源）
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
+  // vercel.json 已經處理 CORS，這裡可以簡化或保留
+  // 但為了保險，還是保留基本 CORS 設定
+  
   // 處理 OPTIONS 預檢請求
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -20,9 +17,8 @@ export default async function handler(req, res) {
   try {
     console.log('🔍 正在連線 Supabase...');
     
-    // 環境變數名稱修正
-    const supabaseUrl = process.env.SUPABASE_URL;  // 注意拼寫
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;  // 注意拼寫
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
     
     if (!supabaseUrl || !supabaseKey) {
       console.error('❌ 環境變數缺失');
@@ -37,10 +33,9 @@ export default async function handler(req, res) {
     console.log('✅ 環境變數檢查通過');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 🔥 重點：改用 claw_stores 而不是 stores
     console.log('📊 正在查詢 Supabase claw_stores 資料表...');
     const { data, error } = await supabase
-      .from('claw_stores')  // ← 這裡改成 claw_stores
+      .from('claw_stores')
       .select('*')
       .limit(200);
 
