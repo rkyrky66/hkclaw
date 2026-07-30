@@ -839,15 +839,9 @@ async function loadCloud() {
     const stores = await response.json();
     console.log(`✅ 成功載入 ${stores.length} 筆資料`);
     
-    if (!stores || stores.length === 0) {
-      console.warn('⚠️ 沒有資料，使用模擬資料');
-      loadMockData();
-      return;
-    }
-    
-    // ===== 關鍵修改：直接使用 Supabase 的 id =====
+    // 直接使用 Supabase 的資料，不需要模擬資料
     STORES = stores.map(s => ({
-      id: s.id,  // 直接使用資料庫的 id，不要重新產生！
+      id: s.id,  // 直接使用資料庫的 id
       name: s.name || "未命名店鋪",
       region: s.region || "旺角",
       addr: s.addr || "（未填地址）",
@@ -864,14 +858,19 @@ async function loadCloud() {
 
     console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
     
+    // 重新渲染找店頁面
     if (CURRENT === "find") {
       showView("find");
     }
     
   } catch (e) { 
     console.error("[v0] 讀取失敗:", e.message);
-    console.warn("🔄 切換到模擬資料模式");
-    loadMockData();
+    // 如果載入失敗，直接顯示空列表，不切換到模擬資料
+    STORES = [];
+    if (CURRENT === "find") {
+      showView("find");
+    }
+    toast("無法載入店鋪資料，請稍後再試", "pink");
   }
 }
 /* ============================================================
