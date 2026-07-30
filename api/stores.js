@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
     console.log('📊 正在查詢 Supabase stores 資料表...');
     const { data, error, count } = await supabase
-      .from('stores')
+      .from('claw_stores')
       .select('*', { count: 'exact', head: false })
       .limit(200);
 
