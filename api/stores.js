@@ -1,8 +1,6 @@
 export default async function handler(req, res) {
-  const origin = req.headers.origin || '*';
-
-  // 允許來自你的 GitHub Pages 或任何來源（開發階段先用 '*' 測試最保險）
-  res.setHeader('Access-Control-Allow-Origin', origin);
+  // 無條件允許所有來源（先排除 403）
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -10,25 +8,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 5. 讀取 Supabase 資料
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/claw_stores?select=*&order=created_at.desc`, {
-      headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
-      }
-    });
-
-    if (!response.ok) throw new Error("Supabase fetch failed");
-
-    const data = await response.json();
-
-    // 5. 成功回傳資料
-    return res.status(200).json(data);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
+  // 直接回傳一個簡單的測試陣列，看前端能不能收到
+  return res.status(200).json([
+    { id: "test1", name: "測試雲端店鋪", region: "旺角", addr: "測試地址" }
+  ]);
 }
