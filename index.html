@@ -383,31 +383,14 @@ function viewFind() {
 // 切換大區
 function setRegionGroup(group) {
   findState.group = group;
-  findState.region = "全部";  // 重置地區選擇
-  // 收起更多
-  moreRegionsOpen = false;
-  const el = document.getElementById("more-regions");
-  const btn = document.getElementById("more-regions-btn");
-  if (el) el.classList.add("hidden");
-  if (btn) btn.textContent = "📍 顯示更多地區";
+  findState.region = "全部";
+  // 收起所有大區的「更多」
+  Object.keys(moreRegionsOpenMap).forEach(key => {
+    moreRegionsOpenMap[key] = false;
+  });
   showView("find");
 }
 
-// 展開/收起更多
-// 已合併到 moreRegionsOpenMap
-// 並刪除舊的 toggleMoreRegions() 和 setRegion() 中的相關邏輯
-function toggleMoreRegions() {
-  moreRegionsOpen = !moreRegionsOpen;
-  const el = document.getElementById("more-regions");
-  const btn = document.getElementById("more-regions-btn");
-  if (el) {
-    el.classList.toggle("hidden", !moreRegionsOpen);
-    if (moreRegionsOpen) el.classList.add("animate-pop");
-  }
-  if (btn) {
-    btn.textContent = moreRegionsOpen ? "📍 收起" : "📍 顯示更多地區";
-  }
-}
 // 大區展開狀態
 let regionGroupOpen = {
   hk: false,
@@ -762,44 +745,9 @@ function openIntelForm() {
     </div>
     <input id="nt-name" placeholder="店名（必填）" class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     
-    <!-- ===== 三區單選（表單內） ===== -->
+    <!-- ===== 地區選擇器 ===== -->
     <p class="mt-4 text-xs font-bold text-gold">📍 地區</p>
-    <div class="mt-2 flex gap-2">
-      ${Object.keys(REGIONS).map(key => `
-        <button type="button" onclick="setIntelGroup('${key}')" 
-          data-group="${key}"
-          class="intel-group-btn flex-1 rounded-xl border py-2 text-sm font-black transition-all
-          ${intelGroup === key 
-            ? 'border-gold bg-gold/20 text-gold glow-gold' 
-            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
-        >${REGIONS[key].icon} ${REGIONS[key].label}</button>
-      `).join("")}
-    </div>
-    
-    <!-- ===== 該區地區按鈕（Grid 4 欄，包含更多/收起） ===== -->
-<div class="intel-region-container mt-3 grid grid-cols-4 gap-2">
-  ${items.map(item => {
-    if (item === '📍 更多' || item === '📍 收起') {
-      return `
-        <button type="button" onclick="toggleIntelMore('${group}')" 
-          class="rounded-full border py-1.5 text-center text-xs transition-all
-          ${isMoreOpen 
-            ? 'chip-active-gold border-gold/60' 
-            : 'border-gold/40 text-gold hover:border-gold/60'}"
-        >${item}</button>
-      `;
-    }
-    return `
-      <button type="button" onclick="pickIntelRegion('${item}')" 
-        data-region="${item}"
-        class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
-        ${selectedIntelRegion === item 
-          ? 'chip-active-gold border-gold/60' 
-          : 'border-gold/40 text-gold hover:border-gold/60'}"
-      >${item}</button>
-    `;
-  }).join("")}
-</div>
+    <div class="intel-selector-container mt-2"></div>
     
     <input id="nt-addr" placeholder="詳細地址（選填）" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     <div class="mt-3 flex items-center gap-2 text-xs text-neongreen"><span class="flicker">📍</span><span id="nt-gps">自動抓取 GPS 中…</span></div>
@@ -809,15 +757,21 @@ function openIntelForm() {
   `);
   bindCamera("nt", 80);
   grabGPS("nt-gps");
+  
+  // ===== 初始化渲染地區選擇器 =====
+  intelRegionSelected = false;
+  renderIntelForm();
 }
 
 // 表單內選取大區
 let intelGroup = "kl";
+let intelRegionSelected = false;  // ← 新增：是否已選地區
 function setIntelGroup(group) {
   intelGroup = group;
-  selectedIntelRegion = "";
-  
-  // 重置該大區的「更多」展開狀態
+  // 切換大區時，如果已選地區，回到未選擇狀態
+  if (intelRegionSelected) {
+    intelRegionSelected = false;
+  }
   intelMoreOpenMap[group] = false;
   
   // 更新大區按鈕高亮
@@ -831,13 +785,14 @@ function setIntelGroup(group) {
     b.classList.toggle("text-white/45", !isActive);
   });
   
-  // 重新渲染該區的地區按鈕
-  renderIntelRegions(group);
+  renderIntelForm();
 }
 // 表單內選取地區
 let selectedIntelRegion = "";
 function pickIntelRegion(r) {
   selectedIntelRegion = r;
+  intelRegionSelected = true;  // ← 標記已選
+  
   // 清除所有地區按鈕的高亮
   document.querySelectorAll(".intel-reg-btn").forEach(b => {
     b.classList.remove("chip-active-gold");
@@ -845,8 +800,8 @@ function pickIntelRegion(r) {
     b.classList.add("border-gold/40");
     b.classList.remove("border-white/20");
     b.classList.remove("text-white/40");
-    b.classList.add("text-gold");  // ← 加入這行，確保未選中時文字是金色
-    b.style.color = "";            // ← 清除 inline style
+    b.classList.add("text-gold");
+    b.style.color = "";
     b.style.background = "";
   });
   // 高亮當前選中
@@ -854,58 +809,100 @@ function pickIntelRegion(r) {
     b.classList.add("chip-active-gold");
     b.classList.remove("border-gold/40");
     b.classList.add("border-gold/60");
-    b.style.color = "#000";        // ← 強制黑色文字
+    b.style.color = "#000";
     b.style.background = "#D4AF37";
   });
-  // 如果有展開更多，自動收起
-  if (document.getElementById("intel-more-regions")?.classList.contains("hidden") === false) {
-    toggleIntelMore();
-  }
+  
+  // ← 移除自動收起的邏輯（因為現在是整個表單切換狀態）
+  
+  // 重新渲染表單（切換到「已選擇」狀態）
+  renderIntelForm();
 }
-
-// 渲染表單內地區（切換大區時呼叫）
-function renderIntelRegions(group) {
+// 重新選擇地區
+function resetIntelRegion() {
+  intelRegionSelected = false;
+  // 不要重置 selectedIntelRegion，保留高亮用
+  renderIntelForm();
+}
+// 渲染表單內地區選擇器
+function renderIntelForm() {
+  const container = document.querySelector("#modal-root .intel-selector-container");
+  if (!container) return;
+  
+  const group = intelGroup || "kl";
   const currentGroup = REGIONS[group];
   const isMoreOpen = intelMoreOpenMap[group] || false;
   const allRegions = isMoreOpen ? [...currentGroup.hot, ...currentGroup.more] : currentGroup.hot;
   
-  // 準備所有按鈕（包含更多/收起）
+  // ===== 狀態 2：已選擇地區 =====
+  if (intelRegionSelected && selectedIntelRegion) {
+    container.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-gold">📍 地區</span>
+          <span class="text-sm font-bold text-neongreen neon-green">→ ${selectedIntelRegion} ✓</span>
+        </div>
+        <button onclick="resetIntelRegion()" 
+          class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold hover:border-gold/60"
+        >重新選擇</button>
+      </div>
+    `;
+    return;
+  }
+  
+  // ===== 狀態 1：未選擇（顯示三區 + 地區按鈕） =====
   const items = [...allRegions];
   if (currentGroup.more.length > 0) {
     items.push(isMoreOpen ? '📍 收起' : '📍 更多');
   }
   
-  // 找容器
-  const container = document.querySelector("#modal-root .intel-region-container");
-  if (!container) return;
-  
-  container.innerHTML = items.map(item => {
-    if (item === '📍 更多' || item === '📍 收起') {
-      return `
-        <button type="button" onclick="toggleIntelMore('${group}')" 
-          class="rounded-full border py-1.5 text-center text-xs transition-all
-          ${isMoreOpen 
-            ? 'chip-active-gold border-gold/60' 
-            : 'border-gold/40 text-gold hover:border-gold/60'}"
-        >${item}</button>
-      `;
-    }
-    return `
-      <button type="button" onclick="pickIntelRegion('${item}')" 
-        data-region="${item}"
-        class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
-        ${selectedIntelRegion === item 
-          ? 'chip-active-gold border-gold/60' 
-          : 'border-gold/40 text-gold hover:border-gold/60'}"
-      >${item}</button>
-    `;
-  }).join("");
+  container.innerHTML = `
+    <!-- 三區單選 -->
+    <div class="flex gap-2">
+      ${Object.keys(REGIONS).map(key => `
+        <button type="button" onclick="setIntelGroup('${key}')" 
+          data-group="${key}"
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${intelGroup === key 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >${REGIONS[key].icon} ${REGIONS[key].label}</button>
+      `).join("")}
+    </div>
+    
+    <!-- 地區按鈕 Grid -->
+    <div class="mt-3 grid grid-cols-4 gap-2">
+      ${items.map(item => {
+        if (item === '📍 更多' || item === '📍 收起') {
+          return `
+            <button type="button" onclick="toggleIntelMore('${group}')" 
+              class="rounded-full border py-1.5 text-center text-xs transition-all
+              ${isMoreOpen 
+                ? 'chip-active-gold border-gold/60' 
+                : 'border-gold/40 text-gold hover:border-gold/60'}"
+            >${item}</button>
+          `;
+        }
+        return `
+          <button type="button" onclick="pickIntelRegion('${item}')" 
+            data-region="${item}"
+            class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
+            ${selectedIntelRegion === item 
+              ? 'chip-active-gold border-gold/60' 
+              : 'border-gold/40 text-gold hover:border-gold/60'}"
+          >${item}</button>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
+// 渲染表單內地區（切換大區時呼叫）
+
 
 // 表單內展開/收起更多
 function toggleIntelMore(group) {
   intelMoreOpenMap[group] = !intelMoreOpenMap[group];
-  renderIntelRegions(intelGroup);
+  renderIntelForm();
 }
 // 表單內「更多」展開狀態（每個大區獨立）
 let intelMoreOpenMap = {
