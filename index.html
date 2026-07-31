@@ -547,19 +547,44 @@ function toggleMoreRegions(group) {
 let selectedMall = '';
 
 // 切換商場區塊顯示
+// 切換商場區塊顯示
 function toggleMallSection() {
   const checked = document.getElementById('nt-mall-toggle').checked;
   const section = document.getElementById('nt-mall-section');
+  
   if (section) {
     section.classList.toggle('hidden', !checked);
   }
+  
   if (checked) {
     // 如果沒有選地區，提示用戶
     if (!selectedIntelRegion) {
       toast('請先選擇地區', 'pink');
-      // 但還是顯示商場列表，會顯示「請先選擇地區」
     }
     renderMallList(document.getElementById('nt-mall-input')?.value || '');
+  } else {
+    // ===== 取消勾選時，清空所有商場相關資料 =====
+    selectedMall = '';
+    
+    // 清空商場輸入框
+    const mallInput = document.getElementById('nt-mall-input');
+    if (mallInput) mallInput.value = '';
+    
+    // 清空樓層輸入框
+    const floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    
+    // 清空詳細地址
+    const addrInput = document.getElementById('nt-addr');
+    if (addrInput) addrInput.value = '';
+    
+    // 隱藏樓層區塊
+    const floorSection = document.getElementById('nt-floor-section');
+    if (floorSection) floorSection.classList.add('hidden');
+    
+    // 清空商場列表
+    const mallList = document.getElementById('nt-mall-list');
+    if (mallList) mallList.innerHTML = '';
   }
 }
 
@@ -594,12 +619,15 @@ async function renderMallList(query = '') {
   mallList.sort((a, b) => a.name.localeCompare(b.name));
   
   if (mallList.length === 0) {
-    container.innerHTML = `<p class="text-xs text-white/40">「${selectedIntelRegion}」暫無商場資料</p>`;
+    container.innerHTML = `
+      <p class="text-xs text-white/40">「${selectedIntelRegion}」暫無商場資料</p>
+      <p class="mt-1 text-[10px] text-white/30">請在輸入框中直接輸入商場名稱</p>
+    `;
     return;
   }
   
   container.innerHTML = `
-    <p class="mb-1.5 text-[10px] text-white/40">${selectedIntelRegion}（${mallList.length}個）</p>
+    <p class="mb-1.5 text-[10px] text-white/40">快速選擇</p>
     <div class="flex flex-wrap gap-2">
       ${mallList.map(m => `
         <button onclick="selectMall('${m.name.replace(/'/g, "\\'")}')" 
@@ -617,22 +645,59 @@ async function renderMallList(query = '') {
 function selectMall(name) {
   selectedMall = name;
   
+  // 填入輸入框
   const input = document.getElementById('nt-mall-input');
   if (input) {
     input.value = name;
   }
   
+  // 顯示樓層輸入框
   const floorSection = document.getElementById('nt-floor-section');
   if (floorSection) {
     floorSection.classList.remove('hidden');
   }
   
+  // 清空樓層輸入框（切換商場時重置）
+  const floorInput = document.getElementById('nt-floor');
+  if (floorInput) {
+    floorInput.value = '';
+  }
+  
+  // 更新詳細地址（只填商場名稱，不包含樓層）
   const addrInput = document.getElementById('nt-addr');
-  if (addrInput && !addrInput.value) {
+  if (addrInput) {
     addrInput.value = name;
   }
   
+  // 重新渲染商場列表（更新高亮）
   renderMallList(name);
+  
+  // 綁定樓層輸入事件（即時更新地址）
+  if (floorInput) {
+    // 移除舊的監聽器（避免重複綁定）
+    floorInput.removeEventListener('input', updateAddressWithFloor);
+    floorInput.addEventListener('input', updateAddressWithFloor);
+  }
+}
+
+// 更新地址（加入樓層）
+function updateAddressWithFloor() {
+  const mallInput = document.getElementById('nt-mall-input');
+  const floorInput = document.getElementById('nt-floor');
+  const addrInput = document.getElementById('nt-addr');
+  
+  if (!mallInput || !floorInput || !addrInput) return;
+  
+  const mallName = mallInput.value.trim();
+  const floor = floorInput.value.trim();
+  
+  if (mallName) {
+    if (floor) {
+      addrInput.value = `${mallName} ${floor}樓`;
+    } else {
+      addrInput.value = mallName;
+    }
+  }
 }
 
 function filterPromoCard() {
@@ -945,8 +1010,8 @@ function openIntelForm() {
         <div id="nt-mall-list" class="mt-2"></div>
         <div id="nt-floor-section" class="hidden mt-3">
           <label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label>
-          <input id="nt-floor" placeholder="如：G/F、2/F、3樓" 
-            class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+          <input id="nt-floor" placeholder="如：G、2、3" 
+  class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
         </div>
       </div>
     </div>
