@@ -765,7 +765,17 @@ function renderStoreList() {
     const hitBadge = s._hit ? '<span class="text-[10px] text-neongreen neon-green">🎯 命中</span>' : "";
 
     return `
-      <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${borderClass} bg-zinc-950 p-4 text-left transition-all">
+  <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${borderClass} bg-zinc-950 p-4 text-left transition-all">
+    <div class="flex gap-3">
+      <!-- ===== 店鋪縮圖 ===== -->
+      <div class="shrink-0">
+        ${s.photo ? `
+          <img src="${s.photo}" class="h-16 w-16 rounded-lg object-cover" alt="${s.name}" />
+        ` : `
+          <div class="flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-800 text-3xl">🏪</div>
+        `}
+      </div>
+      <div class="min-w-0 flex-1">
         <div class="flex items-start justify-between gap-2">
           <div>
             <div class="flex items-center gap-2 flex-wrap">
@@ -776,14 +786,16 @@ function renderStoreList() {
           </div>
           ${badge}
         </div>
-        <div class="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
+        <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
           <span class="text-neonpink neon-pink">📍 ${s.dist} km</span>
           <span>🎰 ${s.machines.length} 部機台</span>
           <span>${s.size}型${s.hour24 ? " · 24H" : ""}${s.token ? " · 需代幣" : ""}</span>
         </div>
-        ${!isVerified ? `<p class="mt-2 text-[10px] text-yellow-400/60">⚠️ 此店鋪資訊由用戶提供，尚未經官方審核</p>` : ""}
-      </button>
-    `;
+        ${!isVerified ? `<p class="mt-1 text-[10px] text-yellow-400/60">⚠️ 此店鋪資訊由用戶提供，尚未經官方審核</p>` : ""}
+      </div>
+    </div>
+  </button>
+`;
   }).join("");
 }
 /* ---- 店鋪內容頁 ---- */
@@ -794,21 +806,37 @@ function openStore(id) {
   const others = STORES.filter(x => x.name.split(" · ")[0] === brand && x.id !== s.id);
   const fav = STATE.favStores.includes(s.id);
   openModal(`
-    <div class="flex items-center justify-between border-b border-gold/30 pb-3">
+    <!-- ===== 店鋪大圖 ===== -->
+    ${s.photo ? `
+      <div class="-mt-5 -mx-5 overflow-hidden rounded-t-3xl">
+        <img src="${s.photo}" class="h-48 w-full object-cover" alt="${s.name}" />
+      </div>
+    ` : `
+      <div class="-mt-5 -mx-5 flex h-48 items-center justify-center rounded-t-3xl bg-zinc-800 text-7xl">
+        🏪
+      </div>
+    `}
+    
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3">
       <div><h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2><p class="text-xs text-white/50">${s.region} · ${s.addr}</p></div>
       <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
     </div>
+    
     <div class="mt-3 flex flex-wrap gap-2 text-xs">
       ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
       ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
       <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
     </div>
+    
     ${others.length ? `<div class="mt-4"><p class="mb-2 text-xs text-white/50">其他分店</p><div class="flex flex-wrap gap-2">${others.map(o => `<button onclick="openStore('${o.id}')" class="rounded-lg border border-gold/30 px-3 py-1.5 text-xs text-gold">${o.region}店</button>`).join("")}</div></div>` : ""}
+    
     <div class="mt-5 flex items-center justify-between">
       <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
       <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
     </div>
+    
     <div class="mt-3 grid grid-cols-2 gap-3">${s.machines.length ? s.machines.map(machineCell).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台，成為第一個共享的人！</p>'}</div>
+    
     <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
   `);
 }
