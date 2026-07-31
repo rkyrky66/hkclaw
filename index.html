@@ -767,13 +767,17 @@ function pickIntelRegion(r) {
     b.classList.add("border-gold/40");
     b.classList.remove("border-white/20");
     b.classList.remove("text-white/40");
-    b.classList.add("text-gold");
+    b.classList.add("text-gold");  // ← 加入這行，確保未選中時文字是金色
+    b.style.color = "";            // ← 清除 inline style
+    b.style.background = "";
   });
   // 高亮當前選中
   document.querySelectorAll(`.intel-reg-btn[data-region="${r}"]`).forEach(b => {
     b.classList.add("chip-active-gold");
     b.classList.remove("border-gold/40");
     b.classList.add("border-gold/60");
+    b.style.color = "#000";        // ← 強制黑色文字
+    b.style.background = "#D4AF37";
   });
   // 如果有展開更多，自動收起
   if (document.getElementById("intel-more-regions")?.classList.contains("hidden") === false) {
@@ -794,6 +798,7 @@ function renderIntelRegions(group) {
         ${selectedIntelRegion === r 
           ? 'chip-active-gold border-gold/60' 
           : 'border-gold/40 text-gold hover:border-gold/60'}"
+        style="${selectedIntelRegion === r ? 'color:#000;background:#D4AF37;' : ''}"
       >${r}</button>
     `).join("");
   }
@@ -805,6 +810,7 @@ function renderIntelRegions(group) {
         ${selectedIntelRegion === r 
           ? 'chip-active-gold border-gold/60' 
           : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
+        style="${selectedIntelRegion === r ? 'color:#000;background:#D4AF37;' : ''}"
       >${r}</button>
     `).join("");
   }
