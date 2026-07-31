@@ -1053,16 +1053,54 @@ function openIntelForm() {
   }
   
   const mallInput = document.getElementById('nt-mall-input');
-  if (mallInput) {
-    mallInput.addEventListener('input', function() {
-      renderMallList(this.value);
-    });
-    mallInput.addEventListener('focus', function() {
-      renderMallList(this.value);
-    });
-  }
+if (mallInput) {
+  // 移除舊的監聽器（避免重複綁定）
+  mallInput.removeEventListener('input', handleMallInputChange);
+  mallInput.removeEventListener('focus', handleMallInputFocus);
+  
+  // 綁定新的監聽器
+  mallInput.addEventListener('input', handleMallInputChange);
+  mallInput.addEventListener('focus', handleMallInputFocus);
+}
   
   document.getElementById('nt-mall-section').classList.add('hidden');
+}
+// 商場輸入框變化處理
+function handleMallInputChange() {
+  const mallInput = document.getElementById('nt-mall-input');
+  if (!mallInput) return;
+  
+  const mallName = mallInput.value.trim();
+  
+  // 1. 更新商場列表（搜尋過濾）
+  renderMallList(mallInput.value);
+  
+  // 2. 如果用戶修改了商場名稱，清空樓層
+  const floorInput = document.getElementById('nt-floor');
+  const addrInput = document.getElementById('nt-addr');
+  const floorSection = document.getElementById('nt-floor-section');
+  
+  if (floorInput) {
+    floorInput.value = '';
+  }
+  
+  // 3. 同步更新詳細地址（只顯示商場名稱）
+  if (addrInput) {
+    addrInput.value = mallName;
+  }
+  
+  // 4. 如果商場名稱被清空，隱藏樓層區塊
+  if (floorSection && !mallName) {
+    floorSection.classList.add('hidden');
+  }
+}
+
+// 商場輸入框聚焦處理
+function handleMallInputFocus() {
+  const mallInput = document.getElementById('nt-mall-input');
+  if (mallInput) {
+    renderMallList(mallInput.value);
+  }
 }
 // ===== 店名自動補全 =====
 function handleNameSuggestions(query) {
