@@ -324,6 +324,8 @@ function viewFind() {
   const currentGroup = REGIONS[group];
   const allRegions = getFullRegions(group);
   const moreRegions = currentGroup.more;
+  const isHotRegion = currentGroup.hot.includes(findState.region);
+  const showSelected = findState.region !== "全部" && findState.region !== "" && !isHotRegion;
   
   return `
     ${filterActive() ? advFilterPanel() : filterPromoCard()}
@@ -343,6 +345,15 @@ function viewFind() {
         >${REGIONS[key].icon} ${REGIONS[key].label}</button>
       `).join("")}
     </div>
+    
+    <!-- ===== 已選地區顯示（非熱門時） ===== -->
+    ${showSelected ? `
+      <div class="mb-3 rounded-lg border border-neongreen/40 bg-neongreen/10 px-3 py-2 text-center text-sm">
+        <span class="text-white/60">你已選：</span>
+        <span class="font-bold text-neongreen neon-green">${findState.region}</span>
+        <button onclick="setRegion('全部')" class="ml-2 text-xs text-white/40 hover:text-white">✕ 清除</button>
+      </div>
+    ` : ''}
     
     <!-- ===== 該區熱門地區（Grid 4 欄） ===== -->
     <div class="mb-2 grid grid-cols-4 gap-2">
