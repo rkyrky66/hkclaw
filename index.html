@@ -680,7 +680,6 @@ function adCountdown(sec, done) {
 function openIntelForm() {
   const group = findState.group || "kl";
   const currentGroup = REGIONS[group];
-  const allRegions = getFullRegions(group);
   const moreRegions = currentGroup.more;
   
   openModal(`
@@ -704,8 +703,8 @@ function openIntelForm() {
       `).join("")}
     </div>
     
-    <!-- ===== 該區熱門地區（Grid 4 欄） ===== -->
-    <div class="mt-3 grid grid-cols-4 gap-2">
+    <!-- ===== 該區熱門地區（包在 container 內） ===== -->
+    <div class="intel-hot-container mt-3 grid grid-cols-4 gap-2">
       ${currentGroup.hot.map(r => `
         <button type="button" onclick="pickIntelRegion('${r}')" 
           data-region="${r}"
@@ -723,9 +722,9 @@ function openIntelForm() {
       class="mt-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
     >📍 顯示更多地區</button>
     
-    <!-- ===== 表單內「更多地區」 ===== -->
+    <!-- ===== 表單內「更多地區」（包在 container 內） ===== -->
     <div id="intel-more-regions" class="mt-3 hidden">
-      <div class="grid grid-cols-4 gap-2 border-t border-gold/20 pt-3">
+      <div class="intel-more-container grid grid-cols-4 gap-2 border-t border-gold/20 pt-3">
         ${moreRegions.map(r => `
           <button type="button" onclick="pickIntelRegion('${r}')" 
             data-region="${r}"
