@@ -142,12 +142,15 @@ async function cloudInsert(table, row) {
     await sbFetch(table, { 
       method: "POST", 
       headers: {
-        Prefer: "return=minimal" // 確保使用 minimal，不要求 Supabase 回傳資料
+        Prefer: "return=minimal"
       },
       body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }]) 
     }); 
   }
-  catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
+  catch (e) { 
+    console.log("[v0] cloudInsert 失敗:", e.message);
+    // 不拋出錯誤，讓前端繼續
+  }
 }
 // 上傳圖片到 Supabase Storage
 async function uploadImage(file, folder = 'stores') {
@@ -174,10 +177,16 @@ async function uploadImage(file, folder = 'stores') {
   });
   
   if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    console.error('上傳失敗:', errText);
-    throw new Error(`上傳失敗 (${uploadRes.status})`);
+  const errText = await uploadRes.text();
+  console.error('上傳失敗 - 狀態:', uploadRes.status, '響應:', errText);
+  // 嘗試解析 JSON 錯誤
+  try {
+    const errJson = JSON.parse(errText);
+    throw new Error(`上傳失敗: ${errJson.message || errText}`);
+  } catch {
+    throw new Error(`上傳失敗 (${uploadRes.status}): ${errText}`);
   }
+}
   
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
   return publicUrl;
@@ -270,13 +279,12 @@ function getFullRegions(group) {
 const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
 const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
 
+// 宣告全域 STORES 變量（初始為空陣列）
+let STORES = [];
+
 function seedStores() {
   const base = [
-    { name: "爪玩店 · 旺角旗艦", region: "旺角", addr: "西洋菜南街 2A 好望角大廈", ig: "clawplay.mk", fb: "clawplayHK", verified: "verified", size: "大", token: false, hour24: true, staff: true },
-    { name: "SayHi Claw · 銅鑼灣", region: "銅鑼灣", addr: "記利佐治街 1 號金百利", ig: "sayhi.claw", fb: "sayhiclaw", verified: "verified", size: "中", token: true, hour24: false, staff: true },
-    { name: "夾夾樂 · 觀塘店", region: "觀塘", addr: "開源道 33 號建生廣場", ig: "gigilok", fb: "", verified: "pending", size: "細", token: false, hour24: true, staff: false },
-    { name: "爪玩店 · 荃灣", region: "荃灣", addr: "沙咀道 388 號中國染廠", ig: "clawplay.tw", fb: "", verified: "verified", size: "中", token: true, hour24: false, staff: true },
-    { name: "夾神殿 · 尖沙咀", region: "尖沙咀", addr: "加連威老道 21 號", ig: "clawgod", fb: "clawgodhk", verified: "pending", size: "大", token: false, hour24: true, staff: true },
+    // ...
   ];
   return base.map((s, i) => ({ id: "s" + i, ...s, dist: (Math.random() * 2 + 0.1).toFixed(1), machines: seedMachines("s" + i, i) }));
 }
@@ -1330,18 +1338,40 @@ async function compressTo(input, key, maxW, q, targetKB) {
   const file = input.files[0]; 
   if (!file) return;
   
-  // 壓縮並轉為 Blob
+  // 1. 讀取檔案
   const dataUrl = await new Promise((resolve) => {
     compressImage(file, maxW, q, targetKB, (dataUrl) => resolve(dataUrl));
   });
   
-  const blob = await fetch(dataUrl).then(r => r.blob());
-  window._cam[key] = blob;  // ← 存 Blob
+  // 2. 將 dataURL 轉為 Blob（更穩定的方式，不使用 fetch）
+  const blob = await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(resolve, 'image/jpeg', q);
+    };
+    img.onerror = () => {
+      // 如果圖片加載失敗，使用 fetch 作為備用
+      fetch(dataUrl).then(r => r.blob()).then(resolve);
+    };
+    img.src = dataUrl;
+  });
+  
+  // 3. 儲存 Blob 和預覽用的 dataURL
+  window._cam[key] = blob;
   window._camPreview[key] = dataUrl;
   
+  // 4. 顯示預覽
   const img = document.getElementById(`${key}-preview`);
   const sz = document.getElementById(`${key}-size`);
-  if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
+  if (img) { 
+    img.src = dataUrl; 
+    img.classList.remove("hidden"); 
+  }
   if (sz) { 
     sz.textContent = `已壓縮 ${Math.round(blob.size/1024)}KB`; 
     sz.className = "mt-1 text-[10px] text-neonpink"; 
@@ -1439,13 +1469,14 @@ async function loadCloud() {
     }
     
   } catch (e) { 
-    console.error("[v0] 讀取失敗:", e.message);
-    STORES = [];
-    if (CURRENT === "find") {
-      showView("find");
-    }
-    toast("無法載入店鋪資料，請稍後再試", "pink");
+  console.error("[v0] 讀取失敗:", e.message);
+  // 載入失敗時使用模擬資料
+  STORES = seedStores();
+  if (CURRENT === "find") {
+    showView("find");
   }
+  toast("無法載入店鋪資料，使用示範店鋪", "pink");
+}
 }
 /* ============================================================
    11. PWA Manifest + Service Worker（維持單一檔案）
