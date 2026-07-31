@@ -152,7 +152,6 @@ async function cloudInsert(table, row) {
 // 上傳圖片到 Supabase Storage
 async function uploadImage(file, folder = 'stores') {
   if (!CLOUD_ON) {
-    // 離線模式：回傳 Base64
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
@@ -160,28 +159,28 @@ async function uploadImage(file, folder = 'stores') {
     });
   }
   
+  const BUCKET = 'claw-stores-images';
   const fileName = `${folder}/${Date.now()}_${uid()}.jpg`;
-  const path = `storage/v1/object/${fileName}`;
-  
-  // 將 dataURL 轉為 Blob
-  const res = await fetch(file);
-  const blob = await res.blob();
+  const path = `storage/v1/object/${BUCKET}/${fileName}`;
   
   const uploadRes = await fetch(`${SUPABASE_URL}/${path}`, {
     method: 'POST',
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': blob.type,
+      'Content-Type': file.type || 'image/jpeg',
     },
-    body: blob,
+    body: file,  // ← File 物件直接傳，不用轉
   });
   
-  if (!uploadRes.ok) throw new Error('上傳失敗');
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    console.error('上傳失敗:', errText);
+    throw new Error(`上傳失敗 (${uploadRes.status})`);
+  }
   
-  // 取得 public URL
-  const { data } = await uploadRes.json();
-  return `${SUPABASE_URL}/storage/v1/object/public/${fileName}`;
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
+  return publicUrl;
 }
 /* 預留：Google Cloud Vision 不當圖片過濾接口 */
 async function visionSafeCheck(base64) {
