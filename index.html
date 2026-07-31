@@ -202,20 +202,40 @@ const filterActive = () => STATE.filterPassUntil > now();
    2. 模擬資料
 ============================================================ */
 const REGIONS = {
-  hot: [
-    "旺角", "銅鑼灣", "尖沙咀", "觀塘", "深水埗",
-    "屯門", "荃灣", "元朗", "葵芳", "將軍澳",
-    "大埔", "天后", "北角", "紅磡", "藍田"
-  ],
-  hk: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔"],
-  kl: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣"],
-  nt: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌"]
+  hk: {
+    label: "港島區",
+    icon: "🏝️",
+    hot: ["銅鑼灣", "天后", "北角"],
+    more: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔"]
+  },
+  kl: {
+    label: "九龍區",
+    icon: "🏙️",
+    hot: ["旺角", "尖沙咀", "觀塘", "深水埗", "紅磡", "藍田"],
+    more: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣"]
+  },
+  nt: {
+    label: "新界區",
+    icon: "🌳",
+    hot: ["屯門", "荃灣", "元朗", "葵芳", "將軍澳", "大埔"],
+    more: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌"]
+  }
 };
-const ALL_REGIONS = [...REGIONS.hot, ...REGIONS.hk, ...REGIONS.kl, ...REGIONS.nt];
+
+// 全地區 flat array
+const ALL_REGIONS = [
+  ...REGIONS.hk.hot, ...REGIONS.hk.more,
+  ...REGIONS.kl.hot, ...REGIONS.kl.more,
+  ...REGIONS.nt.hot, ...REGIONS.nt.more
+];
+
+// 取得某大區的完整地區清單（熱門 + 更多）
+function getFullRegions(group) {
+  return [...REGIONS[group].hot, ...REGIONS[group].more];
+}
 const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
 const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
 
-let STORES = seedStores();
 function seedStores() {
   const base = [
     { name: "爪玩店 · 旺角旗艦", region: "旺角", addr: "西洋菜南街 2A 好望角大廈", ig: "clawplay.mk", fb: "clawplayHK", verified: "verified", size: "大", token: false, hour24: true, staff: true },
@@ -262,7 +282,10 @@ function seedLive() {
    3. SPA 導航
 ============================================================ */
 let CURRENT = "find";
-let findState = { region: "全部" };
+let findState = { 
+  region: "全部", 
+  group: "kl"  // 預設九龍區
+};
 let liveTrack = "player";
 
 const SUBTITLES = {
@@ -297,55 +320,79 @@ document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.
    4. 【找店】
 ============================================================ */
 function viewFind() {
+  const group = findState.group || "kl";
+  const currentGroup = REGIONS[group];
+  const allRegions = getFullRegions(group);
+  const moreRegions = currentGroup.more;
+  
   return `
     ${filterActive() ? advFilterPanel() : filterPromoCard()}
     <div class="mb-3 mt-4 flex items-center justify-between">
       <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> GPS · 附近店舖</div>
       <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>
     </div>
-    <!-- ===== 地區選擇器 ===== -->
-    <div class="mb-4">
-      <div class="flex flex-wrap gap-2">
-        ${REGIONS.hot.map(r => `
-          <button onclick="setRegion('${r}')" 
-            class="rounded-full border px-3 py-1 text-xs 
-            ${findState.region === r 
-              ? 'chip-active-gold border-gold/60' 
-              : 'border-gold/40 text-gold'}"
-          >${r}</button>
-        `).join("")}
-        <button onclick="toggleMoreRegions()" 
-          id="more-regions-btn"
-          class="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold/60"
-        >📍 更多</button>
-      </div>
-      <!-- ===== 展開更多（預設隱藏） ===== -->
-      <div id="more-regions" class="mt-3 hidden space-y-3 border-t border-gold/20 pt-3">
-        ${renderRegionGroup("🏝️ 港島區", REGIONS.hk)}
-        ${renderRegionGroup("🏙️ 九龍區", REGIONS.kl)}
-        ${renderRegionGroup("🌳 新界區", REGIONS.nt)}
-      </div>
+    
+    <!-- ===== 三區單選 ===== -->
+    <div class="mb-3 flex gap-2">
+      ${Object.keys(REGIONS).map(key => `
+        <button onclick="setRegionGroup('${key}')" 
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${findState.group === key 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >${REGIONS[key].icon} ${REGIONS[key].label}</button>
+      `).join("")}
     </div>
-    <div id="store-list" class="space-y-3">${renderStoreList()}</div>`;
-}
-
-function renderRegionGroup(label, list) {
-  return `
-    <div>
-      <p class="mb-1.5 text-[10px] font-bold text-white/40">${label}</p>
-      <div class="flex flex-wrap gap-2">
-        ${list.map(r => `
+    
+    <!-- ===== 該區熱門地區（Grid 4 欄） ===== -->
+    <div class="mb-2 grid grid-cols-4 gap-2">
+      ${currentGroup.hot.map(r => `
+        <button onclick="setRegion('${r}')" 
+          class="rounded-full border py-1.5 text-center text-xs transition-all
+          ${findState.region === r 
+            ? 'chip-active-gold border-gold/60' 
+            : 'border-gold/40 text-gold hover:border-gold/60'}"
+        >${r}</button>
+      `).join("")}
+    </div>
+    
+    <!-- ===== 顯示更多按鈕 ===== -->
+    <button onclick="toggleMoreRegions()" 
+      id="more-regions-btn"
+      class="mb-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
+    >📍 顯示更多地區</button>
+    
+    <!-- ===== 展開更多（預設隱藏） ===== -->
+    <div id="more-regions" class="mb-3 hidden">
+      <div class="grid grid-cols-4 gap-2 border-t border-gold/20 pt-3">
+        ${moreRegions.map(r => `
           <button onclick="setRegion('${r}')" 
-            class="rounded-full border px-3 py-1 text-xs 
+            class="rounded-full border py-1.5 text-center text-xs transition-all
             ${findState.region === r 
               ? 'chip-active-gold border-gold/60' 
               : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
           >${r}</button>
         `).join("")}
       </div>
-    </div>`;
+    </div>
+    
+    <div id="store-list" class="space-y-3">${renderStoreList()}</div>`;
 }
 
+// 切換大區
+function setRegionGroup(group) {
+  findState.group = group;
+  findState.region = "全部";  // 重置地區選擇
+  // 收起更多
+  moreRegionsOpen = false;
+  const el = document.getElementById("more-regions");
+  const btn = document.getElementById("more-regions-btn");
+  if (el) el.classList.add("hidden");
+  if (btn) btn.textContent = "📍 顯示更多地區";
+  showView("find");
+}
+
+// 展開/收起更多
 let moreRegionsOpen = false;
 function toggleMoreRegions() {
   moreRegionsOpen = !moreRegionsOpen;
@@ -353,10 +400,10 @@ function toggleMoreRegions() {
   const btn = document.getElementById("more-regions-btn");
   if (el) {
     el.classList.toggle("hidden", !moreRegionsOpen);
-    el.classList.toggle("animate-pop", moreRegionsOpen);
+    if (moreRegionsOpen) el.classList.add("animate-pop");
   }
   if (btn) {
-    btn.textContent = moreRegionsOpen ? "📍 收起" : "📍 更多";
+    btn.textContent = moreRegionsOpen ? "📍 收起" : "📍 顯示更多地區";
   }
 }
 function filterPromoCard() {
@@ -393,12 +440,12 @@ function advToggle(id, label) {
 function setRegion(r) {
   findState.region = r;
   // 如果點擊的是「更多」裡面的地區，自動收起
-  if (moreRegionsOpen && !REGIONS.hot.includes(r)) {
+  if (moreRegionsOpen) {
     moreRegionsOpen = false;
     const el = document.getElementById("more-regions");
     const btn = document.getElementById("more-regions-btn");
     if (el) el.classList.add("hidden");
-    if (btn) btn.textContent = "📍 更多";
+    if (btn) btn.textContent = "📍 顯示更多地區";
   }
   showView("find");
 }
@@ -620,6 +667,11 @@ function adCountdown(sec, done) {
   const t = setInterval(() => { n--; const el = document.getElementById("ad-num"); if (el) el.textContent = n; if (n <= 0) { clearInterval(t); closeModal(); done(); } }, 1000);
 }
 function openIntelForm() {
+  const group = findState.group || "kl";
+  const currentGroup = REGIONS[group];
+  const allRegions = getFullRegions(group);
+  const moreRegions = currentGroup.more;
+  
   openModal(`
     <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
       <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>
@@ -627,26 +679,52 @@ function openIntelForm() {
     </div>
     <input id="nt-name" placeholder="店名（必填）" class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     
-    <!-- ===== 地區選擇（表單內） ===== -->
+    <!-- ===== 三區單選（表單內） ===== -->
     <p class="mt-4 text-xs font-bold text-gold">📍 地區</p>
-    <div class="mt-2 flex flex-wrap gap-2">
-      ${REGIONS.hot.map(r => `
-        <button type="button" onclick="pickIntelRegion('${r}')" 
-          data-region="${r}"
-          class="intel-reg-btn rounded-full border border-gold/40 px-3 py-1 text-xs text-gold"
-        >${r}</button>
+    <div class="mt-2 flex gap-2">
+      ${Object.keys(REGIONS).map(key => `
+        <button type="button" onclick="setIntelGroup('${key}')" 
+          data-group="${key}"
+          class="intel-group-btn flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${intelGroup === key 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >${REGIONS[key].icon} ${REGIONS[key].label}</button>
       `).join("")}
-      <button type="button" onclick="toggleIntelMore()" 
-        id="intel-more-btn"
-        class="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold/60"
-      >📍 更多</button>
     </div>
     
+    <!-- ===== 該區熱門地區（Grid 4 欄） ===== -->
+    <div class="mt-3 grid grid-cols-4 gap-2">
+      ${currentGroup.hot.map(r => `
+        <button type="button" onclick="pickIntelRegion('${r}')" 
+          data-region="${r}"
+          class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
+          ${selectedIntelRegion === r 
+            ? 'chip-active-gold border-gold/60' 
+            : 'border-gold/40 text-gold hover:border-gold/60'}"
+        >${r}</button>
+      `).join("")}
+    </div>
+    
+    <!-- ===== 顯示更多按鈕 ===== -->
+    <button type="button" onclick="toggleIntelMore()" 
+      id="intel-more-btn"
+      class="mt-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
+    >📍 顯示更多地區</button>
+    
     <!-- ===== 表單內「更多地區」 ===== -->
-    <div id="intel-more-regions" class="mt-3 hidden space-y-3 border-t border-gold/20 pt-3">
-      ${renderIntelRegionGroup("🏝️ 港島區", REGIONS.hk)}
-      ${renderIntelRegionGroup("🏙️ 九龍區", REGIONS.kl)}
-      ${renderIntelRegionGroup("🌳 新界區", REGIONS.nt)}
+    <div id="intel-more-regions" class="mt-3 hidden">
+      <div class="grid grid-cols-4 gap-2 border-t border-gold/20 pt-3">
+        ${moreRegions.map(r => `
+          <button type="button" onclick="pickIntelRegion('${r}')" 
+            data-region="${r}"
+            class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
+            ${selectedIntelRegion === r 
+              ? 'chip-active-gold border-gold/60' 
+              : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
+          >${r}</button>
+        `).join("")}
+      </div>
     </div>
     
     <input id="nt-addr" placeholder="詳細地址（選填）" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
@@ -659,16 +737,37 @@ function openIntelForm() {
   grabGPS("nt-gps");
 }
 
-// 表單內選取地區（記錄選中狀態）
-let selectedIntelRegion = "";
+// 表單內選取大區
+let intelGroup = "kl";
+function setIntelGroup(group) {
+  intelGroup = group;
+  selectedIntelRegion = "";
+  // 更新大區按鈕高亮
+  document.querySelectorAll(".intel-group-btn").forEach(b => {
+    const isActive = b.dataset.group === group;
+    b.classList.toggle("border-gold", isActive);
+    b.classList.toggle("bg-gold/20", isActive);
+    b.classList.toggle("text-gold", isActive);
+    b.classList.toggle("glow-gold", isActive);
+    b.classList.toggle("border-white/20", !isActive);
+    b.classList.toggle("text-white/45", !isActive);
+  });
+  // 重新渲染該區的地區按鈕
+  renderIntelRegions(group);
+}
 
+// 表單內選取地區
+let selectedIntelRegion = "";
 function pickIntelRegion(r) {
   selectedIntelRegion = r;
-  // 清除所有按鈕的高亮
+  // 清除所有地區按鈕的高亮
   document.querySelectorAll(".intel-reg-btn").forEach(b => {
     b.classList.remove("chip-active-gold");
     b.classList.remove("border-gold/60");
     b.classList.add("border-gold/40");
+    b.classList.remove("border-white/20");
+    b.classList.remove("text-white/40");
+    b.classList.add("text-gold");
   });
   // 高亮當前選中
   document.querySelectorAll(`.intel-reg-btn[data-region="${r}"]`).forEach(b => {
@@ -682,21 +781,36 @@ function pickIntelRegion(r) {
   }
 }
 
-function renderIntelRegionGroup(label, list) {
-  return `
-    <div>
-      <p class="mb-1.5 text-[10px] font-bold text-white/40">${label}</p>
-      <div class="flex flex-wrap gap-2">
-        ${list.map(r => `
-          <button type="button" onclick="pickIntelRegion('${r}')" 
-            data-region="${r}"
-            class="intel-reg-btn rounded-full border border-white/20 px-3 py-1 text-xs text-white/40 hover:border-gold/40 hover:text-gold"
-          >${r}</button>
-        `).join("")}
-      </div>
-    </div>`;
+// 渲染表單內地區（切換大區時呼叫）
+function renderIntelRegions(group) {
+  const currentGroup = REGIONS[group];
+  const hotContainer = document.querySelector("#modal-root .intel-hot-container");
+  const moreContainer = document.querySelector("#modal-root .intel-more-container");
+  if (hotContainer) {
+    hotContainer.innerHTML = currentGroup.hot.map(r => `
+      <button type="button" onclick="pickIntelRegion('${r}')" 
+        data-region="${r}"
+        class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
+        ${selectedIntelRegion === r 
+          ? 'chip-active-gold border-gold/60' 
+          : 'border-gold/40 text-gold hover:border-gold/60'}"
+      >${r}</button>
+    `).join("");
+  }
+  if (moreContainer) {
+    moreContainer.innerHTML = currentGroup.more.map(r => `
+      <button type="button" onclick="pickIntelRegion('${r}')" 
+        data-region="${r}"
+        class="intel-reg-btn rounded-full border py-1.5 text-center text-xs transition-all
+        ${selectedIntelRegion === r 
+          ? 'chip-active-gold border-gold/60' 
+          : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
+      >${r}</button>
+    `).join("");
+  }
 }
 
+// 表單內展開/收起更多
 let intelMoreOpen = false;
 function toggleIntelMore() {
   intelMoreOpen = !intelMoreOpen;
@@ -704,10 +818,10 @@ function toggleIntelMore() {
   const btn = document.getElementById("intel-more-btn");
   if (el) {
     el.classList.toggle("hidden", !intelMoreOpen);
-    el.classList.toggle("animate-pop", intelMoreOpen);
+    if (intelMoreOpen) el.classList.add("animate-pop");
   }
   if (btn) {
-    btn.textContent = intelMoreOpen ? "📍 收起" : "📍 更多";
+    btn.textContent = intelMoreOpen ? "📍 收起" : "📍 顯示更多地區";
   }
 }
 function grabGPS(elId) {
@@ -730,7 +844,7 @@ async function submitIntel() {
   const store = {
     id: "s" + uid(),
     name,
-    region: selectedIntelRegion,  // ← 使用選中的地區
+    region: selectedIntelRegion,
     addr,
     ig: "",
     fb: "",
