@@ -1104,24 +1104,88 @@ window._cam = {};
 function cameraBlock(key, targetKB = 100) {
   return `
     <div class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
-      <input id="${key}-photo" type="file" accept="image/*" capture="environment" class="hidden" />
-      <button type="button" onclick="document.getElementById('${key}-photo').click()" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 拍攝現場照（禁相簿）</button>
+      <div id="${key}-camera-container">
+        <button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">
+          📸 開啟相機拍照（強制現拍）
+        </button>
+      </div>
       <img id="${key}-preview" class="mt-2 hidden w-full rounded-lg" alt="現拍預覽" />
       <p id="${key}-size" class="mt-1 text-[10px] text-gold/60">目標 &lt; ${targetKB}KB</p>
-    </div>`;
+    </div>
+  `;
 }
 function bindCamera(key, targetKB = 100) {
-  const input = document.getElementById(`${key}-photo`);
-  if (!input) return;
-  input.addEventListener("change", e => {
-    const file = e.target.files[0]; if (!file) return;
-    compressImage(file, 800, 0.6, targetKB, (dataUrl, kb) => {
-      window._cam[key] = dataUrl;
-      const img = document.getElementById(`${key}-preview`), sz = document.getElementById(`${key}-size`);
-      if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
-      if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = "mt-1 text-[10px] text-neongreen"; }
-    });
+  // 不再需要 input 監聽，改由 capturePhoto 處理
+  // 保留空函數以相容舊呼叫
+}
+// 開啟相機
+function openCamera(key) {
+  const container = document.getElementById(`${key}-camera-container`);
+  if (!container) return;
+  
+  container.innerHTML = `
+    <video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video>
+    <div class="mt-2 flex gap-2">
+      <button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button>
+      <button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button>
+    </div>
+  `;
+  
+  const videoEl = document.getElementById(`${key}-video`);
+  if (!videoEl) return;
+  
+  navigator.mediaDevices.getUserMedia({ 
+    video: { facingMode: 'environment' } 
+  }).then(stream => {
+    videoEl.srcObject = stream;
+    videoEl.play();
+    window._camStreams = window._camStreams || {};
+    window._camStreams[key] = stream;
+  }).catch(() => {
+    toast('無法開啟相機，請允許權限', 'pink');
+    closeCamera(key);
   });
+}
+
+// 拍照
+function capturePhoto(key) {
+  const videoEl = document.getElementById(`${key}-video`);
+  if (!videoEl) return toast('請先開啟相機', 'pink');
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = videoEl.videoWidth || 800;
+  canvas.height = videoEl.videoHeight || 600;
+  canvas.getContext('2d').drawImage(videoEl, 0, 0);
+  
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+  window._cam[key] = dataUrl;
+  
+  // 壓縮
+  const kb = Math.round(dataUrl.length / 1024);
+  const img = document.getElementById(`${key}-preview`);
+  const sz = document.getElementById(`${key}-size`);
+  if (img) { img.src = dataUrl; img.classList.remove('hidden'); }
+  if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = 'mt-1 text-[10px] text-neongreen'; }
+  
+  closeCamera(key);
+  toast('✅ 已拍照！', 'green');
+}
+
+// 關閉相機
+function closeCamera(key) {
+  const stream = window._camStreams?.[key];
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    delete window._camStreams[key];
+  }
+  const container = document.getElementById(`${key}-camera-container`);
+  if (container) {
+    container.innerHTML = `
+      <button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">
+        📸 開啟相機拍照（強制現拍）
+      </button>
+    `;
+  }
 }
 function compressTo(input, key, maxW, q, targetKB) {
   const file = input.files[0]; if (!file) return;
