@@ -324,8 +324,6 @@ function viewFind() {
   const group = findState.group || "kl";
   const currentGroup = REGIONS[group];
   const moreRegions = currentGroup.more;
-  const isHotRegion = currentGroup.hot.includes(findState.region);
-  const showSelected = findState.region !== "全部" && findState.region !== "" && !isHotRegion;
   
   // 最近搜索
   const recent = STATE.recentRegions || [];
@@ -344,7 +342,10 @@ function viewFind() {
         <div class="flex flex-wrap gap-2">
           ${recent.map(r => `
             <button onclick="setRegion('${r}')" 
-              class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen hover:border-neongreen/80"
+              class="rounded-full border py-1.5 px-3 text-center text-xs transition-all
+              ${findState.region === r 
+                ? 'chip-active-gold border-gold/60' 
+                : 'border-gold/40 text-gold hover:border-gold/60'}"
             >${r}</button>
           `).join("")}
         </div>
@@ -355,7 +356,7 @@ function viewFind() {
       </div>
     `}
     
-    <!-- ===== 三區單選（預設不展開任何地區） ===== -->
+    <!-- ===== 三區單選 ===== -->
     <div class="mb-3 flex gap-2">
       ${Object.keys(REGIONS).map(key => `
         <button onclick="toggleRegionGroup('${key}')" 
@@ -366,15 +367,6 @@ function viewFind() {
         >${REGIONS[key].icon} ${REGIONS[key].label}</button>
       `).join("")}
     </div>
-    
-    <!-- ===== 已選地區顯示（非熱門時） ===== -->
-    ${showSelected ? `
-      <div class="mb-3 rounded-lg border border-neongreen/40 bg-neongreen/10 px-3 py-2 text-center text-sm">
-        <span class="text-white/60">你已選：</span>
-        <span class="font-bold text-neongreen neon-green">${findState.region}</span>
-        <button onclick="setRegion('全部')" class="ml-2 text-xs text-white/40 hover:text-white">✕ 清除</button>
-      </div>
-    ` : ''}
     
     <!-- ===== 港島區地區（展開時顯示） ===== -->
     ${renderRegionGroup('hk')}
@@ -442,27 +434,39 @@ function renderRegionGroup(group) {
   
   if (!isOpen) return '';
   
+  // 所有按鈕（包含「更多/收起」）放在同一個 grid 裡
+  const items = [...allRegions];
+  if (data.more.length > 0) {
+    items.push(isMoreOpen ? '📍 收起' : '📍 更多');
+  }
+  
   return `
     <div class="mb-3 animate-pop">
       <div class="grid grid-cols-4 gap-2">
-        ${allRegions.map(r => `
-          <button onclick="setRegion('${r}')" 
-            class="rounded-full border py-1.5 text-center text-xs transition-all
-            ${findState.region === r 
-              ? 'chip-active-gold border-gold/60' 
-              : 'border-gold/40 text-gold hover:border-gold/60'}"
-          >${r}</button>
-        `).join("")}
+        ${items.map(item => {
+          if (item === '📍 更多' || item === '📍 收起') {
+            return `
+              <button onclick="toggleMoreRegions('${group}')" 
+                class="rounded-full border py-1.5 text-center text-xs transition-all
+                ${isMoreOpen 
+                  ? 'chip-active-gold border-gold/60' 
+                  : 'border-gold/40 text-gold hover:border-gold/60'}"
+              >${item}</button>
+            `;
+          }
+          return `
+            <button onclick="setRegion('${item}')" 
+              class="rounded-full border py-1.5 text-center text-xs transition-all
+              ${findState.region === item 
+                ? 'chip-active-gold border-gold/60' 
+                : 'border-gold/40 text-gold hover:border-gold/60'}"
+            >${item}</button>
+          `;
+        }).join("")}
       </div>
-      ${data.more.length > 0 ? `
-        <button onclick="toggleMoreRegions('${group}')" 
-          class="mt-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
-        >${isMoreOpen ? '📍 收起' : '📍 更多'}</button>
-      ` : ''}
     </div>
   `;
 }
-
 // 每個大區的「更多」展開狀態
 let moreRegionsOpenMap = {
   hk: false,
@@ -519,7 +523,6 @@ function setRegion(r) {
     save();
   }
   
-  // 不需要再收起更多（因為每個大區獨立）
   showView("find");
 }
 function filteredStores() {
