@@ -549,45 +549,6 @@ let selectedMall = '';
 // 切換商場區塊顯示
 // 切換商場區塊顯示
 // 切換商場區塊顯示
-function toggleMallSection() {
-  const checked = document.getElementById('nt-mall-toggle').checked;
-  const section = document.getElementById('nt-mall-section');
-  const checkbox = document.getElementById('nt-mall-toggle');
-  
-  // ===== 如果沒有選地區，不允許勾選 =====
-  if (checked && !selectedIntelRegion) {
-    toast('請先選擇地區', 'pink');
-    checkbox.checked = false;  // ← 強制取消勾選
-    return;
-  }
-  
-  if (section) {
-    section.classList.toggle('hidden', !checked);
-  }
-  
-  if (checked) {
-    renderMallList(document.getElementById('nt-mall-input')?.value || '');
-  } else {
-    // ===== 取消勾選時，清空所有商場相關資料 =====
-    selectedMall = '';
-    
-    const mallInput = document.getElementById('nt-mall-input');
-    if (mallInput) mallInput.value = '';
-    
-    const floorInput = document.getElementById('nt-floor');
-    if (floorInput) floorInput.value = '';
-    
-    const addrInput = document.getElementById('nt-addr');
-    if (addrInput) addrInput.value = '';
-    
-    const floorSection = document.getElementById('nt-floor-section');
-    if (floorSection) floorSection.classList.add('hidden');
-    
-    const mallList = document.getElementById('nt-mall-list');
-    if (mallList) mallList.innerHTML = '';
-  }
-}
-
 // 渲染商場列表（根據已選 district 過濾）
 async function renderMallList(query = '') {
   const container = document.getElementById('nt-mall-list');
@@ -663,10 +624,20 @@ function selectMall(name) {
     floorInput.value = '';
   }
   
-  // 更新詳細地址（只填商場名稱，不包含樓層）
+  // ===== 更新詳細地址（檢查是否有完整地址） =====
   const addrInput = document.getElementById('nt-addr');
+  const mallData = getMallData(name);
+  
   if (addrInput) {
-    addrInput.value = name;
+    if (mallData && mallData.address) {
+      // ✅ 有完整地址：自動填入
+      addrInput.value = mallData.address;
+      toast('✅ 已自動填入地址', 'green');
+    } else {
+      // ❌ 無完整地址：只填商場名
+      addrInput.value = name;
+      toast('📍 可補充完整地址獲得 +5 積分', 'gold');
+    }
   }
   
   // 重新渲染商場列表（更新高亮）
@@ -674,7 +645,6 @@ function selectMall(name) {
   
   // 綁定樓層輸入事件（即時更新地址）
   if (floorInput) {
-    // 移除舊的監聽器（避免重複綁定）
     floorInput.removeEventListener('input', updateAddressWithFloor);
     floorInput.addEventListener('input', updateAddressWithFloor);
   }
@@ -1116,6 +1086,12 @@ function handleMallInputFocus() {
     renderMallList(mallInput.value);
   }
 }
+// 取得商場資料（含 address）
+function getMallData(name) {
+  if (!MALLS_CACHE) return null;
+  const allMalls = [...MALLS_CACHE.hk, ...MALLS_CACHE.kl, ...MALLS_CACHE.nt];
+  return allMalls.find(m => m.name === name);
+}
 // 選擇位置類型（獨立舖 / 商場）
 function selectLocationType(type) {
   locationType = type;
@@ -1435,16 +1411,108 @@ if (locationType === 'mall') {
   STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
   addPoints(10, "提交店鋪情報");
 
-  // ===== 11. 重置商場選取狀態 =====
-  selectedMall = '';
-  document.getElementById('nt-mall-toggle').checked = false;
-  document.getElementById('nt-mall-section').classList.add('hidden');
-  document.getElementById('nt-floor-section').classList.add('hidden');
+// ===== 11. 重置商場選取狀態 =====
+selectedMall = '';
+
+// 如果選了「商場」，切換回「獨立舖」
+if (locationType === 'mall') {
+  locationType = 'independent';
+  
+  // 更新按鈕樣式
+  const indBtn = document.getElementById('location-independent');
+  const mallBtn = document.getElementById('location-mall');
+  
+  if (indBtn) {
+    indBtn.classList.add('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+    indBtn.classList.remove('border-white/20', 'text-white/45');
+  }
+  if (mallBtn) {
+    mallBtn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+    mallBtn.classList.add('border-white/20', 'text-white/45');
+  }
+}
+
+// 隱藏商場相關區塊
+document.getElementById('nt-mall-section').classList.add('hidden');
+document.getElementById('nt-floor-section').classList.add('hidden');
 
   toast("已提交！狀態：審核中（2位現場認證後+40）", "green");
+  // ===== 提交成功後，檢查商場是否需要補充地址 =====
+if (locationType === 'mall' && mall) {
+  const mallData = getMallData(mall);
+  if (!mallData || !mallData.address) {
+    setTimeout(() => {
+      showAddressContributionModal(mall);
+    }, 800);
+  }
+}
   closeModal();
   showView("find");
 }
+// 顯示補充地址 Modal（選項 A：只有「稍後再說」）
+function showAddressContributionModal(mallName) {
+  // 如果商場已有地址，不顯示
+  const mallData = getMallData(mallName);
+  if (mallData && mallData.address) return;
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3">
+      <h2 class="font-black text-gold neon-gold">📍 補充商場地址</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    <p class="mt-3 text-sm text-white/70">你提交了「<b class="text-gold">${mallName}</b>」，但我們還缺少這個商場的完整地址。</p>
+    <p class="mt-1 text-xs text-white/40">補充地址可獲得 <span class="text-neongreen">+5 積分</span> 獎勵！</p>
+    <input id="contribute-address" placeholder="請輸入完整地址，如：深水埗欽州街37K號" 
+      class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    <div class="mt-3 flex gap-2">
+      <button onclick="submitAddressContribution('${mallName}')" 
+        class="flex-1 rounded-2xl bg-gold py-3 font-black text-black glow-gold">提交地址（+5 分）</button>
+      <button onclick="closeModal()" 
+        class="flex-1 rounded-2xl border border-white/30 py-3 text-sm text-white/60">稍後再說</button>
+    </div>
+  `);
+}
+
+// 提交地址補充
+async function submitAddressContribution(mallName) {
+  const address = document.getElementById('contribute-address').value.trim();
+  if (!address) return toast('請輸入地址', 'pink');
+  
+  if (CLOUD_ON) {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/malls?name=eq.${encodeURIComponent(mallName)}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address: address })
+      });
+      
+      if (!response.ok) throw new Error('更新失敗');
+      
+      // 更新快取
+      if (MALLS_CACHE) {
+        const allMalls = [...MALLS_CACHE.hk, ...MALLS_CACHE.kl, ...MALLS_CACHE.nt];
+        const target = allMalls.find(m => m.name === mallName);
+        if (target) target.address = address;
+      }
+      
+      addPoints(5, '補充商場地址');
+      toast('✅ 感謝補充地址！+5 積分', 'green');
+      closeModal();
+      
+    } catch (e) {
+      toast('提交失敗，請重試', 'pink');
+    }
+  } else {
+    toast('✅ 已記錄（上線後同步）', 'green');
+    closeModal();
+  }
+}
+
+
 /* ============================================================
    6. 【實時】雙軌戰報
 ============================================================ */
