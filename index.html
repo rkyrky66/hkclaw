@@ -554,6 +554,11 @@ function toggleMallSection() {
     section.classList.toggle('hidden', !checked);
   }
   if (checked) {
+    // 如果沒有選地區，提示用戶
+    if (!selectedIntelRegion) {
+      toast('請先選擇地區', 'pink');
+      // 但還是顯示商場列表，會顯示「請先選擇地區」
+    }
     renderMallList(document.getElementById('nt-mall-input')?.value || '');
   }
 }
