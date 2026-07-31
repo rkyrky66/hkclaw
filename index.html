@@ -173,6 +173,7 @@ const DEFAULT_STATE = {
   myPosts: [],
   myIntel: [],
   daily: {},
+  recentRegions: [],  // ← 新增
 };
 let STATE = load();
 function load() {
@@ -322,10 +323,12 @@ document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.
 function viewFind() {
   const group = findState.group || "kl";
   const currentGroup = REGIONS[group];
-  const allRegions = getFullRegions(group);
   const moreRegions = currentGroup.more;
   const isHotRegion = currentGroup.hot.includes(findState.region);
   const showSelected = findState.region !== "全部" && findState.region !== "" && !isHotRegion;
+  
+  // 最近搜索
+  const recent = STATE.recentRegions || [];
   
   return `
     ${filterActive() ? advFilterPanel() : filterPromoCard()}
@@ -334,12 +337,30 @@ function viewFind() {
       <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>
     </div>
     
-    <!-- ===== 三區單選 ===== -->
+    <!-- ===== 最近搜索 ===== -->
+    ${recent.length > 0 ? `
+      <div class="mb-3">
+        <p class="mb-1.5 text-[10px] font-bold text-white/40">🕐 最近搜索</p>
+        <div class="flex flex-wrap gap-2">
+          ${recent.map(r => `
+            <button onclick="setRegion('${r}')" 
+              class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen hover:border-neongreen/80"
+            >${r}</button>
+          `).join("")}
+        </div>
+      </div>
+    ` : `
+      <div class="mb-3">
+        <p class="mb-1.5 text-[10px] text-white/30">🕐 最近搜索（選擇地區後會顯示在這裡）</p>
+      </div>
+    `}
+    
+    <!-- ===== 三區單選（預設不展開任何地區） ===== -->
     <div class="mb-3 flex gap-2">
       ${Object.keys(REGIONS).map(key => `
-        <button onclick="setRegionGroup('${key}')" 
+        <button onclick="toggleRegionGroup('${key}')" 
           class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
-          ${findState.group === key 
+          ${regionGroupOpen[key] 
             ? 'border-gold bg-gold/20 text-gold glow-gold' 
             : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
         >${REGIONS[key].icon} ${REGIONS[key].label}</button>
@@ -355,37 +376,14 @@ function viewFind() {
       </div>
     ` : ''}
     
-    <!-- ===== 該區熱門地區（Grid 4 欄） ===== -->
-    <div class="mb-2 grid grid-cols-4 gap-2">
-      ${currentGroup.hot.map(r => `
-        <button onclick="setRegion('${r}')" 
-          class="rounded-full border py-1.5 text-center text-xs transition-all
-          ${findState.region === r 
-            ? 'chip-active-gold border-gold/60' 
-            : 'border-gold/40 text-gold hover:border-gold/60'}"
-        >${r}</button>
-      `).join("")}
-    </div>
+    <!-- ===== 港島區地區（展開時顯示） ===== -->
+    ${renderRegionGroup('hk')}
     
-    <!-- ===== 顯示更多按鈕 ===== -->
-    <button onclick="toggleMoreRegions()" 
-      id="more-regions-btn"
-      class="mb-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
-    >📍 顯示更多地區</button>
+    <!-- ===== 九龍區地區（展開時顯示） ===== -->
+    ${renderRegionGroup('kl')}
     
-    <!-- ===== 展開更多（預設隱藏） ===== -->
-    <div id="more-regions" class="mb-3 hidden">
-      <div class="grid grid-cols-4 gap-2 border-t border-gold/20 pt-3">
-        ${moreRegions.map(r => `
-          <button onclick="setRegion('${r}')" 
-            class="rounded-full border py-1.5 text-center text-xs transition-all
-            ${findState.region === r 
-              ? 'chip-active-gold border-gold/60' 
-              : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
-          >${r}</button>
-        `).join("")}
-      </div>
-    </div>
+    <!-- ===== 新界區地區（展開時顯示） ===== -->
+    ${renderRegionGroup('nt')}
     
     <div id="store-list" class="space-y-3">${renderStoreList()}</div>`;
 }
@@ -404,7 +402,8 @@ function setRegionGroup(group) {
 }
 
 // 展開/收起更多
-let moreRegionsOpen = false;
+// 已合併到 moreRegionsOpenMap
+// 並刪除舊的 toggleMoreRegions() 和 setRegion() 中的相關邏輯
 function toggleMoreRegions() {
   moreRegionsOpen = !moreRegionsOpen;
   const el = document.getElementById("more-regions");
@@ -416,6 +415,65 @@ function toggleMoreRegions() {
   if (btn) {
     btn.textContent = moreRegionsOpen ? "📍 收起" : "📍 顯示更多地區";
   }
+}
+// 大區展開狀態
+let regionGroupOpen = {
+  hk: false,
+  kl: false,
+  nt: false
+};
+
+// 切換大區展開/收起
+function toggleRegionGroup(group) {
+  regionGroupOpen[group] = !regionGroupOpen[group];
+  // 收起其他大區
+  Object.keys(regionGroupOpen).forEach(key => {
+    if (key !== group) regionGroupOpen[key] = false;
+  });
+  showView("find");
+}
+
+// 渲染某大區的地區按鈕
+function renderRegionGroup(group) {
+  const data = REGIONS[group];
+  const isOpen = regionGroupOpen[group];
+  const isMoreOpen = moreRegionsOpenMap[group] || false;
+  const allRegions = isMoreOpen ? [...data.hot, ...data.more] : data.hot;
+  
+  if (!isOpen) return '';
+  
+  return `
+    <div class="mb-3 animate-pop">
+      <div class="grid grid-cols-4 gap-2">
+        ${allRegions.map(r => `
+          <button onclick="setRegion('${r}')" 
+            class="rounded-full border py-1.5 text-center text-xs transition-all
+            ${findState.region === r 
+              ? 'chip-active-gold border-gold/60' 
+              : 'border-gold/40 text-gold hover:border-gold/60'}"
+          >${r}</button>
+        `).join("")}
+      </div>
+      ${data.more.length > 0 ? `
+        <button onclick="toggleMoreRegions('${group}')" 
+          class="mt-2 w-full rounded-lg border border-gold/30 py-1.5 text-xs text-gold/60 transition-all hover:border-gold/50 hover:text-gold"
+        >${isMoreOpen ? '📍 收起' : '📍 更多'}</button>
+      ` : ''}
+    </div>
+  `;
+}
+
+// 每個大區的「更多」展開狀態
+let moreRegionsOpenMap = {
+  hk: false,
+  kl: false,
+  nt: false
+};
+
+// 切換「更多」展開/收起
+function toggleMoreRegions(group) {
+  moreRegionsOpenMap[group] = !moreRegionsOpenMap[group];
+  showView("find");
 }
 function filterPromoCard() {
   return `
@@ -450,14 +508,18 @@ function advToggle(id, label) {
 }
 function setRegion(r) {
   findState.region = r;
-  // 如果點擊的是「更多」裡面的地區，自動收起
-  if (moreRegionsOpen) {
-    moreRegionsOpen = false;
-    const el = document.getElementById("more-regions");
-    const btn = document.getElementById("more-regions-btn");
-    if (el) el.classList.add("hidden");
-    if (btn) btn.textContent = "📍 顯示更多地區";
+  
+  // 記錄最近選擇
+  if (r !== "全部" && r !== "") {
+    STATE.recentRegions = STATE.recentRegions.filter(x => x !== r);
+    STATE.recentRegions.unshift(r);
+    if (STATE.recentRegions.length > 6) {
+      STATE.recentRegions = STATE.recentRegions.slice(0, 6);
+    }
+    save();
   }
+  
+  // 不需要再收起更多（因為每個大區獨立）
   showView("find");
 }
 function filteredStores() {
