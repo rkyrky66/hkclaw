@@ -201,7 +201,17 @@ const filterActive = () => STATE.filterPassUntil > now();
 /* ============================================================
    2. 模擬資料
 ============================================================ */
-const REGIONS = ["旺角", "銅鑼灣", "尖沙咀", "觀塘", "荃灣", "沙田"];
+const REGIONS = {
+  hot: [
+    "旺角", "銅鑼灣", "尖沙咀", "觀塘", "深水埗",
+    "屯門", "荃灣", "元朗", "葵芳", "將軍澳",
+    "大埔", "天后", "北角", "紅磡", "藍田"
+  ],
+  hk: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔"],
+  kl: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣"],
+  nt: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌"]
+};
+const ALL_REGIONS = [...REGIONS.hot, ...REGIONS.hk, ...REGIONS.kl, ...REGIONS.nt];
 const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
 const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
 
@@ -293,10 +303,61 @@ function viewFind() {
       <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> GPS · 附近店舖</div>
       <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>
     </div>
-    <div class="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
-      ${["全部", ...REGIONS].map(r => `<button onclick="setRegion('${r}')" class="shrink-0 rounded-full border border-gold/40 px-3 py-1 text-xs ${findState.region === r ? "chip-active-gold" : "text-gold"}">${r}</button>`).join("")}
+    <!-- ===== 地區選擇器 ===== -->
+    <div class="mb-4">
+      <div class="flex flex-wrap gap-2">
+        ${REGIONS.hot.map(r => `
+          <button onclick="setRegion('${r}')" 
+            class="rounded-full border px-3 py-1 text-xs 
+            ${findState.region === r 
+              ? 'chip-active-gold border-gold/60' 
+              : 'border-gold/40 text-gold'}"
+          >${r}</button>
+        `).join("")}
+        <button onclick="toggleMoreRegions()" 
+          id="more-regions-btn"
+          class="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold/60"
+        >📍 更多</button>
+      </div>
+      <!-- ===== 展開更多（預設隱藏） ===== -->
+      <div id="more-regions" class="mt-3 hidden space-y-3 border-t border-gold/20 pt-3">
+        ${renderRegionGroup("🏝️ 港島區", REGIONS.hk)}
+        ${renderRegionGroup("🏙️ 九龍區", REGIONS.kl)}
+        ${renderRegionGroup("🌳 新界區", REGIONS.nt)}
+      </div>
     </div>
     <div id="store-list" class="space-y-3">${renderStoreList()}</div>`;
+}
+
+function renderRegionGroup(label, list) {
+  return `
+    <div>
+      <p class="mb-1.5 text-[10px] font-bold text-white/40">${label}</p>
+      <div class="flex flex-wrap gap-2">
+        ${list.map(r => `
+          <button onclick="setRegion('${r}')" 
+            class="rounded-full border px-3 py-1 text-xs 
+            ${findState.region === r 
+              ? 'chip-active-gold border-gold/60' 
+              : 'border-white/20 text-white/40 hover:border-gold/40 hover:text-gold'}"
+          >${r}</button>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
+let moreRegionsOpen = false;
+function toggleMoreRegions() {
+  moreRegionsOpen = !moreRegionsOpen;
+  const el = document.getElementById("more-regions");
+  const btn = document.getElementById("more-regions-btn");
+  if (el) {
+    el.classList.toggle("hidden", !moreRegionsOpen);
+    el.classList.toggle("animate-pop", moreRegionsOpen);
+  }
+  if (btn) {
+    btn.textContent = moreRegionsOpen ? "📍 收起" : "📍 更多";
+  }
 }
 function filterPromoCard() {
   return `
@@ -329,27 +390,62 @@ function advFilterPanel() {
 function advToggle(id, label) {
   return `<label class="flex items-center gap-2 rounded-lg border border-gold/30 px-2 py-2"><input id="${id}" type="checkbox" onchange="renderStoreListDom()" class="accent-neongreen" /> ${label}</label>`;
 }
-function setRegion(r) { findState.region = r; showView("find"); }
+function setRegion(r) {
+  findState.region = r;
+  // 如果點擊的是「更多」裡面的地區，自動收起
+  if (moreRegionsOpen && !REGIONS.hot.includes(r)) {
+    moreRegionsOpen = false;
+    const el = document.getElementById("more-regions");
+    const btn = document.getElementById("more-regions-btn");
+    if (el) el.classList.add("hidden");
+    if (btn) btn.textContent = "📍 更多";
+  }
+  showView("find");
+}
+function filteredStores() {
+  let list = STORES.slice();
+  
+  // 1. 地區過濾
+  if (findState.region !== "全部" && findState.region !== "") {
+    list = list.filter(s => s.region === findState.region);
+  }
+  
+  // 2. 初始化 _hit 標記
+  list.forEach(s => s._hit = false);
+  
+  // 3. 高級 Filter（如果有啟用）
+  if (filterActive()) {
+    const on = id => document.getElementById(id)?.checked;
+    
+    // 免代幣
+    if (on("f_token")) list = list.filter(s => !s.token);
+    
+    // 24 小時
+    if (on("f_24")) list = list.filter(s => s.hour24);
+    
+    // 有場務
+    if (on("f_staff")) list = list.filter(s => s.staff);
+    
+    // 大型店鋪
+    if (on("f_big")) list = list.filter(s => s.size === "大");
+    
+    // 精準過濾：店內含指定台性 / 商品
+    const tag = document.getElementById("f_tag")?.value;
+    if (tag) {
+      list.forEach(s => s._hit = s.machines.some(m => m.feats.includes(tag)));
+      list.sort((a, b) => (b._hit === true) - (a._hit === true));
+    }
+  }
+  
+  // 4. 排序：命中標記優先 → 距離近優先
+  return list.sort((a, b) => (b._hit === true) - (a._hit === true) || a.dist - b.dist);
+}
 function refreshGPS() {
   toast("定位中…", "green");
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(() => toast("已更新附近店舖", "green"), () => toast("無法定位，顯示預設清單", "pink"));
   else toast("此裝置不支援定位", "pink");
 }
-function filteredStores() {
-  let list = STORES.slice();
-  if (findState.region !== "全部") list = list.filter(s => s.region === findState.region);
-  list.forEach(s => s._hit = false);
-  if (filterActive()) {
-    const on = id => document.getElementById(id)?.checked;
-    if (on("f_token")) list = list.filter(s => !s.token);
-    if (on("f_24")) list = list.filter(s => s.hour24);
-    if (on("f_staff")) list = list.filter(s => s.staff);
-    if (on("f_big")) list = list.filter(s => s.size === "大");
-    const tag = document.getElementById("f_tag")?.value;
-    if (tag) { list.forEach(s => s._hit = s.machines.some(m => m.feats.includes(tag))); list.sort((a, b) => (b._hit === true) - (a._hit === true)); }
-  }
-  return list.sort((a, b) => (b._hit === true) - (a._hit === true) || a.dist - b.dist);
-}
+
 function renderStoreListDom() { const el = document.getElementById("store-list"); if (el) el.innerHTML = renderStoreList(); }
 function renderStoreList() {
   const list = filteredStores();
@@ -526,17 +622,93 @@ function adCountdown(sec, done) {
 function openIntelForm() {
   openModal(`
     <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
-      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2><button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
     </div>
     <input id="nt-name" placeholder="店名（必填）" class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
-    <select id="nt-region" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-gold">${REGIONS.map(r => `<option>${r}</option>`).join("")}</select>
+    
+    <!-- ===== 地區選擇（表單內） ===== -->
+    <p class="mt-4 text-xs font-bold text-gold">📍 地區</p>
+    <div class="mt-2 flex flex-wrap gap-2">
+      ${REGIONS.hot.map(r => `
+        <button type="button" onclick="pickIntelRegion('${r}')" 
+          data-region="${r}"
+          class="intel-reg-btn rounded-full border border-gold/40 px-3 py-1 text-xs text-gold"
+        >${r}</button>
+      `).join("")}
+      <button type="button" onclick="toggleIntelMore()" 
+        id="intel-more-btn"
+        class="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold/60"
+      >📍 更多</button>
+    </div>
+    
+    <!-- ===== 表單內「更多地區」 ===== -->
+    <div id="intel-more-regions" class="mt-3 hidden space-y-3 border-t border-gold/20 pt-3">
+      ${renderIntelRegionGroup("🏝️ 港島區", REGIONS.hk)}
+      ${renderIntelRegionGroup("🏙️ 九龍區", REGIONS.kl)}
+      ${renderIntelRegionGroup("🌳 新界區", REGIONS.nt)}
+    </div>
+    
     <input id="nt-addr" placeholder="詳細地址（選填）" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     <div class="mt-3 flex items-center gap-2 text-xs text-neongreen"><span class="flicker">📍</span><span id="nt-gps">自動抓取 GPS 中…</span></div>
     <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>
     ${cameraBlock("nt", 80)}
     <button onclick="submitIntel()" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交（+10 積分）</button>
   `);
-  bindCamera("nt", 80); grabGPS("nt-gps");
+  bindCamera("nt", 80);
+  grabGPS("nt-gps");
+}
+
+// 表單內選取地區（記錄選中狀態）
+let selectedIntelRegion = "";
+
+function pickIntelRegion(r) {
+  selectedIntelRegion = r;
+  // 清除所有按鈕的高亮
+  document.querySelectorAll(".intel-reg-btn").forEach(b => {
+    b.classList.remove("chip-active-gold");
+    b.classList.remove("border-gold/60");
+    b.classList.add("border-gold/40");
+  });
+  // 高亮當前選中
+  document.querySelectorAll(`.intel-reg-btn[data-region="${r}"]`).forEach(b => {
+    b.classList.add("chip-active-gold");
+    b.classList.remove("border-gold/40");
+    b.classList.add("border-gold/60");
+  });
+  // 如果有展開更多，自動收起
+  if (document.getElementById("intel-more-regions")?.classList.contains("hidden") === false) {
+    toggleIntelMore();
+  }
+}
+
+function renderIntelRegionGroup(label, list) {
+  return `
+    <div>
+      <p class="mb-1.5 text-[10px] font-bold text-white/40">${label}</p>
+      <div class="flex flex-wrap gap-2">
+        ${list.map(r => `
+          <button type="button" onclick="pickIntelRegion('${r}')" 
+            data-region="${r}"
+            class="intel-reg-btn rounded-full border border-white/20 px-3 py-1 text-xs text-white/40 hover:border-gold/40 hover:text-gold"
+          >${r}</button>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
+let intelMoreOpen = false;
+function toggleIntelMore() {
+  intelMoreOpen = !intelMoreOpen;
+  const el = document.getElementById("intel-more-regions");
+  const btn = document.getElementById("intel-more-btn");
+  if (el) {
+    el.classList.toggle("hidden", !intelMoreOpen);
+    el.classList.toggle("animate-pop", intelMoreOpen);
+  }
+  if (btn) {
+    btn.textContent = intelMoreOpen ? "📍 收起" : "📍 更多";
+  }
 }
 function grabGPS(elId) {
   const el = document.getElementById(elId);
@@ -548,46 +720,38 @@ async function submitIntel() {
   const photo = window._cam?.nt;
   if (!name) return toast("請填店名", "pink");
   if (!photo) return toast("請現拍店鋪照", "pink");
-  
+  if (!selectedIntelRegion) return toast("請選擇地區", "pink");
+
   const chk = await visionSafeCheck(photo);
   if (!chk.safe) return toast("圖片未通過內容審查", "pink");
 
-  const region = document.getElementById("nt-region").value;
   const addr = document.getElementById("nt-addr").value.trim() || "（未填）";
 
-  const store = { 
-    id: "s" + uid(), 
-    name, 
-    region, 
-    addr, 
-    ig: "", 
-    fb: "", 
-    verified: "pending", 
-    size: "中", 
-    token: false, 
-    hour24: false, 
-    staff: false, 
-    dist: (Math.random() * 2).toFixed(1), 
-    machines: [] 
+  const store = {
+    id: "s" + uid(),
+    name,
+    region: selectedIntelRegion,  // ← 使用選中的地區
+    addr,
+    ig: "",
+    fb: "",
+    verified: "pending",
+    size: "中",
+    token: false,
+    hour24: false,
+    staff: false,
+    dist: (Math.random() * 2).toFixed(1),
+    machines: []
   };
 
-  // 1. 寫入雲端（使用 minimal，不依賴後端回傳）
-  cloudInsert("claw_stores", { name, region, addr, photo, status: "pending" });
-
-  // 2. 【關鍵】手動 Push / unshift 到前端本地的 STORES 陣列最前方
+  cloudInsert("claw_stores", { name, region: selectedIntelRegion, addr, photo, status: "pending" });
   STORES.unshift(store);
-
-  // 3. 記錄到使用者的情報歷史
   STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
   addPoints(10, "提交店鋪情報");
 
   toast("已提交！狀態：審核中（2位現場認證後+40）", "green");
-  closeModal(); 
-  
-  // 4. 即時重新渲染找店頁面，讓用家立刻看到新店鋪！
+  closeModal();
   showView("find");
 }
-
 /* ============================================================
    6. 【實時】雙軌戰報
 ============================================================ */
