@@ -1945,20 +1945,21 @@ async function loadCloud() {
     console.log(`✅ 成功載入 ${stores.length} 筆資料`);
     
     STORES = stores.map(s => ({
-      id: String(s.id),
-      name: s.name || "未命名店鋪",
-      region: s.region || "旺角",
-      addr: s.addr || "（未填地址）",
-      ig: s.ig || "",
-      fb: s.fb || "",
-      verified: s.status === "verified" ? "verified" : "pending",
-      size: s.size || "中",
-      token: s.token || false,
-      hour24: s.hour24 || false,
-      staff: s.staff || false,
-      dist: (Math.random() * 2 + 0.1).toFixed(1),
-      machines: s.machines || []
-    }));
+  id: String(s.id),
+  name: s.name || "未命名店鋪",
+  region: s.region || "旺角",
+  addr: s.addr || "（未填地址）",
+  ig: s.ig || "",
+  fb: s.fb || "",
+  verified: s.status === "verified" ? "verified" : "pending",
+  size: s.size || "中",
+  token: s.token || false,
+  hour24: s.hour24 || false,
+  staff: s.staff || false,
+  dist: (Math.random() * 2 + 0.1).toFixed(1),
+  machines: s.machines || [],
+  photo: s.photo || ""   // ← 加入這行！
+}));
 
     console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
     
