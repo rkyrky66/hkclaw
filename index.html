@@ -149,6 +149,40 @@ async function cloudInsert(table, row) {
   }
   catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
 }
+// 上傳圖片到 Supabase Storage
+async function uploadImage(file, folder = 'stores') {
+  if (!CLOUD_ON) {
+    // 離線模式：回傳 Base64
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+  
+  const fileName = `${folder}/${Date.now()}_${uid()}.jpg`;
+  const path = `storage/v1/object/${fileName}`;
+  
+  // 將 dataURL 轉為 Blob
+  const res = await fetch(file);
+  const blob = await res.blob();
+  
+  const uploadRes = await fetch(`${SUPABASE_URL}/${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': blob.type,
+    },
+    body: blob,
+  });
+  
+  if (!uploadRes.ok) throw new Error('上傳失敗');
+  
+  // 取得 public URL
+  const { data } = await uploadRes.json();
+  return `${SUPABASE_URL}/storage/v1/object/public/${fileName}`;
+}
 /* 預留：Google Cloud Vision 不當圖片過濾接口 */
 async function visionSafeCheck(base64) {
   // TODO: 接上 Cloud Vision SafeSearch API。未接線時預設放行。
@@ -650,21 +684,39 @@ function openMachineForm(sid) {
   `);
   bindCamera("mf");
 }
-function submitMachine(sid) {
-  const photo = window._cam?.mf;
-  if (!photo) return toast("請先現拍機台照", "pink");
+async function submitMachine(sid) {
+  const photoBlob = window._cam?.mf;
+  if (!photoBlob) return toast("請先現拍機台照", "pink");
+  
+  let photoUrl = window._camPreview?.mf || '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'machines');
+    } catch (e) {
+      toast('圖片上傳失敗，請重試', 'pink');
+      return;
+    }
+  }
+  
   const feats = selectedTags("mf-feats");
   if (!feats.length) return toast("請至少選一個台性標籤", "pink");
+  
   const s = STORES.find(x => x.id === sid);
-  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats, plays: selectedTags("mf-plays"), prize: "台主自報", updated: now(), photo });
-  cloudInsert("claw_machines", { store_id: sid, feats, photo });
+  s.machines.unshift({ 
+    id: sid + "_u" + uid(), 
+    no: "新" + (s.machines.length + 1), 
+    feats, 
+    plays: selectedTags("mf-plays"), 
+    prize: "台主自報", 
+    updated: now(), 
+    photo: photoUrl  // ← 存 URL
+  });
+  
+  cloudInsert("claw_machines", { store_id: sid, feats, photo: photoUrl });
   toast("機台已上架，相片成為識別", "green");
-  closeModal(); openStore(sid);
-}
-function buyFilter(mode) {
-  if (mode === "points") { if (STATE.points < 200) return toast("積分不足 200", "pink"); addPoints(-200, "開啟高級 Filter"); }
-  else toast("模擬支付 HK$15 成功", "green");
-  STATE.filterPassUntil = now() + 30 * DAY; save(); showView("find");
+  closeModal(); 
+  openStore(sid);
 }
 
 /* ============================================================
@@ -917,12 +969,24 @@ function grabGPS(elId) {
 }
 async function submitIntel() {
   const name = document.getElementById("nt-name").value.trim();
-  const photo = window._cam?.nt;
+  const photoBlob = window._cam?.nt;
   if (!name) return toast("請填店名", "pink");
-  if (!photo) return toast("請現拍店鋪照", "pink");
-  if (!selectedIntelRegion) return toast("請選擇地區", "pink");
+  if (!photoBlob) return toast("請現拍店鋪照", "pink");
 
-  const chk = await visionSafeCheck(photo);
+  // 上傳圖片到 Storage
+  let photoUrl = window._camPreview?.nt || '';
+  if (CLOUD_ON) {
+    try {
+      // 將 Blob 轉為 File
+      const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'stores');
+    } catch (e) {
+      toast('圖片上傳失敗，請重試', 'pink');
+      return;
+    }
+  }
+
+  const chk = await visionSafeCheck(photoUrl);
   if (!chk.safe) return toast("圖片未通過內容審查", "pink");
 
   const addr = document.getElementById("nt-addr").value.trim() || "（未填）";
@@ -943,7 +1007,15 @@ async function submitIntel() {
     machines: []
   };
 
-  cloudInsert("claw_stores", { name, region: selectedIntelRegion, addr, photo, status: "pending" });
+  // ✅ 改為儲存 URL 而不是 Base64
+  cloudInsert("claw_stores", { 
+    name, 
+    region: selectedIntelRegion, 
+    addr, 
+    photo: photoUrl,  // ← 存 URL
+    status: "pending" 
+  });
+  
   STORES.unshift(store);
   STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
   addPoints(10, "提交店鋪情報");
@@ -1005,16 +1077,42 @@ function openPlayerPost() {
   `);
   bindCamera("lp"); grabGPS("lp-gps");
 }
-function submitPlayer() {
+async function submitPlayer() {
   const d = daily();
-  const photo = window._cam?.lp;
-  if (!photo) return toast("請現拍出貨照", "pink");
+  const photoBlob = window._cam?.lp;
+  if (!photoBlob) return toast("請現拍出貨照", "pink");
+  
+  let photoUrl = window._camPreview?.lp || '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'live');
+    } catch (e) {
+      toast('圖片上傳失敗，請重試', 'pink');
+      return;
+    }
+  }
+  
   const tag = selectedTags("lp-tag")[0] || "出貨";
-  const post = { id: "l" + uid(), track: "player", label: "🎯 夾客", tag, prize: "現場出貨！", photo, ts: now(), expire: now() + DAY, days: 1 };
-  LIVE.unshift(post); STATE.myPosts.unshift({ ...post, photo: "" });
-  d.live++; addPoints(5, "發布出貨照");
-  cloudInsert("claw_live", { track: "player", tag, photo });
-  closeModal(); showView("live");
+  const post = { 
+    id: "l" + uid(), 
+    track: "player", 
+    label: "🎯 夾客", 
+    tag, 
+    prize: "現場出貨！", 
+    photo: photoUrl,  // ← 存 URL
+    ts: now(), 
+    expire: now() + DAY, 
+    days: 1 
+  };
+  
+  LIVE.unshift(post); 
+  STATE.myPosts.unshift({ ...post, photo: "" });
+  d.live++; 
+  addPoints(5, "發布出貨照");
+  cloudInsert("claw_live", { track: "player", tag, photo: photoUrl });
+  closeModal(); 
+  showView("live");
 }
 function openOwnerPost() {
   const d = daily();
@@ -1038,20 +1136,53 @@ function openOwnerPost() {
 }
 let opPick = { days: 0, cost: 0 };
 function pickDays(dd, c) { opPick = { days: dd, cost: c }; document.querySelectorAll(".op-day").forEach(b => b.classList.toggle("chip-active-pink", +b.dataset.days === dd)); }
-function submitOwner() {
+async function submitOwner() {
   const d = daily();
   const img = document.getElementById("op-preview");
   if (!img || img.classList.contains("hidden")) return toast("請上傳海報", "pink");
   if (!opPick.days) return toast("請選擇保留天數", "pink");
   if (STATE.points < opPick.cost) return toast(`積分不足 ${opPick.cost}`, "pink");
+  
+  // ===== 上傳海報到 Storage =====
+  const photoBlob = window._cam?.op;
+  let photoUrl = window._camPreview?.op || '';
+  
+  if (CLOUD_ON && photoBlob) {
+    try {
+      const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'promo');
+    } catch (e) {
+      toast('圖片上傳失敗，請重試', 'pink');
+      return;
+    }
+  } else if (!CLOUD_ON && photoBlob) {
+    // 離線模式：用 dataURL
+    photoUrl = window._camPreview?.op || '';
+  }
+  
   const tag = selectedTags("op-tag")[0] || "機台介紹";
   const store = document.getElementById("op-store").value;
-  const post = { id: "l" + uid(), track: "owner", label: "🏬 台主", tag, prize: "台主宣傳上架", store, photo: img.src, ts: now(), expire: now() + opPick.days * DAY, days: opPick.days };
-  LIVE.unshift(post); STATE.myPosts.unshift({ ...post, photo: "" });
-  d.promoUsed++; addPoints(-opPick.cost, `發布宣傳 ${opPick.days} 天`);
-  cloudInsert("claw_live", { track: "owner", tag, store_id: store, days: opPick.days });
+  const post = { 
+    id: "l" + uid(), 
+    track: "owner", 
+    label: "🏬 台主", 
+    tag, 
+    prize: "台主宣傳上架", 
+    store, 
+    photo: photoUrl,  // ← 存 URL
+    ts: now(), 
+    expire: now() + opPick.days * DAY, 
+    days: opPick.days 
+  };
+  
+  LIVE.unshift(post); 
+  STATE.myPosts.unshift({ ...post, photo: "" });
+  d.promoUsed++; 
+  addPoints(-opPick.cost, `發布宣傳 ${opPick.days} 天`);
+  cloudInsert("claw_live", { track: "owner", tag, store_id: store, days: opPick.days, photo: photoUrl });
   toast(`宣傳已上架，${opPick.days} 天後自動下架`, "green");
-  closeModal(); showView("live");
+  closeModal(); 
+  showView("live");
 }
 
 /* ============================================================
@@ -1148,7 +1279,7 @@ function openCamera(key) {
 }
 
 // 拍照
-function capturePhoto(key) {
+async function capturePhoto(key) {
   const videoEl = document.getElementById(`${key}-video`);
   if (!videoEl) return toast('請先開啟相機', 'pink');
   
@@ -1157,19 +1288,28 @@ function capturePhoto(key) {
   canvas.height = videoEl.videoHeight || 600;
   canvas.getContext('2d').drawImage(videoEl, 0, 0);
   
+  // 先轉為 dataURL 顯示預覽
   const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-  window._cam[key] = dataUrl;
   
-  // 壓縮
-  const kb = Math.round(dataUrl.length / 1024);
+  // 顯示預覽
   const img = document.getElementById(`${key}-preview`);
   const sz = document.getElementById(`${key}-size`);
   if (img) { img.src = dataUrl; img.classList.remove('hidden'); }
+  
+  // ✅ 改為儲存 Blob 物件，準備上傳
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+  window._cam[key] = blob;  // ← 存 Blob 而不是 Base64
+  window._camPreview[key] = dataUrl;  // ← 預覽用
+  
+  const kb = Math.round(blob.size / 1024);
   if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = 'mt-1 text-[10px] text-neongreen'; }
   
   closeCamera(key);
   toast('✅ 已拍照！', 'green');
 }
+
+// 新增：儲存預覽用的 dataURL
+window._camPreview = {};
 
 // 關閉相機
 function closeCamera(key) {
@@ -1187,13 +1327,26 @@ function closeCamera(key) {
     `;
   }
 }
-function compressTo(input, key, maxW, q, targetKB) {
-  const file = input.files[0]; if (!file) return;
-  compressImage(file, maxW, q, targetKB, (dataUrl, kb) => {
-    const img = document.getElementById(`${key}-preview`), sz = document.getElementById(`${key}-size`);
-    if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
-    if (sz) { sz.textContent = `已壓縮 ${kb}KB`; sz.className = "mt-1 text-[10px] text-neonpink"; }
+async function compressTo(input, key, maxW, q, targetKB) {
+  const file = input.files[0]; 
+  if (!file) return;
+  
+  // 壓縮並轉為 Blob
+  const dataUrl = await new Promise((resolve) => {
+    compressImage(file, maxW, q, targetKB, (dataUrl) => resolve(dataUrl));
   });
+  
+  const blob = await fetch(dataUrl).then(r => r.blob());
+  window._cam[key] = blob;  // ← 存 Blob
+  window._camPreview[key] = dataUrl;
+  
+  const img = document.getElementById(`${key}-preview`);
+  const sz = document.getElementById(`${key}-size`);
+  if (img) { img.src = dataUrl; img.classList.remove("hidden"); }
+  if (sz) { 
+    sz.textContent = `已壓縮 ${Math.round(blob.size/1024)}KB`; 
+    sz.className = "mt-1 text-[10px] text-neonpink"; 
+  }
 }
 /* 核心：Canvas 壓縮，最大寬 maxW、初始品質 q，逐步降質直到 < targetKB */
 function compressImage(file, maxW, quality, targetKB, cb) {
