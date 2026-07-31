@@ -300,7 +300,7 @@ const REGIONS = {
     label: "新界區",
     icon: "🌳",
     hot: ["屯門", "荃灣", "元朗", "葵芳", "將軍澳", "大埔"],
-    more: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌", "昂坪", "坑口", "調景嶺", "日出康城", "西貢"]
+    more: ["葵興","天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌", "昂坪", "坑口", "調景嶺", "日出康城", "西貢"]
   }
 };
 
@@ -558,31 +558,43 @@ function toggleMallSection() {
   }
 }
 
-// 渲染商場列表（根據已選地區過濾）
+// 渲染商場列表（根據已選 district 過濾）
 async function renderMallList(query = '') {
   const container = document.getElementById('nt-mall-list');
   if (!container) return;
   
+  // 如果沒有選中地區，提示用戶
+  if (!selectedIntelRegion) {
+    container.innerHTML = `<p class="text-xs text-white/40">請先選擇地區</p>`;
+    return;
+  }
+  
   const malls = await loadMalls();
-  const selectedRegion = intelGroup || 'kl';
-  const regionMap = { hk: '港島區', kl: '九龍區', nt: '新界區' };
-  const regionName = regionMap[selectedRegion] || '九龍區';
   
-  let regionKey = selectedRegion;
-  let mallList = malls[regionKey] || [];
+  // 從所有商場中過濾出 district 等於所選地區的商場
+  let allMalls = [];
+  Object.keys(malls).forEach(key => {
+    allMalls = allMalls.concat(malls[key]);
+  });
   
+  let mallList = allMalls.filter(m => m.district === selectedIntelRegion);
+  
+  // 如果有搜尋關鍵字，進一步過濾
   if (query && query.trim()) {
     const q = query.trim().toLowerCase();
     mallList = mallList.filter(m => m.name.toLowerCase().includes(q));
   }
   
+  // 按名稱排序
+  mallList.sort((a, b) => a.name.localeCompare(b.name));
+  
   if (mallList.length === 0) {
-    container.innerHTML = `<p class="text-xs text-white/40">該區暫無商場資料</p>`;
+    container.innerHTML = `<p class="text-xs text-white/40">「${selectedIntelRegion}」暫無商場資料</p>`;
     return;
   }
   
   container.innerHTML = `
-    <p class="mb-1.5 text-[10px] text-white/40">${regionName}（${mallList.length}個）</p>
+    <p class="mb-1.5 text-[10px] text-white/40">${selectedIntelRegion}（${mallList.length}個）</p>
     <div class="flex flex-wrap gap-2">
       ${mallList.map(m => `
         <button onclick="selectMall('${m.name.replace(/'/g, "\\'")}')" 
