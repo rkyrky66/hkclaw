@@ -191,6 +191,48 @@ async function uploadImage(file, folder = 'stores') {
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
   return publicUrl;
 }
+// 載入商場列表（從 Supabase）
+let MALLS_CACHE = null;
+
+async function loadMalls() {
+  if (!CLOUD_ON) {
+    // 離線模式：返回空陣列
+    return { hk: [], kl: [], nt: [] };
+  }
+  
+  // 如果有快取，直接回傳
+  if (MALLS_CACHE) return MALLS_CACHE;
+  
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/malls?select=*&order=name`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const malls = await response.json();
+    
+    // 按地區分組
+    const grouped = { hk: [], kl: [], nt: [] };
+    malls.forEach(m => {
+      if (m.region === '港島區') grouped.hk.push(m);
+      else if (m.region === '九龍區') grouped.kl.push(m);
+      else if (m.region === '新界區') grouped.nt.push(m);
+    });
+    
+    MALLS_CACHE = grouped;
+    console.log(`✅ 載入 ${malls.length} 個商場`);
+    return grouped;
+    
+  } catch (e) {
+    console.error('載入商場失敗:', e);
+    return { hk: [], kl: [], nt: [] };
+  }
+}
 /* 預留：Google Cloud Vision 不當圖片過濾接口 */
 async function visionSafeCheck(base64) {
   // TODO: 接上 Cloud Vision SafeSearch API。未接線時預設放行。
@@ -249,19 +291,19 @@ const REGIONS = {
     label: "港島區",
     icon: "🏝️",
     hot: ["銅鑼灣", "天后", "北角"],
-    more: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔"]
+    more: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔", "杏花邨", "黃竹坑"]
   },
   kl: {
     label: "九龍區",
     icon: "🏙️",
     hot: ["旺角", "尖沙咀", "觀塘", "深水埗", "紅磡", "藍田"],
-    more: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣"]
+    more: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣", "秀茂坪", "油塘", "樂富", "啟德", "黃埔", "慈雲山", "大角咀", "荔枝角"]
   },
   nt: {
     label: "新界區",
     icon: "🌳",
     hot: ["屯門", "荃灣", "元朗", "葵芳", "將軍澳", "大埔"],
-    more: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌"]
+    more: ["天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌", "昂坪", "坑口", "調景嶺", "日出康城", "西貢"]
   }
 };
 
@@ -805,8 +847,11 @@ function openIntelForm() {
     <input id="nt-name" placeholder="店名（必填）" class="mt-4 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     
     <!-- ===== 地區選擇器 ===== -->
-    
     <div class="intel-selector-container mt-2"></div>
+    
+    <!-- ===== 商場選擇器 ===== -->
+    <p class="mt-4 text-xs font-bold text-gold">📍 商場名稱（選填）</p>
+    <div id="mall-selector-container" class="mt-2"></div>
     
     <input id="nt-addr" placeholder="詳細地址（選填）" class="mt-3 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
     <div class="mt-3 flex items-center gap-2 text-xs text-neongreen"><span class="flicker">📍</span><span id="nt-gps">自動抓取 GPS 中…</span></div>
@@ -820,6 +865,9 @@ function openIntelForm() {
   // ===== 初始化渲染地區選擇器 =====
   intelRegionSelected = false;
   renderIntelForm();
+  
+  // ===== 初始化渲染商場選擇器 =====
+  renderMallSelector();
 }
 
 // 表單內選取大區
@@ -955,6 +1003,126 @@ function renderIntelForm() {
     </div>
   `;
 }
+// 商場選擇狀態
+let selectedMall = '';  // 選中的商場名稱
+let mallGroupOpen = {
+  hk: false,
+  kl: false,
+  nt: false
+};
+
+// 渲染商場選擇器
+async function renderMallSelector() {
+  const container = document.getElementById('mall-selector-container');
+  if (!container) return;
+  
+  const malls = await loadMalls();
+  const hasMalls = malls.hk.length > 0 || malls.kl.length > 0 || malls.nt.length > 0;
+  
+  if (!hasMalls) {
+    container.innerHTML = `
+      <div class="text-xs text-white/40">暫無商場資料</div>
+      <input id="nt-mall" placeholder="請輸入商場名稱（選填）" class="mt-2 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    `;
+    return;
+  }
+  
+  // 判斷是否選中「非商場」模式
+  const isNotMall = selectedMall === '__NOT_MALL__';
+  
+  container.innerHTML = `
+    <!-- 非商場選項（第一項） -->
+    <button onclick="selectMall('__NOT_MALL__')" 
+      class="w-full rounded-lg border py-2 text-center text-sm transition-all
+      ${isNotMall ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}"
+    >📝 直接輸入地址（非商場）</button>
+    
+    ${isNotMall ? `
+      <input id="nt-mall" placeholder="請輸入商場名稱（選填）" class="mt-2 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    ` : ''}
+    
+    <!-- 分隔線 -->
+    <div class="mt-3 border-t border-gold/20"></div>
+    
+    <!-- 港島區 -->
+    ${renderMallGroup('hk', '🏝️ 港島區', malls.hk)}
+    
+    <!-- 九龍區 -->
+    ${renderMallGroup('kl', '🏙️ 九龍區', malls.kl)}
+    
+    <!-- 新界區 -->
+    ${renderMallGroup('nt', '🌳 新界區', malls.nt)}
+  `;
+  
+  // 如果有選中的商場，自動填入地址
+  if (selectedMall && selectedMall !== '__NOT_MALL__') {
+    const addrInput = document.getElementById('nt-addr');
+    if (addrInput && !addrInput.value) {
+      addrInput.value = selectedMall;
+    }
+  }
+}
+
+// 渲染單個地區的商場列表
+function renderMallGroup(group, label, list) {
+  if (!list || list.length === 0) return '';
+  
+  const isOpen = mallGroupOpen[group] || false;
+  
+  return `
+    <div class="mt-2">
+      <button onclick="toggleMallGroup('${group}')" 
+        class="flex w-full items-center justify-between text-xs font-bold text-white/40 hover:text-white/60"
+      >
+        <span>${label}（${list.length}個）</span>
+        <span>${isOpen ? '▼' : '▶'}</span>
+      </button>
+      ${isOpen ? `
+        <div class="mt-1 grid grid-cols-3 gap-1">
+          ${list.map(m => `
+            <button onclick="selectMall('${m.name}')" 
+              class="rounded-full border py-1 text-center text-xs transition-all
+              ${selectedMall === m.name 
+                ? 'chip-active-gold border-gold/60' 
+                : 'border-gold/40 text-gold hover:border-gold/60'}"
+            >${m.name}</button>
+          `).join("")}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// 選擇商場
+function selectMall(name) {
+  selectedMall = name;
+  
+  // 如果是「非商場」模式，顯示輸入框
+  if (name === '__NOT_MALL__') {
+    renderMallSelector();
+    // 聚焦到輸入框
+    setTimeout(() => {
+      const input = document.getElementById('nt-mall');
+      if (input) input.focus();
+    }, 100);
+    return;
+  }
+  
+  // 選中商場，自動填入地址
+  const addrInput = document.getElementById('nt-addr');
+  if (addrInput) {
+    addrInput.value = name;
+    addrInput.focus();
+  }
+  
+  renderMallSelector();
+}
+
+// 切換商場地區展開/收起
+function toggleMallGroup(group) {
+  mallGroupOpen[group] = !mallGroupOpen[group];
+  renderMallSelector();
+}
 // 渲染表單內地區（切換大區時呼叫）
 
 
@@ -984,7 +1152,6 @@ async function submitIntel() {
   let photoUrl = window._camPreview?.nt || '';
   if (CLOUD_ON) {
     try {
-      // 將 Blob 轉為 File
       const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
       photoUrl = await uploadImage(file, 'stores');
     } catch (e) {
@@ -996,7 +1163,25 @@ async function submitIntel() {
   const chk = await visionSafeCheck(photoUrl);
   if (!chk.safe) return toast("圖片未通過內容審查", "pink");
 
-  const addr = document.getElementById("nt-addr").value.trim() || "（未填）";
+  // ===== 讀取地址（包含商場資訊） =====
+  let addr = document.getElementById("nt-addr").value.trim() || "（未填）";
+  
+  // 如果選中了商場（非「非商場」模式），地址前面加上商場名稱
+  if (selectedMall && selectedMall !== '__NOT_MALL__') {
+    // 如果地址已經包含商場名稱，就不重複
+    if (!addr.includes(selectedMall)) {
+      addr = `${selectedMall} · ${addr}`;
+    }
+  } else {
+    // 「非商場」模式：讀取手動輸入的商場名稱
+    const mallInput = document.getElementById('nt-mall');
+    if (mallInput && mallInput.value.trim()) {
+      const mallName = mallInput.value.trim();
+      if (!addr.includes(mallName)) {
+        addr = `${mallName} · ${addr}`;
+      }
+    }
+  }
 
   const store = {
     id: "s" + uid(),
@@ -1014,12 +1199,11 @@ async function submitIntel() {
     machines: []
   };
 
-  // ✅ 改為儲存 URL 而不是 Base64
   cloudInsert("claw_stores", { 
     name, 
     region: selectedIntelRegion, 
     addr, 
-    photo: photoUrl,  // ← 存 URL
+    photo: photoUrl, 
     status: "pending" 
   });
   
