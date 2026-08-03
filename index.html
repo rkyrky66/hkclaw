@@ -654,18 +654,30 @@ document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.
 ============================================================ */
 function viewMap() {
   return `
-    <div id="map-wrapper">
-      <div id="map-container"></div>
+    <div id="map-wrapper" style="height:45vh; min-height:200px; flex-shrink:0;">
+      <div id="map-container" style="height:100%; width:100%;"></div>
     </div>
     <div class="map-divider"></div>
-    <div id="map-store-list-wrapper">
+    <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px;">
       <div id="map-store-list" class="space-y-2 pb-2">
         ${renderMapStoreList()}
       </div>
     </div>
   `;
 }
-
+function getStoresInBounds() {
+  if (!map) return STORES.filter(s => s.lat && s.lng);
+  
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  
+  return STORES.filter(s => {
+    if (!s.lat || !s.lng) return false;
+    return s.lat >= sw.lat && s.lat <= ne.lat &&
+           s.lng >= sw.lng && s.lng <= ne.lng;
+  });
+}
 function afterMapView() {
   requestAnimationFrame(() => {
     setTimeout(() => {
@@ -690,20 +702,27 @@ function afterMapView() {
   });
 }
 function renderMapStoreList() {
-  const list = STORES.filter(s => s.lat && s.lng);
+  // 只顯示地圖視野範圍內的店鋪
+  const list = getStoresInBounds();
+  
   if (!list.length) {
-    return `<p class="py-6 text-center text-sm text-white/40">暫無店鋪資料</p>`;
+    return `<p class="py-6 text-center text-sm text-white/40">此區域暫無店鋪</p>`;
   }
+  
+  // 計算距離並排序
   const sorted = list.map(s => {
     const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
     return { ...s, _dist: dist };
   }).sort((a, b) => a._dist - b._dist);
+  
   mapStoresList = sorted;
+  
   const formatDist = (s) => {
     if (s._dist === 9999) return '📍 位置未知';
     if (s._dist < 1) return `${Math.round(s._dist * 1000)}m`;
     return `${s._dist.toFixed(1)}km`;
   };
+  
   return sorted.map(s => {
     const isVerified = s.verified === "verified";
     const dotColor = isVerified ? 'text-neongreen' : 'text-white/30';
@@ -735,14 +754,12 @@ function initMap() {
     return;
   }
   
-  // 如果地圖已存在且已初始化，但容器是空的，強制重置
+  // 如果地圖已存在且已初始化
   if (mapInitialized) {
-    // 檢查地圖是否真的存在且附著在容器上
     if (map && map.getContainer()) {
       console.log('🗺️ 地圖已初始化，跳過');
       return;
     } else {
-      // 地圖存在但容器已失效，重置狀態
       console.log('🗺️ 地圖狀態異常，強制重置');
       mapInitialized = false;
       map = null;
@@ -751,18 +768,17 @@ function initMap() {
     }
   }
   
+  // 初始中心：預設香港中心點
   let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
   let zoom = 13;
   
-  if (lastMapRegion && REGION_CENTERS[lastMapRegion]) {
-    center = REGION_CENTERS[lastMapRegion];
-    zoom = 14;
-    console.log(`🗺️ 定位到上次選取地區: ${lastMapRegion}`);
-  }
-  else if (userLocation) {
+  // 如果有 GPS，定位到用戶位置
+  if (userLocation) {
     center = { lat: userLocation.lat, lng: userLocation.lng };
     zoom = 15;
     console.log(`🗺️ 定位到 GPS 位置`);
+  } else {
+    console.log(`🗺️ 定位到香港中心點（等待 GPS）`);
   }
   
   try {
@@ -781,6 +797,11 @@ function initMap() {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> 貢獻者',
       maxZoom: 19,
     }).addTo(map);
+    
+    // ===== 地圖事件監聽：當視野改變時更新列表 =====
+    map.on('moveend zoomend', function() {
+      updateMapList();
+    });
     
     markerCluster = L.markerClusterGroup({
       iconCreateFunction: function(cluster) {
@@ -804,6 +825,7 @@ function initMap() {
     }
     
     updateMapMarkers();
+    updateMapList();  // 初始化列表
     
     mapInitialized = true;
     console.log('🗺️ 地圖初始化完成');
@@ -816,6 +838,12 @@ function initMap() {
     console.error('地圖初始化失敗:', e);
     toast('地圖載入失敗，請重新整理', 'pink');
   }
+}
+
+function updateMapList() {
+  const listContainer = document.getElementById('map-store-list');
+  if (!listContainer) return;
+  listContainer.innerHTML = renderMapStoreList();
 }
 
 function addUserMarker(lat, lng) {
@@ -889,7 +917,9 @@ function updateMapMarkers() {
 function flyToStore(id) {
   const s = STORES.find(x => x.id === id);
   if (!s || !s.lat || !s.lng || !map) return;
+  
   map.flyTo([s.lat, s.lng], 16, { duration: 0.8 });
+  
   setTimeout(() => {
     let targetMarker = null;
     markerCluster.eachLayer((layer) => {
@@ -901,6 +931,8 @@ function flyToStore(id) {
       targetMarker.openPopup();
     }
   }, 400);
+  
+  // 列表會因為地圖移動而自動更新（moveend 事件觸發）
   toast(`📍 移動到 ${s.name}`, 'green');
 }
 
@@ -2582,6 +2614,11 @@ renderPoints();
 
 (async function initApp() {
   await loadCloud();
+  
+  // 直接顯示地圖頁面（只呼叫一次）
+  showView("map");
+  
+  // 如果 GPS 回來，更新地圖位置
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -2589,17 +2626,20 @@ renderPoints();
         gpsLat = userLocation.lat;
         gpsLng = userLocation.lng;
         console.log('✅ 自動定位成功:', userLocation);
-        // 定位成功後直接顯示地圖
-        showView("map");
+        
+        // 如果地圖已初始化，飛到用戶位置
+        if (map && mapInitialized) {
+          map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
+          addUserMarker(userLocation.lat, userLocation.lng);
+          updateMapMarkers();
+          updateMapList();
+        }
       },
       () => {
-        console.log('⚠️ 自動定位失敗，使用預設地區');
-        showView("map");
+        console.log('⚠️ 自動定位失敗，使用預設香港中心點');
       },
       { enableHighAccuracy: true, timeout: 5000 }
     );
-  } else {
-    showView("map");
   }
 })();
 </script>
