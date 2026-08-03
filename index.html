@@ -606,7 +606,6 @@ const AFTER = { map: afterMapView };
 function showView(name) {
   // 如果離開地圖頁面，銷毀地圖釋放資源
   if (CURRENT === 'map' && name !== 'map') {
-    // 離開地圖頁面時銷毀
     if (map) {
       map.remove();
       map = null;
@@ -617,19 +616,20 @@ function showView(name) {
     }
   }
   
-  // 如果進入地圖頁面，重置狀態（確保重新初始化）
+  // 如果進入地圖頁面，強制重置狀態（確保重新初始化）
   if (name === 'map') {
-    // 如果地圖仍然存在但狀態混亂，強制重置
-    if (map && !map.getContainer()) {
+    // 強制重置 mapInitialized，讓 initMap 可以重新執行
+    mapInitialized = false;
+    // 如果有舊地圖，銷毀它
+    if (map) {
+      try {
+        map.remove();
+      } catch(e) {}
       map = null;
-      mapInitialized = false;
       markerCluster = null;
       userMarker = null;
     }
-    // 如果 mapInitialized 為 true 但 map 為 null，重置
-    if (mapInitialized && !map) {
-      mapInitialized = false;
-    }
+    console.log('🗺️ 進入地圖頁面，強制重置狀態');
   }
   
   CURRENT = name;
