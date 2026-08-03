@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.Default.css" />
 
-<!-- ===== Leaflet JS（放在最前面確保載入） ===== -->
+<!-- ===== Leaflet JS（必須在 Tailwind 之前載入） ===== -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
 
@@ -40,7 +40,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet" />
 
 <style>
-  /* ... 你的樣式保持不變 ... */
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(255,0,127,0.10), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(0,255,0,0.08), transparent 40%),
+      #000;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .neon-green { text-shadow: 0 0 4px #00FF00, 0 0 12px #00FF00; }
+  .neon-pink  { text-shadow: 0 0 4px #FF007F, 0 0 12px #FF007F; }
+  .neon-gold  { text-shadow: 0 0 4px #D4AF37, 0 0 10px #D4AF37; }
+  .glow-green { box-shadow: 0 0 6px rgba(0,255,0,.5), inset 0 0 6px rgba(0,255,0,.2); }
+  .glow-pink  { box-shadow: 0 0 6px rgba(255,0,127,.5), inset 0 0 6px rgba(255,0,127,.2); }
+  .glow-gold  { box-shadow: 0 0 8px rgba(212,175,55,.5); }
+  .chip-active-green { background:#00FF00; color:#000; box-shadow:0 0 10px #00FF00; }
+  .chip-active-pink  { background:#FF007F; color:#000; box-shadow:0 0 10px #FF007F; }
+  .chip-active-gold  { background:#D4AF37; color:#000; box-shadow:0 0 10px #D4AF37; }
+  @keyframes pop { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .animate-pop { animation: pop .18s ease-out; }
+  @keyframes flicker { 0%,100%{opacity:1} 45%{opacity:.75} 55%{opacity:.9} }
+  .flicker { animation: flicker 3s infinite; }
+  @keyframes fadeup { 0%{opacity:0; transform:translateY(8px)} 100%{opacity:1; transform:translateY(0)} }
+  .view-enter { animation: fadeup .22s ease-out; }
+  @keyframes bounty { 0%,100%{box-shadow:0 0 6px rgba(212,175,55,.6)} 50%{box-shadow:0 0 16px rgba(212,175,55,1)} }
+  .bounty { animation: bounty 1.4s infinite; }
+  .nav-btn.active .nav-ico { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor); }
+  .stale { filter: grayscale(1) brightness(.55); opacity:.55; }
+  input, select, textarea { font-size: 16px; }
 </style>
 </head>
 
@@ -794,7 +822,9 @@ function toggleMoreRegions(group) {
   moreRegionsOpenMap[group] = !moreRegionsOpenMap[group];
   showView("find");
 }
-
+function buyFilter() {
+  toast('功能開發中', 'gold');
+}
 function filterPromoCard() {
   return `
     <div class="rounded-2xl border border-neonpink/50 bg-zinc-950 p-4 glow-pink">
@@ -1879,9 +1909,7 @@ async function submitAddressContribution(mallName) {
   }
 }
 
-function buyFilter() {
-  toast('功能開發中', 'gold');
-}
+
 
 /* ============================================================
    9. 【實時頁面】
