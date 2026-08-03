@@ -257,6 +257,8 @@ const DEFAULT_STATE = {
   recentRegions: [],
 };
 let STATE = load();
+let gpsLat = null;
+let gpsLng = null;
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem("claw_state"));
@@ -605,45 +607,30 @@ async function renderMallList(query = '') {
 // 選擇商場
 function selectMall(name) {
   selectedMall = name;
-  
-  // 填入輸入框
   const input = document.getElementById('nt-mall-input');
-  if (input) {
-    input.value = name;
-  }
+  if (input) input.value = name;
   
-  // 顯示樓層輸入框
   const floorSection = document.getElementById('nt-floor-section');
-  if (floorSection) {
-    floorSection.classList.remove('hidden');
-  }
+  if (floorSection) floorSection.classList.remove('hidden');
   
-  // 清空樓層輸入框（切換商場時重置）
   const floorInput = document.getElementById('nt-floor');
-  if (floorInput) {
-    floorInput.value = '';
-  }
+  if (floorInput) floorInput.value = '';
   
-  // ===== 更新詳細地址（檢查是否有完整地址） =====
   const addrInput = document.getElementById('nt-addr');
   const mallData = getMallData(name);
   
+  // ✅ 儲存完整地址（若有）或商場名稱（當無地址時）
+  window._selectedMallBaseAddress = mallData && mallData.address ? mallData.address : name;
+  window._selectedMallName = name;
+  
   if (addrInput) {
-    if (mallData && mallData.address) {
-      // ✅ 有完整地址：自動填入
-      addrInput.value = mallData.address;
-      toast('✅ 已自動填入地址', 'green');
-    } else {
-      // ❌ 無完整地址：只填商場名
-      addrInput.value = name;
-      toast('📍 可補充完整地址獲得 +5 積分', 'gold');
-    }
+    addrInput.value = window._selectedMallBaseAddress; // 不帶樓層
   }
   
-  // 重新渲染商場列表（更新高亮）
+  // 重新渲染商場清單（更新高亮）
   renderMallList(name);
   
-  // 綁定樓層輸入事件（即時更新地址）
+  // 綁定樓層輸入事件（移除舊的避免重複）
   if (floorInput) {
     floorInput.removeEventListener('input', updateAddressWithFloor);
     floorInput.addEventListener('input', updateAddressWithFloor);
@@ -652,21 +639,17 @@ function selectMall(name) {
 
 // 更新地址（加入樓層）
 function updateAddressWithFloor() {
-  const mallInput = document.getElementById('nt-mall-input');
   const floorInput = document.getElementById('nt-floor');
   const addrInput = document.getElementById('nt-addr');
+  if (!floorInput || !addrInput) return;
   
-  if (!mallInput || !floorInput || !addrInput) return;
-  
-  const mallName = mallInput.value.trim();
   const floor = floorInput.value.trim();
+  const base = window._selectedMallBaseAddress || window._selectedMallName || '';
   
-  if (mallName) {
-    if (floor) {
-      addrInput.value = `${mallName} ${floor}樓`;
-    } else {
-      addrInput.value = mallName;
-    }
+  if (floor) {
+    addrInput.value = `${base} ${floor}樓`;
+  } else {
+    addrInput.value = base;
   }
 }
 
@@ -1348,8 +1331,24 @@ let intelMoreOpenMap = {
 };
 function grabGPS(elId) {
   const el = document.getElementById(elId);
-  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => el && (el.textContent = `已定位 ${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`), () => el && (el.textContent = "定位失敗（可手動填地址）"));
-  else if (el) el.textContent = "裝置不支援定位";
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        gpsLat = pos.coords.latitude;
+        gpsLng = pos.coords.longitude;
+        if (el) el.textContent = `已定位 ${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)}`;
+      },
+      () => {
+        if (el) el.textContent = "定位失敗（可手動填地址）";
+        gpsLat = null;
+        gpsLng = null;
+      }
+    );
+  } else {
+    if (el) el.textContent = "裝置不支援定位";
+    gpsLat = null;
+    gpsLng = null;
+  }
 }
 async function submitIntel() {
   // ===== 1. 店名 =====
@@ -1424,15 +1423,17 @@ if (locationType === 'mall') {
   };
 
   // ===== 9. 上傳到雲端（包含 mall 和 floor） =====
-  cloudInsert("claw_stores", { 
-    name, 
-    region: selectedIntelRegion, 
-    addr, 
-    photo: photoUrl, 
-    status: "pending",
-    mall: mall,      // ← 新增：商場名稱
-    floor: floor     // ← 新增：樓層
-  });
+  await cloudInsert("claw_stores", {
+  name,
+  region: selectedIntelRegion,
+  addr,
+  photo: photoUrl,
+  status: "pending",
+  mall: mall,
+  floor: floor,
+  // ⬇️ 加入 GPS 座標（如果有定位成功）
+  ...(gpsLat !== null && gpsLng !== null ? { lat: gpsLat, lng: gpsLng } : {})
+});
   
   // ===== 10. 更新本地 =====
   STORES.unshift(store);
