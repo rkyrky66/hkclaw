@@ -607,27 +607,34 @@ async function renderMallList(query = '') {
 // 選擇商場
 function selectMall(name) {
   selectedMall = name;
+  
   const input = document.getElementById('nt-mall-input');
-  if (input) input.value = name;
+  if (input) {
+    input.value = name;
+  }
   
   const floorSection = document.getElementById('nt-floor-section');
-  if (floorSection) floorSection.classList.remove('hidden');
+  if (floorSection) {
+    floorSection.classList.remove('hidden');
+  }
   
   const floorInput = document.getElementById('nt-floor');
-  if (floorInput) floorInput.value = '';
+  if (floorInput) {
+    floorInput.value = '';
+  }
   
   const addrInput = document.getElementById('nt-addr');
   const mallData = getMallData(name);
   
-  // ✅ 儲存完整地址（若有）或商場名稱（當無地址時）
+  // 儲存完整地址（若有）或商場名稱（當無地址時）
   window._selectedMallBaseAddress = mallData && mallData.address ? mallData.address : name;
   window._selectedMallName = name;
   
   if (addrInput) {
-    addrInput.value = window._selectedMallBaseAddress; // 不帶樓層
+    addrInput.value = window._selectedMallBaseAddress;
   }
   
-  // 重新渲染商場清單（更新高亮）
+  // 重新渲染商場列表（更新高亮）
   renderMallList(name);
   
   // 綁定樓層輸入事件（移除舊的避免重複）
@@ -636,7 +643,6 @@ function selectMall(name) {
     floorInput.addEventListener('input', updateAddressWithFloor);
   }
 }
-
 // 更新地址（加入樓層）
 function updateAddressWithFloor() {
   const floorInput = document.getElementById('nt-floor');
@@ -644,12 +650,20 @@ function updateAddressWithFloor() {
   if (!floorInput || !addrInput) return;
   
   const floor = floorInput.value.trim();
-  const base = window._selectedMallBaseAddress || window._selectedMallName || '';
+  const mallName = window._selectedMallName || '';
+  const baseAddr = window._selectedMallBaseAddress || '';
   
   if (floor) {
-    addrInput.value = `${base} ${floor}樓`;
+    // 如果有完整地址，使用完整地址 + 樓層
+    if (baseAddr && baseAddr !== mallName) {
+      addrInput.value = `${baseAddr} ${floor}樓`;
+    } else {
+      // 否則使用商場名稱 + 樓層
+      addrInput.value = mallName ? `${mallName} ${floor}樓` : floor;
+    }
   } else {
-    addrInput.value = base;
+    // 沒有樓層時，回復到基礎地址
+    addrInput.value = baseAddr || mallName || '';
   }
 }
 
@@ -979,37 +993,37 @@ function openIntelForm() {
     </div>
     
     <!-- ===== 位置（必選） ===== -->
-<div class="mt-4">
-  <label class="text-xs font-bold text-gold">位置 <span class="text-neonpink">（必選）</span></label>
-  <div class="mt-2 flex gap-2">
-    <button onclick="selectLocationType('independent')" 
-      id="location-independent"
-      class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
-      ${locationType === 'independent' 
-        ? 'border-gold bg-gold/20 text-gold glow-gold' 
-        : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
-    >🏪 獨立舖</button>
-    <button onclick="selectLocationType('mall')" 
-      id="location-mall"
-      class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
-      ${locationType === 'mall' 
-        ? 'border-gold bg-gold/20 text-gold glow-gold' 
-        : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
-    >🏬 商場</button>
-  </div>
-  
-  <!-- ===== 商場選項（只在選「商場」時顯示） ===== -->
-  <div id="nt-mall-section" class="hidden mt-3">
-    <input id="nt-mall-input" placeholder="請輸入商場名稱" 
-      class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
-    <div id="nt-mall-list" class="mt-2"></div>
-    <div id="nt-floor-section" class="hidden mt-3">
-      <label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label>
-      <input id="nt-floor" placeholder="如：G、2、3" 
-        class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    <div class="mt-4">
+      <label class="text-xs font-bold text-gold">位置 <span class="text-neonpink">（必選）</span></label>
+      <div class="mt-2 flex gap-2">
+        <button onclick="selectLocationType('independent')" 
+          id="location-independent"
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${locationType === 'independent' 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >🏪 獨立舖</button>
+        <button onclick="selectLocationType('mall')" 
+          id="location-mall"
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${locationType === 'mall' 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >🏬 商場</button>
+      </div>
+      
+      <!-- ===== 商場選項（只在選「商場」時顯示） ===== -->
+      <div id="nt-mall-section" class="hidden mt-3">
+        <input id="nt-mall-input" placeholder="請輸入商場名稱" 
+          class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+        <div id="nt-mall-list" class="mt-2"></div>
+        <div id="nt-floor-section" class="hidden mt-3">
+          <label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label>
+          <input id="nt-floor" placeholder="如：G、2、3" 
+            class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+        </div>
+      </div>
     </div>
-  </div>
-</div>
     
     <!-- ===== 詳細地址（選填） ===== -->
     <div class="mt-4">
@@ -1035,6 +1049,7 @@ function openIntelForm() {
   intelRegionSelected = false;
   renderIntelForm();
   
+  // ===== 店名自動補全 =====
   const nameInput = document.getElementById('nt-name');
   if (nameInput) {
     nameInput.addEventListener('input', function() {
@@ -1047,17 +1062,26 @@ function openIntelForm() {
     });
   }
   
+  // ===== 商場輸入框事件綁定 =====
   const mallInput = document.getElementById('nt-mall-input');
-if (mallInput) {
-  // 移除舊的監聽器（避免重複綁定）
-  mallInput.removeEventListener('input', handleMallInputChange);
-  mallInput.removeEventListener('focus', handleMallInputFocus);
+  if (mallInput) {
+    mallInput.removeEventListener('input', handleMallInputChange);
+    mallInput.removeEventListener('focus', handleMallInputFocus);
+    mallInput.addEventListener('input', handleMallInputChange);
+    mallInput.addEventListener('focus', handleMallInputFocus);
+  }
   
-  // 綁定新的監聽器
-  mallInput.addEventListener('input', handleMallInputChange);
-  mallInput.addEventListener('focus', handleMallInputFocus);
-}
+  // ===== 初始化時隱藏樓層輸入 =====
+  const floorSection = document.getElementById('nt-floor-section');
+  if (floorSection) {
+    floorSection.classList.add('hidden');
+  }
   
+  // ===== 重置商場相關變數 =====
+  selectedMall = '';
+  locationType = 'independent';
+  
+  // ===== 隱藏商場選項區塊 =====
   document.getElementById('nt-mall-section').classList.add('hidden');
 }
 // 商場輸入框變化處理
@@ -1066,30 +1090,43 @@ function handleMallInputChange() {
   if (!mallInput) return;
   
   const mallName = mallInput.value.trim();
+  const floorSection = document.getElementById('nt-floor-section');
+  const addrInput = document.getElementById('nt-addr');
+  const floorInput = document.getElementById('nt-floor');
   
-  // 1. 更新商場列表（搜尋過濾）
+  // ===== 1. 如果有輸入內容，顯示樓層輸入區塊；否則隱藏 =====
+  if (floorSection) {
+    if (mallName) {
+      floorSection.classList.remove('hidden');
+    } else {
+      floorSection.classList.add('hidden');
+    }
+  }
+  
+  // ===== 2. 更新商場列表（搜尋過濾） =====
   renderMallList(mallInput.value);
   
-  // 2. 如果用戶修改了商場名稱，清空樓層
-  const floorInput = document.getElementById('nt-floor');
-  const addrInput = document.getElementById('nt-addr');
-  const floorSection = document.getElementById('nt-floor-section');
-  
+  // ===== 3. 如果用戶修改了商場名稱，清空樓層 =====
   if (floorInput) {
     floorInput.value = '';
   }
   
-  // 3. 同步更新詳細地址（只顯示商場名稱）
+  // ===== 4. 同步更新詳細地址（顯示商場名稱或完整地址） =====
   if (addrInput) {
-    addrInput.value = mallName;
+    const mallData = getMallData(mallName);
+    if (mallData && mallData.address) {
+      // 有完整地址：填入完整地址
+      addrInput.value = mallData.address;
+    } else {
+      // 無完整地址：只填商場名稱
+      addrInput.value = mallName;
+    }
   }
   
-  // 4. 如果商場名稱被清空，隱藏樓層區塊
-  if (floorSection && !mallName) {
-    floorSection.classList.add('hidden');
-  }
+  // ===== 5. 儲存當前商場名稱作為 base =====
+  window._selectedMallName = mallName;
+  window._selectedMallBaseAddress = getMallData(mallName)?.address || mallName || '';
 }
-
 // 商場輸入框聚焦處理
 function handleMallInputFocus() {
   const mallInput = document.getElementById('nt-mall-input');
@@ -1107,7 +1144,6 @@ function getMallData(name) {
 function selectLocationType(type) {
   locationType = type;
   
-  // 更新按鈕高亮
   const indBtn = document.getElementById('location-independent');
   const mallBtn = document.getElementById('location-mall');
   
@@ -1129,31 +1165,49 @@ function selectLocationType(type) {
     mallBtn.classList.toggle('text-white/45', type !== 'mall');
   }
   
-  // 顯示/隱藏商場選項區塊
   const section = document.getElementById('nt-mall-section');
+  const floorSection = document.getElementById('nt-floor-section');
+  const mallInput = document.getElementById('nt-mall-input');
+  const floorInput = document.getElementById('nt-floor');
+  const addrInput = document.getElementById('nt-addr');
+  const mallList = document.getElementById('nt-mall-list');
+  
   if (section) {
     if (type === 'mall') {
       section.classList.remove('hidden');
+      
       // 如果已選地區，載入商場列表
       if (selectedIntelRegion) {
-        renderMallList(document.getElementById('nt-mall-input')?.value || '');
+        renderMallList(mallInput?.value || '');
       } else {
         toast('請先選擇地區', 'pink');
       }
+      
+      // 如果已輸入商場名稱，顯示樓層輸入
+      if (mallInput && mallInput.value.trim()) {
+        if (floorSection) {
+          floorSection.classList.remove('hidden');
+        }
+      } else {
+        if (floorSection) {
+          floorSection.classList.add('hidden');
+        }
+      }
+      
     } else {
       section.classList.add('hidden');
+      
       // 清空所有商場相關資料
       selectedMall = '';
-      const mallInput = document.getElementById('nt-mall-input');
       if (mallInput) mallInput.value = '';
-      const floorInput = document.getElementById('nt-floor');
       if (floorInput) floorInput.value = '';
-      const addrInput = document.getElementById('nt-addr');
       if (addrInput) addrInput.value = '';
-      const floorSection = document.getElementById('nt-floor-section');
       if (floorSection) floorSection.classList.add('hidden');
-      const mallList = document.getElementById('nt-mall-list');
       if (mallList) mallList.innerHTML = '';
+      
+      // 清空儲存的商場資料
+      window._selectedMallName = '';
+      window._selectedMallBaseAddress = '';
     }
   }
 }
@@ -1382,25 +1436,31 @@ async function submitIntel() {
   let addr = document.getElementById("nt-addr").value.trim() || "";
   
   // ===== 7. 讀取商場和樓層 =====
-let mall = '';
-let floor = '';
+  let mall = '';
+  let floor = '';
 
-if (locationType === 'mall') {
-  const mallInput = document.getElementById('nt-mall-input');
-  if (mallInput && mallInput.value.trim()) {
-    mall = mallInput.value.trim();
-    floor = document.getElementById('nt-floor')?.value.trim() || '';
-    
-    // 組合地址
-    let mallAddr = mall;
-    if (floor) {
-      mallAddr += ` ${floor}樓`;
-    }
-    if (!addr.includes(mall)) {
-      addr = addr ? `${mallAddr} · ${addr}` : mallAddr;
+  if (locationType === 'mall') {
+    const mallInput = document.getElementById('nt-mall-input');
+    if (mallInput && mallInput.value.trim()) {
+      mall = mallInput.value.trim();
+      floor = document.getElementById('nt-floor')?.value.trim() || '';
+      
+      // 組合地址
+      let mallAddr = mall;
+      if (floor) {
+        mallAddr += ` ${floor}樓`;
+      }
+      
+      // 如果有完整地址，使用完整地址 + 樓層；否則只使用商場名稱 + 樓層
+      const mallData = getMallData(mall);
+      if (mallData && mallData.address) {
+        const baseAddr = mallData.address;
+        addr = floor ? `${baseAddr} ${floor}樓` : baseAddr;
+      } else {
+        addr = mallAddr;
+      }
     }
   }
-}
   
   // 如果地址還是空的，用「（未填）」代替
   if (!addr) addr = "（未填）";
@@ -1423,58 +1483,65 @@ if (locationType === 'mall') {
   };
 
   // ===== 9. 上傳到雲端（包含 mall 和 floor） =====
-  await cloudInsert("claw_stores", {
-  name,
-  region: selectedIntelRegion,
-  addr,
-  photo: photoUrl,
-  status: "pending",
-  mall: mall,
-  floor: floor,
-  // ⬇️ 加入 GPS 座標（如果有定位成功）
-  ...(gpsLat !== null && gpsLng !== null ? { lat: gpsLat, lng: gpsLng } : {})
-});
+  const payload = {
+    name: name,
+    region: selectedIntelRegion,
+    addr: addr,
+    photo: photoUrl,
+    status: "pending",
+    mall: mall,
+    floor: floor
+  };
+  
+  // 如果有 GPS，加入座標
+  if (gpsLat !== null && gpsLng !== null) {
+    payload.lat = gpsLat;
+    payload.lng = gpsLng;
+  }
+  
+  await cloudInsert("claw_stores", payload);
   
   // ===== 10. 更新本地 =====
   STORES.unshift(store);
   STATE.myIntel.unshift({ id: store.id, name, ts: now(), status: "審核中" });
   addPoints(10, "提交店鋪情報");
 
-// ===== 11. 重置商場選取狀態 =====
-selectedMall = '';
+  // ===== 11. 重置商場選取狀態 =====
+  selectedMall = '';
 
-// 如果選了「商場」，切換回「獨立舖」
-if (locationType === 'mall') {
-  locationType = 'independent';
-  
-  // 更新按鈕樣式
-  const indBtn = document.getElementById('location-independent');
-  const mallBtn = document.getElementById('location-mall');
-  
-  if (indBtn) {
-    indBtn.classList.add('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
-    indBtn.classList.remove('border-white/20', 'text-white/45');
+  // 如果選了「商場」，切換回「獨立舖」
+  if (locationType === 'mall') {
+    locationType = 'independent';
+    
+    const indBtn = document.getElementById('location-independent');
+    const mallBtn = document.getElementById('location-mall');
+    
+    if (indBtn) {
+      indBtn.classList.add('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+      indBtn.classList.remove('border-white/20', 'text-white/45');
+    }
+    if (mallBtn) {
+      mallBtn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+      mallBtn.classList.add('border-white/20', 'text-white/45');
+    }
   }
-  if (mallBtn) {
-    mallBtn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
-    mallBtn.classList.add('border-white/20', 'text-white/45');
-  }
-}
 
-// 隱藏商場相關區塊
-document.getElementById('nt-mall-section').classList.add('hidden');
-document.getElementById('nt-floor-section').classList.add('hidden');
+  // 隱藏商場相關區塊
+  document.getElementById('nt-mall-section').classList.add('hidden');
+  document.getElementById('nt-floor-section').classList.add('hidden');
 
   toast("已提交！狀態：審核中（2位現場認證後+40）", "green");
+  
   // ===== 提交成功後，檢查商場是否需要補充地址 =====
-if (locationType === 'mall' && mall) {
-  const mallData = getMallData(mall);
-  if (!mallData || !mallData.address) {
-    setTimeout(() => {
-      showAddressContributionModal(mall);
-    }, 800);
+  if (locationType === 'mall' && mall) {
+    const mallData = getMallData(mall);
+    if (!mallData || !mallData.address) {
+      setTimeout(() => {
+        showAddressContributionModal(mall);
+      }, 800);
+    }
   }
-}
+  
   closeModal();
   showView("find");
 }
