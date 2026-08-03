@@ -38,7 +38,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet" />
-
+  
 <style>
   html, body { height: 100%; overscroll-behavior: none; }
   body {
@@ -69,6 +69,40 @@
   .nav-btn.active .nav-ico { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor); }
   .stale { filter: grayscale(1) brightness(.55); opacity:.55; }
   input, select, textarea { font-size: 16px; }
+  /* ===== 地圖與列表布局 ===== */
+  #map-wrapper {
+    height: 45vh;
+    min-height: 200px;
+    width: 100%;
+    flex-shrink: 0;
+    position: relative;
+  }
+  #map-container {
+    height: 100%;
+    width: 100%;
+    background: #111;
+    position: relative;
+    z-index: 1;
+  }
+  #map-container .leaflet-control-zoom {
+    border: none !important;
+  }
+  #map-container .leaflet-control-zoom a {
+    background: rgba(20,20,20,0.85) !important;
+    color: #D4AF37 !important;
+    border: 1px solid rgba(212,175,55,0.25) !important;
+  }
+  #map-store-list-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .map-divider {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), rgba(0,255,0,0.2), rgba(212,175,55,0.3), transparent);
+    flex-shrink: 0;
+  }
 </style>
 </head>
 
@@ -500,11 +534,11 @@ document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.
 ============================================================ */
 function viewMap() {
   return `
-    <div class="-mx-4 -mt-3">
+    <div id="map-wrapper">
       <div id="map-container"></div>
     </div>
     <div class="map-divider"></div>
-    <div class="mt-3">
+    <div id="map-store-list-wrapper">
       <div id="map-store-list" class="space-y-2 pb-2">
         ${renderMapStoreList()}
       </div>
@@ -513,11 +547,28 @@ function viewMap() {
 }
 
 function afterMapView() {
-  setTimeout(() => {
-    initMap();
-  }, 200);
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const container = document.getElementById('map-container');
+      if (container) {
+        const wrapper = document.getElementById('map-wrapper');
+        if (wrapper) {
+          const h = wrapper.offsetHeight;
+          if (h > 0) {
+            container.style.height = h + 'px';
+          } else {
+            container.style.height = '45vh';
+          }
+        }
+        container.style.width = '100%';
+        initMap();
+      } else {
+        console.error('❌ map-container 不存在');
+        toast('地圖載入失敗，請重新整理', 'pink');
+      }
+    }, 300);
+  });
 }
-
 function renderMapStoreList() {
   const list = STORES.filter(s => s.lat && s.lng);
   if (!list.length) {
