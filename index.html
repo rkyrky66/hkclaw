@@ -499,17 +499,31 @@ const AFTER = { map: afterMapView };
 
 function showView(name) {
   // 如果離開地圖頁面，銷毀地圖釋放資源
-  if (CURRENT === 'map' && name !== 'map' && map) {
-    setTimeout(() => {
-      if (map) {
-        map.remove();
-        map = null;
-        mapInitialized = false;
-        markerCluster = null;
-        userMarker = null;
-        console.log('🗺️ 地圖已銷毀（釋放資源）');
-      }
-    }, 100);
+  if (CURRENT === 'map' && name !== 'map') {
+    // 離開地圖頁面時銷毀
+    if (map) {
+      map.remove();
+      map = null;
+      mapInitialized = false;
+      markerCluster = null;
+      userMarker = null;
+      console.log('🗺️ 地圖已銷毀（釋放資源）');
+    }
+  }
+  
+  // 如果進入地圖頁面，重置狀態（確保重新初始化）
+  if (name === 'map') {
+    // 如果地圖仍然存在但狀態混亂，強制重置
+    if (map && !map.getContainer()) {
+      map = null;
+      mapInitialized = false;
+      markerCluster = null;
+      userMarker = null;
+    }
+    // 如果 mapInitialized 為 true 但 map 為 null，重置
+    if (mapInitialized && !map) {
+      mapInitialized = false;
+    }
   }
   
   CURRENT = name;
@@ -610,8 +624,26 @@ function renderMapStoreList() {
 ============================================================ */
 function initMap() {
   const container = document.getElementById('map-container');
-  if (!container) return;
-  if (mapInitialized) return;
+  if (!container) {
+    console.error('❌ map-container 不存在');
+    return;
+  }
+  
+  // 如果地圖已存在且已初始化，但容器是空的，強制重置
+  if (mapInitialized) {
+    // 檢查地圖是否真的存在且附著在容器上
+    if (map && map.getContainer()) {
+      console.log('🗺️ 地圖已初始化，跳過');
+      return;
+    } else {
+      // 地圖存在但容器已失效，重置狀態
+      console.log('🗺️ 地圖狀態異常，強制重置');
+      mapInitialized = false;
+      map = null;
+      markerCluster = null;
+      userMarker = null;
+    }
+  }
   
   let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
   let zoom = 13;
@@ -982,7 +1014,19 @@ function refreshGPS() {
         const region = getRegionFromCoords(userLocation.lat, userLocation.lng);
         if (region) {
           findState.region = region;
-          showView("find");
+        }
+        // 如果在地圖頁面，重新載入地圖
+        if (CURRENT === 'map') {
+          // 先銷毀舊地圖
+          if (map) {
+            map.remove();
+            map = null;
+            mapInitialized = false;
+            markerCluster = null;
+            userMarker = null;
+          }
+          // 重新渲染地圖頁面
+          showView("map");
         } else {
           showView("find");
         }
@@ -2423,6 +2467,7 @@ renderPoints();
         gpsLat = userLocation.lat;
         gpsLng = userLocation.lng;
         console.log('✅ 自動定位成功:', userLocation);
+        // 定位成功後直接顯示地圖
         showView("map");
       },
       () => {
