@@ -575,6 +575,7 @@
     let lastMapRegion = localStorage.getItem('claw_last_map_region') || '';
     let _currentMallModal = null;
     let _currentMallFloor = null;
+    let _storeContext = null;  // 儲存店鋪來源上下文
 
     // 地區中心點
     const REGION_CENTERS = {
@@ -1114,14 +1115,19 @@ function onSubmitMissingStore(mallName) {
     return;
   }
   
+  // 儲存來源：從商場 Modal 來的
+  _storeContext = {
+    from: 'mall',
+    mallName: mallName,
+    floor: currentFloor,
+    highlightId: storeId
+  };
+  
   // 關閉商場 Modal
   closeModal();
   
-  // 直接打開店鋪詳情頁面
+  // 打開店鋪詳情頁面
   openStore(storeId);
-  
-  // 不移動地圖，因為用戶已經在商場區域內了
-  // 但為了讓用戶知道位置，可以在 Popup 中顯示位置資訊
 }
 
     function viewAllMallStores(mallName) {
@@ -1754,38 +1760,124 @@ function onSubmitMissingStore(mallName) {
        6. 店鋪詳細 Modal + 任務 + 實時 + 我的
     ============================================================ */
     function openStore(id) {
-      const s = STORES.find(x => x.id === id);
-      if (!s) return;
-      const fav = STATE.favStores.includes(s.id);
-      if (map) { try { map.closePopup(); } catch (e) {} }
-      openModal(`
-        ${s.photo ? `<div class="-mt-5 -mx-5 overflow-hidden rounded-t-3xl"><img src="${s.photo}" class="h-48 w-full object-cover" alt="${s.name}" /></div>` : `<div class="-mt-5 -mx-5 flex h-48 items-center justify-center rounded-t-3xl bg-zinc-800 text-7xl">🏪</div>`}
-        <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3">
-          <div><h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2><p class="text-xs text-white/50">${s.region} · ${s.addr}</p></div>
-          <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
-        </div>
-        <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
-          ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
-          <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
-        </div>
-        <div class="mt-5 flex items-center justify-between">
-          <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
-          <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
-        </div>
-        <div class="mt-3 grid grid-cols-2 gap-3">${s.machines.length ? s.machines.map(m => `
-          <div class="rounded-xl border ${(now() - m.updated < 2 * DAY) ? 'border-neongreen/70 glow-green' : 'border-white/20 stale'} bg-zinc-950 p-2 text-left">
-            ${m.photo ? `<img src="${m.photo}" class="h-24 w-full rounded-lg object-cover" alt="機台 ${m.no}" />` : `<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>`}
-            <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ${m.no}</b>${(now() - m.updated < 2 * DAY) ? "" : '<span class="text-[9px] text-white/40">[存疑]</span>'}</div>
-            <div class="mt-1 flex flex-wrap gap-1">${m.feats.slice(0, 2).map(f => `<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">${f}</span>`).join("")}</div>
-            <p class="mt-1 truncate text-[10px] text-white/50">🎁 ${m.prize}</p>
-            <p class="text-[9px] text-white/40">${timeAgo(m.updated)}</p>
-          </div>
-        `).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>'}</div>
-        <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
-      `);
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  const fav = STATE.favStores.includes(s.id);
+  if (map) { try { map.closePopup(); } catch (e) {} }
+  
+  // ===== 獲取該商場的所有店鋪（用於左右切換） =====
+  let mallStores = [];
+  let currentIndex = -1;
+  let mallName = '';
+  
+  // 如果這間店在商場內
+  if (s.mall && s.mall.trim() !== '') {
+    mallName = s.mall;
+    const group = window._mallGroups && window._mallGroups[mallName];
+    if (group && group.stores) {
+      // 按樓層排序
+      mallStores = group.stores.slice().sort((a, b) => {
+        const floorA = a.floor || 'G';
+        const floorB = b.floor || 'G';
+        if (floorA === 'G') return -1;
+        if (floorB === 'G') return 1;
+        const numA = parseInt(floorA);
+        const numB = parseInt(floorB);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return floorA.localeCompare(floorB);
+      });
+      // 找到當前店鋪在列表中的位置
+      currentIndex = mallStores.findIndex(store => store.id === id);
     }
+  }
+  
+  // 判斷是否有左右箭頭
+  const hasNav = mallStores.length > 1 && currentIndex >= 0;
+  const prevId = hasNav ? mallStores[(currentIndex - 1 + mallStores.length) % mallStores.length].id : null;
+  const nextId = hasNav ? mallStores[(currentIndex + 1) % mallStores.length].id : null;
+  
+  // 返回按鈕（從商場來的）
+  const backBtn = (_storeContext && _storeContext.from === 'mall') 
+    ? `<button onclick="backToMall()" class="text-sm text-gold mr-2">← 返回</button>`
+    : '';
+  
+  // 左右箭頭
+  const navHtml = hasNav ? `
+    <div class="flex items-center gap-3">
+      <button onclick="openStore('${prevId}')" class="text-2xl text-gold hover:text-white transition-colors px-2">‹</button>
+      <span class="text-xs text-white/40">${currentIndex + 1}/${mallStores.length}</span>
+      <button onclick="openStore('${nextId}')" class="text-2xl text-gold hover:text-white transition-colors px-2">›</button>
+    </div>
+  ` : '';
+  
+  const isInMall = s.mall && s.mall.trim() !== '';
+  const mallInfo = isInMall ? `<span class="text-[10px] text-white/30 ml-2">${s.mall} · ${s.floor || 'G'}F</span>` : '';
+  
+  openModal(`
+    ${s.photo ? `<div class="-mt-5 -mx-5 overflow-hidden rounded-t-3xl"><img src="${s.photo}" class="h-48 w-full object-cover" alt="${s.name}" /></div>` : `<div class="-mt-5 -mx-5 flex h-48 items-center justify-center rounded-t-3xl bg-zinc-800 text-7xl">🏪</div>`}
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3">
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          ${backBtn}
+          <h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2>
+          ${mallInfo}
+        </div>
+        <p class="text-xs text-white/50">${s.region} · ${s.addr}</p>
+      </div>
+      <div class="flex items-center gap-3">
+        ${navHtml}
+        <button onclick="closeStoreModal()" class="text-2xl text-white/50">✕</button>
+      </div>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
+      ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
+      <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
+      ${isInMall ? `<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>` : ''}
+    </div>
+    <div class="mt-5 flex items-center justify-between">
+      <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
+      <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
+    </div>
+    <div class="mt-3 grid grid-cols-2 gap-3">${s.machines.length ? s.machines.map(m => `
+      <div class="rounded-xl border ${(now() - m.updated < 2 * DAY) ? 'border-neongreen/70 glow-green' : 'border-white/20 stale'} bg-zinc-950 p-2 text-left">
+        ${m.photo ? `<img src="${m.photo}" class="h-24 w-full rounded-lg object-cover" alt="機台 ${m.no}" />` : `<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>`}
+        <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ${m.no}</b>${(now() - m.updated < 2 * DAY) ? "" : '<span class="text-[9px] text-white/40">[存疑]</span>'}</div>
+        <div class="mt-1 flex flex-wrap gap-1">${m.feats.slice(0, 2).map(f => `<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">${f}</span>`).join("")}</div>
+        <p class="mt-1 truncate text-[10px] text-white/50">🎁 ${m.prize}</p>
+        <p class="text-[9px] text-white/40">${timeAgo(m.updated)}</p>
+      </div>
+    `).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>'}</div>
+    <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
+  `);
+}
+function closeStoreModal() {
+  // 關閉 Modal
+  closeModal();
+  
+  // 如果來源是商場，回到商場列表
+  if (_storeContext && _storeContext.from === 'mall') {
+    const ctx = _storeContext;
+    setTimeout(() => {
+      openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
+      _storeContext = null;
+    }, 300);
+  } else {
+    _storeContext = null;
+  }
+}
 
+function backToMall() {
+  // 點擊「返回」按鈕回到商場列表
+  closeModal();
+  if (_storeContext && _storeContext.from === 'mall') {
+    const ctx = _storeContext;
+    setTimeout(() => {
+      openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
+      _storeContext = null;
+    }, 300);
+  }
+}
     function openMachineForm(sid) {
       openModal(`
         <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
@@ -1889,6 +1981,16 @@ function onSubmitMissingStore(mallName) {
       showView("task"); }
 
     function openIntelForm(prefillMall, prefillRegion) {
+  // ===== 強制重置所有表單狀態（讓它獨立工作，不受頁面影響） =====
+  intelGroup = "kl";
+  intelRegionSelected = false;
+  selectedIntelRegion = prefillRegion || '';
+  locationType = prefillMall ? 'mall' : 'independent';
+  selectedMall = '';
+  window._selectedMallName = '';
+  window._selectedMallBaseAddress = '';
+  
+  // ===== 其餘原本的 openIntelForm 代碼保持完全不變 =====
   const group = intelGroup || "kl";
   const currentGroup = REGIONS[group];
   const moreRegions = currentGroup.more;
@@ -1976,25 +2078,22 @@ function onSubmitMissingStore(mallName) {
   bindCamera("nt", 80);
   grabGPS("nt-gps");
   
+  // 重置地區選擇狀態
   intelRegionSelected = false;
   renderIntelForm();
   
   // ===== 如果有預填商場名稱，自動觸發邏輯 =====
   if (prefillMall) {
-    // 延遲執行，確保 DOM 已渲染
     setTimeout(() => {
       const mallInput = document.getElementById('nt-mall-input');
       if (mallInput) {
         mallInput.value = prefillMall;
-        // 觸發 input 事件，顯示樓層輸入
         mallInput.dispatchEvent(new Event('input'));
-        // 如果有地區，也自動選中
         if (prefillRegion) {
           selectedIntelRegion = prefillRegion;
           intelRegionSelected = true;
           renderIntelForm();
         }
-        // 自動選中「商場」選項
         if (locationType !== 'mall') {
           selectLocationType('mall');
         }
@@ -2037,9 +2136,7 @@ function onSubmitMissingStore(mallName) {
     locationType = 'independent';
     document.getElementById('nt-mall-section').classList.add('hidden');
   } else {
-    // 如果有預填商場，顯示商場區塊
     document.getElementById('nt-mall-section').classList.remove('hidden');
-    // 觸發商場輸入變化，顯示樓層
     setTimeout(() => {
       if (mallInput) mallInput.dispatchEvent(new Event('input'));
     }, 100);
