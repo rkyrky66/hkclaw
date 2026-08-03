@@ -156,6 +156,7 @@
   textarea {
     font-size: 16px;
   }
+
   /* ===== 地圖與列表布局 ===== */
   #map-wrapper {
     height: 45vh;
@@ -190,6 +191,7 @@
     background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), rgba(0, 255, 0, 0.2), rgba(212, 175, 55, 0.3), transparent);
     flex-shrink: 0;
   }
+
   /* ===== 圖釘標記（綠色 - 已認證） ===== */
   .custom-marker-green {
     position: relative;
@@ -214,6 +216,7 @@
     line-height: 1;
     z-index: 2;
   }
+
   /* ===== 圖釘標記（黃色 - 審核中） ===== */
   .custom-marker-yellow {
     position: relative;
@@ -238,6 +241,7 @@
     line-height: 1;
     z-index: 2;
   }
+
   /* ===== 用戶位置 ===== */
   .custom-marker-user {
     background: #3b82f6;
@@ -259,6 +263,7 @@
       box-shadow: 0 0 30px rgba(59, 130, 246, 1), 0 0 60px rgba(59, 130, 246, 0.6);
     }
   }
+
   /* ===== Popup 樣式 ===== */
   .leaflet-popup-content-wrapper {
     background: #1a1a1a;
@@ -301,6 +306,7 @@
     color: #888;
     border: 1px solid rgba(136, 136, 136, 0.3);
   }
+
   /* ===== 聚合圈 ===== */
   .marker-cluster-custom {
     background: rgba(128, 0, 255, 0.7);
@@ -316,11 +322,21 @@
     justify-content: center;
     box-shadow: 0 0 16px rgba(128, 0, 255, 0.5);
   }
-  /* ===== 商場 Modal 樣式 ===== */
+
+  /* ===== 商場 Modal 樣式（固定高度版本） ===== */
+  .mall-modal-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-height: 82vh;
+    min-height: 40vh;
+    height: auto;
+  }
+
   .mall-modal-header {
     border-bottom: 1px solid rgba(212, 175, 55, 0.2);
     padding-bottom: 12px;
     margin-bottom: 12px;
+    flex-shrink: 0;
   }
   .mall-modal-header .mall-name {
     color: #D4AF37;
@@ -337,6 +353,8 @@
     font-size: 12px;
     margin-top: 2px;
   }
+
+  /* Tab 區 - 固定 */
   .mall-tabs {
     display: flex;
     gap: 8px;
@@ -345,6 +363,7 @@
     overflow-x: auto;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
   }
   .mall-tabs::-webkit-scrollbar {
     display: none;
@@ -377,6 +396,18 @@
   .mall-tab.active .tab-count {
     opacity: 0.8;
   }
+
+  /* 店鋪列表區 - 獨立滾動 */
+  .mall-store-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 100px;
+    max-height: 45vh;
+    padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 店鋪項目 */
   .mall-store-item {
     display: flex;
     align-items: center;
@@ -427,24 +458,47 @@
     color: #FFB800;
     border: 1px solid rgba(255, 184, 0, 0.2);
   }
-  .mall-view-all-btn {
+
+  /* 底部按鈕 - 固定 */
+  .mall-footer-btn {
     display: block;
     width: 100%;
-    padding: 10px;
+    padding: 10px 12px;
     margin-top: 12px;
     border-radius: 10px;
-    background: rgba(212, 175, 55, 0.15);
-    border: 1px solid rgba(212, 175, 55, 0.3);
+    background: rgba(212, 175, 55, 0.12);
+    border: 1px solid rgba(212, 175, 55, 0.25);
     color: #D4AF37;
     font-weight: 700;
     font-size: 13px;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
+    flex-shrink: 0;
+    line-height: 1.4;
   }
-  .mall-view-all-btn:active {
+  .mall-footer-btn:active {
     transform: scale(0.97);
     background: rgba(212, 175, 55, 0.25);
+  }
+  .mall-footer-btn .sub-text {
+    font-weight: 400;
+    font-size: 10px;
+    opacity: 0.6;
+    display: block;
+    margin-top: 1px;
+  }
+
+  /* ===== 滾動條美化（可選） ===== */
+  .mall-store-list-scroll::-webkit-scrollbar {
+    width: 3px;
+  }
+  .mall-store-list-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .mall-store-list-scroll::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.3);
+    border-radius: 10px;
   }
 </style>
 </head>
@@ -912,122 +966,172 @@
       return group.stores.filter(s => (s.floor || 'G') === floor);
     }
 
-    function openMallModal(mallName, highlightStoreId, highlightFloor) {
-      const group = window._mallGroups && window._mallGroups[mallName];
-      if (!group || !group.stores.length) {
-        toast('找不到該商場的店鋪資料', 'pink');
-        return;
-      }
-      _currentMallModal = mallName;
-      _currentMallFloor = highlightFloor || null;
-      let targetFloor = highlightFloor;
-      if (!targetFloor && highlightStoreId) {
-        const store = group.stores.find(s => s.id === highlightStoreId);
-        if (store) targetFloor = store.floor || 'G';
-      }
-      if (targetFloor) {
-        _currentMallFloor = targetFloor;
-      } else {
-        const floors = getFloorsInMall(mallName);
-        _currentMallFloor = floors.length > 0 ? floors[0] : 'G';
-      }
-      renderMallModal(mallName, highlightStoreId, _currentMallFloor);
-    }
+    // ===== 商場 Modal 功能（固定高度 + 只更新列表） =====
+let _currentMallData = null;  // 儲存當前商場數據
+let _currentHighlightId = null;
 
-    function renderMallModal(mallName, highlightStoreId, activeFloor) {
-      const group = window._mallGroups && window._mallGroups[mallName];
-      if (!group) return;
-      const floors = getFloorsInMall(mallName);
-      const stores = getStoresByFloor(mallName, activeFloor);
-      const total = group.totalStores;
-      const mallLat = group.lat;
-      const mallLng = group.lng;
+function openMallModal(mallName, highlightStoreId, highlightFloor) {
+  const group = window._mallGroups && window._mallGroups[mallName];
+  if (!group || !group.stores.length) {
+    toast('找不到該商場的店鋪資料', 'pink');
+    return;
+  }
 
-      const tabsHtml = floors.map(floor => {
-        const count = getStoresByFloor(mallName, floor).length;
-        const isActive = floor === activeFloor;
-        return `
-          <button class="mall-tab ${isActive ? 'active' : ''}" 
-                  onclick="switchMallFloor('${mallName.replace(/'/g, "\\'")}', '${floor}')">
-            ${floor}F <span class="tab-count">${count}</span>
-          </button>
-        `;
-      }).join('');
+  _currentMallData = group;
+  _currentHighlightId = highlightStoreId || null;
 
-      const storesHtml = stores.map((s, idx) => {
-        const number = idx + 1;
-        const isHighlight = s.id === highlightStoreId;
-        const statusClass = s.verified === "verified" ? 'verified' : 'pending';
-        const statusText = s.verified === "verified" ? '✅ 已認證' : '⏳ 審核中';
-        return `
-          <div class="mall-store-item ${isHighlight ? 'highlight' : ''}" 
-               onclick="onMallStoreClick('${s.id}', '${mallName.replace(/'/g, "\\'")}', '${activeFloor}')">
-            <span class="store-number">#${number}</span>
-            <span class="store-name">${s.name}</span>
-            <span class="store-status ${statusClass}">${statusText}</span>
+  let targetFloor = highlightFloor;
+  if (!targetFloor && highlightStoreId) {
+    const store = group.stores.find(s => s.id === highlightStoreId);
+    if (store) targetFloor = store.floor || 'G';
+  }
+  if (!targetFloor) {
+    const floors = getFloorsInMall(mallName);
+    targetFloor = floors.length > 0 ? floors[0] : 'G';
+  }
+  _currentMallFloor = targetFloor;
+
+  // 第一次打開：生成完整 Modal 結構
+  renderMallModalStructure(mallName, targetFloor, highlightStoreId);
+}
+
+function renderMallModalStructure(mallName, activeFloor, highlightStoreId) {
+  const group = _currentMallData;
+  if (!group) return;
+
+  const total = group.totalStores;
+  const allVerified = group.stores.every(s => s.verified === "verified");
+  const statusIcon = allVerified ? '🟢' : '🟡';
+  const statusText = allVerified ? '全部已認證' : '部分審核中';
+
+  // 生成 Tab（所有樓層）
+  const floors = getFloorsInMall(mallName);
+  const tabsHtml = floors.map(floor => {
+    const count = getStoresByFloor(mallName, floor).length;
+    const isActive = floor === activeFloor;
+    return `
+      <button class="mall-tab ${isActive ? 'active' : ''}" 
+              onclick="switchMallFloor('${mallName.replace(/'/g, "\\'")}', '${floor}')">
+        ${floor}F <span class="tab-count">${count}</span>
+      </button>
+    `;
+  }).join('');
+
+  // 生成列表（只顯示當前樓層）
+  const storesHtml = generateStoreListHtml(mallName, activeFloor, highlightStoreId);
+
+  const modalHtml = `
+    <div class="mall-modal-wrapper">
+      <div class="mall-modal-header">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="mall-name">🏬 ${mallName}</div>
+            <div class="mall-addr">${group.stores[0]?.region || ''} · ${total} 間店鋪</div>
+            <div class="mall-count">${statusIcon} ${statusText}</div>
           </div>
-        `;
-      }).join('');
-
-      const noStoresHtml =
-        `<p style="text-align:center;color:rgba(255,255,255,0.3);padding:20px 0;font-size:13px;">此樓層暫無店鋪</p>`;
-
-      const allVerified = group.stores.every(s => s.verified === "verified");
-      const statusIcon = allVerified ? '🟢' : '🟡';
-
-      const modalHtml = `
-        <div class="mall-modal-header">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <div class="mall-name">🏬 ${mallName}</div>
-              <div class="mall-addr">${group.stores[0]?.region || ''} · ${total} 間店鋪</div>
-              <div class="mall-count">${statusIcon} ${allVerified ? '全部已認證' : '部分審核中'}</div>
-            </div>
-            <button onclick="closeModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>
-          </div>
+          <button onclick="closeModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>
         </div>
-        <div class="mall-tabs">${tabsHtml}</div>
-        <div style="flex:1;overflow-y:auto;max-height:50vh;">
-          ${stores.length > 0 ? storesHtml : noStoresHtml}
-        </div>
-        ${mallLat && mallLng ? `
-          <button class="mall-view-all-btn" onclick="viewAllMallStores('${mallName.replace(/'/g, "\\'")}')">
-            📍 在地圖上查看全部
-          </button>
-        ` : ''}
-      `;
-      openModal(modalHtml);
-    }
+      </div>
+      
+      <div class="mall-tabs">
+        ${tabsHtml}
+      </div>
+      
+      <div class="mall-store-list-scroll" id="mall-store-list-scroll">
+        ${storesHtml}
+      </div>
+      
+      <button class="mall-footer-btn" onclick="onSubmitMissingStore('${mallName.replace(/'/g, "\\'")}')">
+        📝 漏了店？提交 +50 分！
+        <span class="sub-text">審核通過後可獲得 50 積分</span>
+      </button>
+    </div>
+  `;
 
-    function switchMallFloor(mallName, floor) {
-      _currentMallFloor = floor;
-      renderMallModal(mallName, null, floor);
+  openModal(modalHtml);
+}
+
+function generateStoreListHtml(mallName, floor, highlightStoreId) {
+  const stores = getStoresByFloor(mallName, floor);
+  if (!stores.length) {
+    return `<p style="text-align:center;color:rgba(255,255,255,0.3);padding:30px 0;font-size:13px;">此樓層暫無店鋪</p>`;
+  }
+
+  return stores.map((s, idx) => {
+    const number = idx + 1;
+    const isHighlight = s.id === highlightStoreId;
+    const statusClass = s.verified === "verified" ? 'verified' : 'pending';
+    const statusText = s.verified === "verified" ? '✅ 已認證' : '⏳ 審核中';
+    return `
+      <div class="mall-store-item ${isHighlight ? 'highlight' : ''}" 
+           onclick="onMallStoreClick('${s.id}', '${mallName.replace(/'/g, "\\'")}', '${floor}')">
+        <span class="store-number">#${number}</span>
+        <span class="store-name">${s.name}</span>
+        <span class="store-status ${statusClass}">${statusText}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function switchMallFloor(mallName, floor) {
+  _currentMallFloor = floor;
+  // 只更新列表，不重建 Modal
+  const container = document.getElementById('mall-store-list-scroll');
+  if (container) {
+    container.innerHTML = generateStoreListHtml(mallName, floor, _currentHighlightId);
+    // 滾動到頂部
+    container.scrollTop = 0;
+  }
+  // 更新 Tab 高亮
+  document.querySelectorAll('.mall-tab').forEach(tab => {
+    const isActive = tab.textContent.trim().startsWith(floor + 'F');
+    tab.classList.toggle('active', isActive);
+  });
+}
+
+function onSubmitMissingStore(mallName) {
+  closeModal();
+  // 打開提交表單，自動填入商場名稱和地區
+  const group = _currentMallData;
+  if (group && group.stores.length > 0) {
+    const region = group.stores[0]?.region || '';
+    // 自動填入商場名稱到表單（如果 openIntelForm 支援參數）
+    if (typeof openIntelForm === 'function') {
+      openIntelForm(mallName, region);
+    } else {
+      // 如果 openIntelForm 不支援參數，用 toast 引導
+      toast('請在「任務」頁面提交店鋪情報', 'gold');
     }
+  } else {
+    toast('請在「任務」頁面提交店鋪情報', 'gold');
+  }
+}
 
     function onMallStoreClick(storeId, mallName, currentFloor) {
-      const s = STORES.find(x => x.id === storeId);
-      if (s && s.lat && s.lng && map) {
-        map.flyTo([s.lat, s.lng], 16, { duration: 0.8 });
-        setTimeout(() => {
-          let targetMarker = null;
-          if (markerCluster) {
-            markerCluster.eachLayer((layer) => {
-              if (layer.options && layer.options.storeId === storeId) {
-                targetMarker = layer;
-              }
-            });
+  const s = STORES.find(x => x.id === storeId);
+  if (s && s.lat && s.lng && map) {
+    map.flyTo([s.lat, s.lng], 16, { duration: 0.8 });
+    setTimeout(() => {
+      let targetMarker = null;
+      if (markerCluster) {
+        markerCluster.eachLayer((layer) => {
+          if (layer.options && layer.options.storeId === storeId) {
+            targetMarker = layer;
           }
-          if (targetMarker) {
-            targetMarker.openPopup();
-          } else {
-            toast(`📍 ${s.name}`, 'green');
-          }
-        }, 500);
-      } else {
-        toast('無法定位該店鋪', 'pink');
+        });
       }
-      renderMallModal(mallName, storeId, currentFloor);
-    }
+      if (targetMarker) {
+        targetMarker.openPopup();
+      } else {
+        toast(`📍 ${s.name}`, 'green');
+      }
+    }, 500);
+  } else {
+    toast('無法定位該店鋪', 'pink');
+  }
+  // ✅ 修正：改為 renderMallModalStructure
+  renderMallModalStructure(mallName, currentFloor, storeId);
+}
 
     function viewAllMallStores(mallName) {
       const group = window._mallGroups && window._mallGroups[mallName];
@@ -1768,9 +1872,163 @@
       if (d.review === 3) addPoints(30, "滿3追加");
       showView("task"); }
 
-    function openIntelForm() {
-      toast('請在「找店」頁面提交情報', 'gold');
-    }
+    function openIntelForm(prefillMall, prefillRegion) {
+  const group = intelGroup || "kl";
+  const currentGroup = REGIONS[group];
+  const moreRegions = currentGroup.more;
+  const isMoreOpen = intelMoreOpenMap[group] || false;
+  const allRegions = isMoreOpen ? [...currentGroup.hot, ...currentGroup.more] : currentGroup.hot;
+  
+  const items = [...allRegions];
+  if (currentGroup.more.length > 0) {
+    items.push(isMoreOpen ? '📍 收起' : '📍 更多');
+  }
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
+      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    
+    <!-- ===== 店名（必填） ===== -->
+    <div class="mt-4">
+      <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>
+      <input id="nt-name" placeholder="請輸入店名" 
+        class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600"
+        autocomplete="off" />
+      <div id="nt-name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>
+    </div>
+    
+    <!-- ===== 地區（必填） ===== -->
+    <div class="mt-4">
+      <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>
+      <div class="intel-selector-container mt-2"></div>
+    </div>
+    
+    <!-- ===== 位置（必選） ===== -->
+    <div class="mt-4">
+      <label class="text-xs font-bold text-gold">位置 <span class="text-neonpink">（必選）</span></label>
+      <div class="mt-2 flex gap-2">
+        <button onclick="selectLocationType('independent')" 
+          id="location-independent"
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${locationType === 'independent' 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >🏪 獨立舖</button>
+        <button onclick="selectLocationType('mall')" 
+          id="location-mall"
+          class="flex-1 rounded-xl border py-2 text-sm font-black transition-all
+          ${locationType === 'mall' 
+            ? 'border-gold bg-gold/20 text-gold glow-gold' 
+            : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}"
+        >🏬 商場</button>
+      </div>
+      
+      <!-- ===== 商場選項 ===== -->
+      <div id="nt-mall-section" class="hidden mt-3">
+        <input id="nt-mall-input" placeholder="請輸入商場名稱" 
+          class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600"
+          value="${prefillMall || ''}" />
+        <div id="nt-mall-list" class="mt-2"></div>
+        <div id="nt-floor-section" class="hidden mt-3">
+          <label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label>
+          <input id="nt-floor" placeholder="如：G、2、3" 
+            class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+        </div>
+      </div>
+    </div>
+    
+    <!-- ===== 詳細地址（選填） ===== -->
+    <div class="mt-4">
+      <label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label>
+      <input id="nt-addr" placeholder="請輸入詳細地址" 
+        class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600" />
+    </div>
+    
+    <div class="mt-3 flex items-center gap-2 text-xs text-neongreen">
+      <span class="flicker">📍</span>
+      <span id="nt-gps">自動抓取 GPS 中…</span>
+    </div>
+    
+    <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>
+    ${cameraBlock("nt", 80)}
+    
+    <button onclick="submitIntel()" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交（+10 積分）</button>
+  `);
+  
+  bindCamera("nt", 80);
+  grabGPS("nt-gps");
+  
+  intelRegionSelected = false;
+  renderIntelForm();
+  
+  // ===== 如果有預填商場名稱，自動觸發邏輯 =====
+  if (prefillMall) {
+    // 延遲執行，確保 DOM 已渲染
+    setTimeout(() => {
+      const mallInput = document.getElementById('nt-mall-input');
+      if (mallInput) {
+        mallInput.value = prefillMall;
+        // 觸發 input 事件，顯示樓層輸入
+        mallInput.dispatchEvent(new Event('input'));
+        // 如果有地區，也自動選中
+        if (prefillRegion) {
+          selectedIntelRegion = prefillRegion;
+          intelRegionSelected = true;
+          renderIntelForm();
+        }
+        // 自動選中「商場」選項
+        if (locationType !== 'mall') {
+          selectLocationType('mall');
+        }
+        toast(`已自動填入「${prefillMall}」`, 'green');
+      }
+    }, 400);
+  }
+  
+  // ===== 店名自動補全 =====
+  const nameInput = document.getElementById('nt-name');
+  if (nameInput) {
+    nameInput.addEventListener('input', function() {
+      handleNameSuggestions(this.value);
+    });
+    nameInput.addEventListener('blur', function() {
+      setTimeout(() => {
+        document.getElementById('nt-name-suggestions').classList.add('hidden');
+      }, 200);
+    });
+  }
+  
+  // ===== 商場輸入框事件綁定 =====
+  const mallInput = document.getElementById('nt-mall-input');
+  if (mallInput) {
+    mallInput.removeEventListener('input', handleMallInputChange);
+    mallInput.removeEventListener('focus', handleMallInputFocus);
+    mallInput.addEventListener('input', handleMallInputChange);
+    mallInput.addEventListener('focus', handleMallInputFocus);
+  }
+  
+  // ===== 初始化時隱藏樓層輸入 =====
+  const floorSection = document.getElementById('nt-floor-section');
+  if (floorSection) {
+    floorSection.classList.add('hidden');
+  }
+  
+  // ===== 重置商場相關變數 =====
+  selectedMall = '';
+  if (!prefillMall) {
+    locationType = 'independent';
+    document.getElementById('nt-mall-section').classList.add('hidden');
+  } else {
+    // 如果有預填商場，顯示商場區塊
+    document.getElementById('nt-mall-section').classList.remove('hidden');
+    // 觸發商場輸入變化，顯示樓層
+    setTimeout(() => {
+      if (mallInput) mallInput.dispatchEvent(new Event('input'));
+    }, 100);
+  }
+}
 
     function viewLive() {
       return `
