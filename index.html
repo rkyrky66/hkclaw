@@ -324,13 +324,13 @@
   }
 
   /* ===== 商場 Modal 樣式（固定高度版本） ===== */
-  .mall-modal-wrapper {
-    display: flex;
-    flex-direction: column;
-    max-height: 82vh;
-    min-height: 40vh;
-    height: auto;
-  }
+.mall-modal-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 75vh;           /* ← 固定高度，不隨內容變化 */
+  max-height: 75vh;
+  min-height: 75vh;
+}
 
   .mall-modal-header {
     border-bottom: 1px solid rgba(212, 175, 55, 0.2);
@@ -461,33 +461,33 @@
 
   /* 底部按鈕 - 固定 */
   .mall-footer-btn {
-    display: block;
-    width: 100%;
-    padding: 10px 12px;
-    margin-top: 12px;
-    border-radius: 10px;
-    background: rgba(212, 175, 55, 0.12);
-    border: 1px solid rgba(212, 175, 55, 0.25);
-    color: #D4AF37;
-    font-weight: 700;
-    font-size: 13px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    line-height: 1.4;
-  }
-  .mall-footer-btn:active {
-    transform: scale(0.97);
-    background: rgba(212, 175, 55, 0.25);
-  }
-  .mall-footer-btn .sub-text {
-    font-weight: 400;
-    font-size: 10px;
-    opacity: 0.6;
-    display: block;
-    margin-top: 1px;
-  }
+  display: block;
+  width: 100%;
+  padding: 12px 12px;
+  margin-top: 12px;
+  border-radius: 10px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  color: #D4AF37;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.mall-footer-btn:active {
+  transform: scale(0.97);
+  background: rgba(212, 175, 55, 0.25);
+}
+.mall-footer-btn .sub-text {
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.6;
+  display: block;
+  margin-top: 2px;
+}
 
   /* ===== 滾動條美化（可選） ===== */
   .mall-store-list-scroll::-webkit-scrollbar {
@@ -1042,9 +1042,9 @@ function renderMallModalStructure(mallName, activeFloor, highlightStoreId) {
       </div>
       
       <button class="mall-footer-btn" onclick="onSubmitMissingStore('${mallName.replace(/'/g, "\\'")}')">
-        📝 漏了店？提交 +50 分！
-        <span class="sub-text">審核通過後可獲得 50 積分</span>
-      </button>
+  📝 沒有你要的店？按此提交（10 積分）！
+  <span class="sub-text">認證後再追加 40 積分</span>
+</button>
     </div>
   `;
 
@@ -1109,28 +1109,19 @@ function onSubmitMissingStore(mallName) {
 
     function onMallStoreClick(storeId, mallName, currentFloor) {
   const s = STORES.find(x => x.id === storeId);
-  if (s && s.lat && s.lng && map) {
-    map.flyTo([s.lat, s.lng], 16, { duration: 0.8 });
-    setTimeout(() => {
-      let targetMarker = null;
-      if (markerCluster) {
-        markerCluster.eachLayer((layer) => {
-          if (layer.options && layer.options.storeId === storeId) {
-            targetMarker = layer;
-          }
-        });
-      }
-      if (targetMarker) {
-        targetMarker.openPopup();
-      } else {
-        toast(`📍 ${s.name}`, 'green');
-      }
-    }, 500);
-  } else {
-    toast('無法定位該店鋪', 'pink');
+  if (!s) {
+    toast('找不到該店鋪', 'pink');
+    return;
   }
-  // ✅ 修正：改為 renderMallModalStructure
-  renderMallModalStructure(mallName, currentFloor, storeId);
+  
+  // 關閉商場 Modal
+  closeModal();
+  
+  // 直接打開店鋪詳情頁面
+  openStore(storeId);
+  
+  // 不移動地圖，因為用戶已經在商場區域內了
+  // 但為了讓用戶知道位置，可以在 Popup 中顯示位置資訊
 }
 
     function viewAllMallStores(mallName) {
@@ -1251,71 +1242,96 @@ function onSubmitMissingStore(mallName) {
        4b. 地圖核心邏輯
     ============================================================ */
     function initMap() {
-      const container = document.getElementById('map-container');
-      if (!container) { console.error('❌ map-container 不存在'); return; }
-      if (mapInitialized) {
-        if (map && map.getContainer()) { console.log('🗺️ 地圖已初始化，跳過'); return; } else {
-          console.log('🗺️ 地圖狀態異常，強制重置');
-          mapInitialized = false;
-          map = null;
-          markerCluster = null;
-          userMarker = null;
-        }
-      }
-
-      let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
-      let zoom = 13;
-      if (userLocation) {
-        center = { lat: userLocation.lat, lng: userLocation.lng };
-        zoom = 15;
-        console.log(`🗺️ 定位到 GPS 位置`);
-      } else {
-        console.log(`🗺️ 定位到香港中心點（等待 GPS）`);
-      }
-
-      try {
-        map = L.map('map-container', {
-          center: [center.lat, center.lng],
-          zoom: zoom,
-          zoomControl: false,
-          attributionControl: true,
-        });
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
-          maxZoom: 19,
-        }).addTo(map);
-
-        map.on('moveend zoomend', function() { updateMapList(); });
-
-        markerCluster = L.markerClusterGroup({
-          iconCreateFunction: function(cluster) {
-            const count = cluster.getChildCount();
-            return L.divIcon({
-              html: `<div class="marker-cluster-custom">${count}</div>`,
-              className: '',
-              iconSize: L.point(36, 36),
-            });
-          },
-          maxClusterRadius: 60,
-          spiderfyOnMaxZoom: true,
-          zoomToBoundsOnClick: true,
-        });
-        map.addLayer(markerCluster);
-
-        if (userLocation) { addUserMarker(userLocation.lat, userLocation.lng); }
-        updateMapMarkers();
-        updateMapList();
-
-        mapInitialized = true;
-        console.log('🗺️ 地圖初始化完成');
-        setTimeout(() => { if (map) map.invalidateSize(); }, 300);
-      } catch (e) {
-        console.error('地圖初始化失敗:', e);
-        toast('地圖載入失敗，請重新整理', 'pink');
-      }
+  const container = document.getElementById('map-container');
+  if (!container) { console.error('❌ map-container 不存在'); return; }
+  if (mapInitialized) {
+    if (map && map.getContainer()) { console.log('🗺️ 地圖已初始化，跳過'); return; } else {
+      console.log('🗺️ 地圖狀態異常，強制重置');
+      mapInitialized = false;
+      map = null;
+      markerCluster = null;
+      userMarker = null;
     }
+  }
 
+  let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
+  let zoom = 13;
+  if (userLocation) {
+    center = { lat: userLocation.lat, lng: userLocation.lng };
+    zoom = 15;
+    console.log(`🗺️ 定位到 GPS 位置`);
+  } else {
+    console.log(`🗺️ 定位到香港中心點（等待 GPS）`);
+  }
+
+  try {
+    map = L.map('map-container', {
+      center: [center.lat, center.lng],
+      zoom: zoom,
+      zoomControl: false,
+      attributionControl: true,
+    });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
+      maxZoom: 19,
+    }).addTo(map);
+
+    map.on('moveend zoomend', function() { updateMapList(); });
+
+    // ===== 修改：聚合圈顯示店鋪總數 =====
+    markerCluster = L.markerClusterGroup({
+      iconCreateFunction: function(cluster) {
+        // 計算所有子標記代表的店鋪總數
+        let totalStores = 0;
+        const childMarkers = cluster.getAllChildMarkers();
+        
+        childMarkers.forEach(marker => {
+          // 檢查 marker 是否有 totalStores 屬性（商場合併標記）
+          if (marker.options && marker.options.totalStores) {
+            // 商場合併標記：加上該商場的店鋪數量
+            totalStores += marker.options.totalStores || 1;
+          } else {
+            // 獨立舖或其他標記：加 1
+            totalStores += 1;
+          }
+        });
+        
+        // 如果總數小於等於 1，不顯示聚合圈（直接顯示單獨標記）
+        if (totalStores <= 1) {
+          return L.divIcon({ 
+            html: '', 
+            className: '',
+            iconSize: L.point(0, 0),
+          });
+        }
+        
+        // 返回聚合圈，顯示店鋪總數
+        return L.divIcon({
+          html: `<div class="marker-cluster-custom">${totalStores}</div>`,
+          className: '',
+          iconSize: L.point(36, 36),
+        });
+      },
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+    });
+    map.addLayer(markerCluster);
+
+    if (userLocation) { addUserMarker(userLocation.lat, userLocation.lng); }
+    updateMapMarkers();
+    updateMapList();
+
+    mapInitialized = true;
+    console.log('🗺️ 地圖初始化完成');
+    setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+  } catch (e) {
+    console.error('地圖初始化失敗:', e);
+    toast('地圖載入失敗，請重新整理', 'pink');
+  }
+}
     function updateMapList() {
       const listContainer = document.getElementById('map-store-list');
       if (!listContainer) return;
@@ -1338,117 +1354,117 @@ function onSubmitMissingStore(mallName) {
     }
 
     function updateMapMarkers() {
-      if (!map || !markerCluster) return;
-      markerCluster.clearLayers();
-      const inBounds = getStoresInBounds();
+  if (!map || !markerCluster) return;
+  markerCluster.clearLayers();
+  const inBounds = getStoresInBounds();
 
-      const mallGroups = {};
-      const standaloneStores = [];
-      inBounds.forEach(s => {
-        if (s.mall && s.mall.trim() !== '') {
-          const key = s.mall;
-          if (!mallGroups[key]) {
-            mallGroups[key] = { mallName: key, stores: [], lat: 0, lng: 0, totalStores: 0 };
-          }
-          mallGroups[key].stores.push(s);
-          mallGroups[key].totalStores++;
-          mallGroups[key].lat += s.lat;
-          mallGroups[key].lng += s.lng;
-        } else {
-          standaloneStores.push(s);
-        }
-      });
-
-      Object.keys(mallGroups).forEach(key => {
-        const group = mallGroups[key];
-        group.lat = group.lat / group.stores.length;
-        group.lng = group.lng / group.stores.length;
-        group.stores.sort((a, b) => {
-          const floorA = a.floor || '999';
-          const floorB = b.floor || '999';
-          return floorA.localeCompare(floorB, undefined, { numeric: true });
-        });
-      });
-      window._mallGroups = mallGroups;
-
-      Object.keys(mallGroups).forEach(key => {
-        const group = mallGroups[key];
-        const count = group.totalStores;
-        const isAllVerified = group.stores.every(s => s.verified === "verified");
-        const bgColor = isAllVerified ? '#00CC66' : '#FFB800';
-        const borderColor = isAllVerified ? '#00FF88' : '#FFD700';
-        const textColor = isAllVerified ? '#fff' : '#1a1a1a';
-
-        const marker = L.marker([group.lat, group.lng], {
-          icon: L.divIcon({
-            className: '',
-            html: `<div style="position:relative;width:36px;height:44px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                    <span style="transform:rotate(45deg);color:${textColor};font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;">${count}</span>
-                  </div>`,
-            iconSize: [36, 44],
-            iconAnchor: [18, 44],
-            popupAnchor: [0, -48],
-          }),
-          isMall: true,
-          mallName: key,
-        });
-
-        const statusText = isAllVerified ? '✅ 已認證' : '⏳ 審核中';
-        marker.bindPopup(`
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="color:#D4AF37;font-weight:700;font-size:14px;">🏬 ${key}</span>
-              <span style="font-size:10px;color:${isAllVerified ? '#00FF00' : '#FFB800'};">${statusText}</span>
-            </div>
-            <div style="color:#aaa;font-size:11px;margin-top:2px;">${count} 間店鋪</div>
-            <button onclick="openMallModal('${key.replace(/'/g, "\\'")}')" 
-              style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">
-              📋 查看全部 ${count} 間店鋪
-            </button>
-          </div>
-        `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
-        markerCluster.addLayer(marker);
-      });
-
-      standaloneStores.forEach(s => {
-        const isVerified = s.verified === "verified";
-        const bgColor = isVerified ? '#00CC66' : '#FFB800';
-        const borderColor = isVerified ? '#00FF88' : '#FFD700';
-        const marker = L.marker([s.lat, s.lng], {
-          icon: L.divIcon({
-            className: '',
-            html: `<div style="width:28px;height:34px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                    <span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:10px;">●</span>
-                  </div>`,
-            iconSize: [28, 34],
-            iconAnchor: [14, 34],
-            popupAnchor: [0, -38],
-          }),
-          isMall: false,
-          storeId: s.id,
-        });
-
-        const statusBadge = isVerified ?
-          '<span class="status-badge verified">✅ 已認證</span>' :
-          '<span class="status-badge pending">⏳ 審核中</span>';
-        marker.bindPopup(`
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span style="color:#D4AF37;font-weight:700;font-size:14px;">${s.name}</span>
-              ${statusBadge}
-            </div>
-            <div style="color:#aaa;font-size:11px;margin-top:2px;">${s.addr}</div>
-            <button onclick="openStoreFromMap('${s.id}')" style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">📍 查看詳情</button>
-          </div>
-        `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
-        markerCluster.addLayer(marker);
-      });
-
-      updateMapList();
-      const totalMarkers = Object.keys(mallGroups).length + standaloneStores.length;
-      console.log(`🗺️ 已載入 ${totalMarkers} 個標記（${Object.keys(mallGroups).length} 個商場合併，${standaloneStores.length} 個獨立舖）`);
+  const mallGroups = {};
+  const standaloneStores = [];
+  inBounds.forEach(s => {
+    if (s.mall && s.mall.trim() !== '') {
+      const key = s.mall;
+      if (!mallGroups[key]) {
+        mallGroups[key] = { mallName: key, stores: [], lat: 0, lng: 0, totalStores: 0 };
+      }
+      mallGroups[key].stores.push(s);
+      mallGroups[key].totalStores++;
+      mallGroups[key].lat += s.lat;
+      mallGroups[key].lng += s.lng;
+    } else {
+      standaloneStores.push(s);
     }
+  });
 
+  Object.keys(mallGroups).forEach(key => {
+    const group = mallGroups[key];
+    group.lat = group.lat / group.stores.length;
+    group.lng = group.lng / group.stores.length;
+    group.stores.sort((a, b) => {
+      const floorA = a.floor || '999';
+      const floorB = b.floor || '999';
+      return floorA.localeCompare(floorB, undefined, { numeric: true });
+    });
+  });
+  window._mallGroups = mallGroups;
+
+  Object.keys(mallGroups).forEach(key => {
+    const group = mallGroups[key];
+    const count = group.totalStores;
+    const isAllVerified = group.stores.every(s => s.verified === "verified");
+    const bgColor = isAllVerified ? '#00CC66' : '#FFB800';
+    const borderColor = isAllVerified ? '#00FF88' : '#FFD700';
+    const textColor = isAllVerified ? '#fff' : '#1a1a1a';
+
+    const marker = L.marker([group.lat, group.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="position:relative;width:36px;height:44px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <span style="transform:rotate(45deg);color:${textColor};font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;">${count}</span>
+              </div>`,
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+        popupAnchor: [0, -48],
+      }),
+      isMall: true,
+      mallName: key,
+      totalStores: count,
+    });
+
+    const statusText = isAllVerified ? '✅ 已認證' : '⏳ 審核中';
+    marker.bindPopup(`
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="color:#D4AF37;font-weight:700;font-size:14px;">🏬 ${key}</span>
+          <span style="font-size:10px;color:${isAllVerified ? '#00FF00' : '#FFB800'};">${statusText}</span>
+        </div>
+        <div style="color:#aaa;font-size:11px;margin-top:2px;">${count} 間店鋪</div>
+        <button onclick="openMallModal('${key.replace(/'/g, "\\'")}')" 
+          style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">
+          📋 查看全部 ${count} 間店鋪
+        </button>
+      </div>
+    `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
+    markerCluster.addLayer(marker);
+  });
+
+  standaloneStores.forEach(s => {
+    const isVerified = s.verified === "verified";
+    const bgColor = isVerified ? '#00CC66' : '#FFB800';
+    const borderColor = isVerified ? '#00FF88' : '#FFD700';
+    const marker = L.marker([s.lat, s.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="width:28px;height:34px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:10px;">●</span>
+              </div>`,
+        iconSize: [28, 34],
+        iconAnchor: [14, 34],
+        popupAnchor: [0, -38],
+      }),
+      isMall: false,
+      storeId: s.id,
+    });
+
+    const statusBadge = isVerified ?
+      '<span class="status-badge verified">✅ 已認證</span>' :
+      '<span class="status-badge pending">⏳ 審核中</span>';
+    marker.bindPopup(`
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="color:#D4AF37;font-weight:700;font-size:14px;">${s.name}</span>
+          ${statusBadge}
+        </div>
+        <div style="color:#aaa;font-size:11px;margin-top:2px;">${s.addr}</div>
+        <button onclick="openStoreFromMap('${s.id}')" style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">📍 查看詳情</button>
+      </div>
+    `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
+    markerCluster.addLayer(marker);
+  });
+
+  updateMapList();
+  const totalMarkers = Object.keys(mallGroups).length + standaloneStores.length;
+  console.log(`🗺️ 已載入 ${totalMarkers} 個標記（${Object.keys(mallGroups).length} 個商場合併，${standaloneStores.length} 個獨立舖）`);
+}
     function flyToStore(id) {
       const s = STORES.find(x => x.id === id);
       if (!s || !s.lat || !s.lng || !map) return;
@@ -2165,11 +2181,16 @@ function onSubmitMissingStore(mallName) {
     }
 
     function openModal(html) {
-      const root = document.getElementById("modal-root");
-      root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
-      root.innerHTML =
-        `<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative max-h-[88vh] w-full overflow-y-auto rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold">${html}<div class="h-4"></div></div>`;
-    }
+  const root = document.getElementById("modal-root");
+  root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
+  root.innerHTML = `
+    <div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+    <div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" 
+         style="height:75vh; max-height:75vh; display:flex; flex-direction:column;">
+      ${html}
+    </div>
+  `;
+}
 
     function closeModal() {
       const root = document.getElementById("modal-root");
