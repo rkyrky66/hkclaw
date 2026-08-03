@@ -1472,7 +1472,7 @@ function handleNameSuggestions(query) {
   
   container.classList.remove('hidden');
   container.innerHTML = uniqueStores.map(s => `
-    <button onclick="selectNameSuggestion('${s.name.replace(/'/g, "\\'")}', '${s.region}', '${s.addr.replace(/'/g, "\\'")}')" 
+    <button onclick="selectNameSuggestion('${s.name.replace(/'/g, "\\'")}')"  
       class="w-full text-left px-3 py-2 text-sm text-gold hover:bg-gold/20 border-b border-gold/20 last:border-0 transition-all">
       <div class="flex items-center justify-between">
         <span class="font-bold">${s.name}</span>
@@ -1484,24 +1484,11 @@ function handleNameSuggestions(query) {
 }
 
 // ===== 選擇店名後自動填入全部資料 =====
-function selectNameSuggestion(name, region, addr) {
-  // 填入店名
+function selectNameSuggestion(name) {
+  // ===== 只填入店名，不影響其他欄位 =====
   const nameInput = document.getElementById('nt-name');
   if (nameInput) {
     nameInput.value = name;
-  }
-  
-  // 自動填入地區
-  if (region) {
-    selectedIntelRegion = region;
-    intelRegionSelected = true;
-    renderIntelForm();
-  }
-  
-  // 自動填入地址
-  const addrInput = document.getElementById('nt-addr');
-  if (addrInput && addr) {
-    addrInput.value = addr;
   }
   
   // 隱藏建議清單
@@ -1510,7 +1497,7 @@ function selectNameSuggestion(name, region, addr) {
     container.classList.add('hidden');
   }
   
-  toast(`✅ 已自動填入「${name}」的資料`, 'green');
+  toast(`✅ 已填入店名「${name}」`, 'green');
 }
 // 表單內選取大區
 let intelGroup = "kl";
