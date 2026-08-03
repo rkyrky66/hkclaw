@@ -103,37 +103,57 @@
     background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), rgba(0,255,0,0.2), rgba(212,175,55,0.3), transparent);
     flex-shrink: 0;
   }
-  /* ===== 標記樣式 ===== */
+  /* ===== 圖釘標記（綠色 - 已認證） ===== */
 .custom-marker-green {
-  background: #00FF00;
-  border: 2px solid #00FF00;
-  border-radius: 50%;
-  box-shadow: 0 0 12px rgba(0,255,0,0.6);
-  width: 18px !important;
-  height: 18px !important;
-  display: flex;
+  position: relative;
+  width: 36px;
+  height: 44px;
+  background: #00CC66;
+  border: 2px solid #00FF88;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 12px rgba(0,204,102,0.6), 0 2px 8px rgba(0,0,0,0.3);
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  color: #000;
-  font-weight: 700;
-  font-size: 11px;
+  cursor: pointer;
 }
-
-.custom-marker-gray {
-  background: #888;
-  border: 2px solid #888;
-  border-radius: 50%;
-  box-shadow: 0 0 8px rgba(136,136,136,0.4);
-  width: 16px !important;
-  height: 16px !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.custom-marker-green .marker-number {
+  transform: rotate(45deg);
   color: #fff;
-  font-weight: 700;
-  font-size: 10px;
+  font-weight: 900;
+  font-size: 13px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  line-height: 1;
+  z-index: 2;
 }
 
+/* ===== 圖釘標記（黃色 - 審核中） ===== */
+.custom-marker-yellow {
+  position: relative;
+  width: 34px;
+  height: 42px;
+  background: #FFB800;
+  border: 2px solid #FFD700;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 12px rgba(255,184,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.custom-marker-yellow .marker-number {
+  transform: rotate(45deg);
+  color: #1a1a1a;
+  font-weight: 900;
+  font-size: 13px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+  line-height: 1;
+  z-index: 2;
+}
+
+/* ===== 用戶位置（保持原樣） ===== */
 .custom-marker-user {
   background: #3b82f6;
   border: 2px solid #60a5fa;
@@ -145,7 +165,6 @@
   margin-top: -9px !important;
   animation: pulse-bg 1.8s ease-in-out infinite;
 }
-
 @keyframes pulse-bg {
   0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.8), 0 0 40px rgba(59,130,246,0.4); }
   50% { box-shadow: 0 0 30px rgba(59,130,246,1), 0 0 60px rgba(59,130,246,0.6); }
@@ -723,19 +742,24 @@ function renderMapStoreList() {
     return `${s._dist.toFixed(1)}km`;
   };
   
-  return sorted.map(s => {
+  return sorted.map((s, index) => {
+    const number = index + 1;
     const isVerified = s.verified === "verified";
-    const dotColor = isVerified ? 'text-neongreen' : 'text-white/30';
+    const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
+    const statusLabel = isVerified ? '已認證' : '審核中';
+    
     return `
       <button onclick="flyToStore('${s.id}')" 
         class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-3 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
         <div class="flex items-center justify-between gap-2">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
+              <span class="text-gold font-bold text-sm min-w-[24px]">#${number}</span>
               <span class="${dotColor}">●</span>
               <span class="font-bold text-gold text-sm truncate">${s.name}</span>
+              <span class="text-[9px] text-white/30">${statusLabel}</span>
             </div>
-            <p class="text-[11px] text-white/40 truncate">${s.region} · ${s.addr}</p>
+            <p class="text-[11px] text-white/40 truncate pl-[24px]">${s.region} · ${s.addr}</p>
           </div>
           <span class="text-xs text-neonpink whitespace-nowrap">📍 ${formatDist(s)}</span>
         </div>
@@ -793,8 +817,9 @@ function initMap() {
     
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> 貢獻者',
+    // 淺色地圖底圖（CartoDB Light）
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
       maxZoom: 19,
     }).addTo(map);
     
@@ -866,22 +891,34 @@ function addUserMarker(lat, lng) {
 function updateMapMarkers() {
   if (!map || !markerCluster) return;
   
-  // 清除所有現有的標記（保留使用者標記由 addUserMarker 單獨管理）
+  // 清除所有現有的標記
   markerCluster.clearLayers();
   
-  // 只顯示有 GPS 的店鋪
-  const storesWithGps = STORES.filter(s => s.lat && s.lng);
+  // 取得地圖視野內的店鋪（按距離排序）
+  const inBounds = getStoresInBounds();
+  const sorted = inBounds.map(s => {
+    const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
+    return { ...s, _dist: dist };
+  }).sort((a, b) => a._dist - b._dist);
   
-  storesWithGps.forEach(s => {
+  // 儲存編號對應關係（用於列表）
+  window._markerNumbers = {};
+  sorted.forEach((s, index) => {
+    window._markerNumbers[s.id] = index + 1;
+  });
+  
+  sorted.forEach((s, index) => {
+    const number = index + 1;
     const isVerified = s.verified === "verified";
+    const colorClass = isVerified ? 'custom-marker-green' : 'custom-marker-yellow';
     
-    // 創建標記 - 使用 Font Awesome 圖示
     const marker = L.marker([s.lat, s.lng], {
       icon: L.divIcon({
         className: '',
-        html: `<div class="${isVerified ? 'custom-marker-green' : 'custom-marker-gray'}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;font-size:12px;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.8);">${isVerified ? '✓' : '?'}</div>`,
-        iconSize: isVerified ? [18, 18] : [16, 16],
-        iconAnchor: isVerified ? [9, 9] : [8, 8],
+        html: `<div class="${colorClass}"><span class="marker-number">${number}</span></div>`,
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+        popupAnchor: [0, -48],
       }),
       storeId: s.id,
     });
@@ -893,11 +930,11 @@ function updateMapMarkers() {
     
     const popupContent = `
       <div>
-        <div class="flex items-center" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="store-name" style="color:#D4AF37;font-weight:700;font-size:14px;">${s.name}</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="color:#D4AF37;font-weight:700;font-size:14px;">#${number} ${s.name}</span>
           ${statusBadge}
         </div>
-        <div class="store-addr" style="color:#aaa;font-size:11px;margin-top:2px;">${s.addr}</div>
+        <div style="color:#aaa;font-size:11px;margin-top:2px;">${s.addr}</div>
         <button onclick="openStoreFromMap('${s.id}')" style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">📍 查看詳情</button>
       </div>
     `;
@@ -911,7 +948,10 @@ function updateMapMarkers() {
     markerCluster.addLayer(marker);
   });
   
-  console.log(`🗺️ 已載入 ${storesWithGps.length} 個店鋪標記`);
+  // 更新列表
+  updateMapList();
+  
+  console.log(`🗺️ 已載入 ${sorted.length} 個店鋪標記（視野範圍內）`);
 }
 
 function flyToStore(id) {
