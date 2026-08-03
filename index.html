@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.Default.css" />
 
-<!-- ===== Leaflet JS（必須在 Tailwind 之前載入） ===== -->
+<!-- ===== Leaflet JS ===== -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
 
@@ -238,7 +238,7 @@
     line-height: 1;
     z-index: 2;
   }
-  /* ===== 用戶位置（保持原樣） ===== */
+  /* ===== 用戶位置 ===== */
   .custom-marker-user {
     background: #3b82f6;
     border: 2px solid #60a5fa;
@@ -427,14 +427,6 @@
     color: #FFB800;
     border: 1px solid rgba(255, 184, 0, 0.2);
   }
-  .mall-store-item .store-floor-badge {
-    font-size: 9px;
-    color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.05);
-    padding: 1px 8px;
-    border-radius: 10px;
-    flex-shrink: 0;
-  }
   .mall-view-all-btn {
     display: block;
     width: 100%;
@@ -526,69 +518,26 @@
     let markerCluster = null;
     let userMarker = null;
     let mapInitialized = false;
-    let currentMapMarkers = [];
-    let flyToTarget = null;
     let lastMapRegion = localStorage.getItem('claw_last_map_region') || '';
     let _currentMallModal = null;
     let _currentMallFloor = null;
 
-    // 地區中心點（用於地圖跳轉）
+    // 地區中心點
     const REGION_CENTERS = {
       '銅鑼灣': { lat: 22.2799, lng: 114.1838 },
       '天后': { lat: 22.2810, lng: 114.1900 },
       '北角': { lat: 22.2910, lng: 114.2005 },
       '中環': { lat: 22.2820, lng: 114.1560 },
-      '金鐘': { lat: 22.2780, lng: 114.1640 },
-      '上環': { lat: 22.2860, lng: 114.1520 },
-      '灣仔': { lat: 22.2760, lng: 114.1750 },
-      '鰂魚涌': { lat: 22.2850, lng: 114.2100 },
-      '太古': { lat: 22.2835, lng: 114.2180 },
-      '筲箕灣': { lat: 22.2780, lng: 114.2300 },
-      '香港仔': { lat: 22.2480, lng: 114.1550 },
-      '杏花邨': { lat: 22.2760, lng: 114.2400 },
-      '黃竹坑': { lat: 22.2480, lng: 114.1670 },
       '旺角': { lat: 22.3193, lng: 114.1694 },
       '尖沙咀': { lat: 22.2960, lng: 114.1720 },
       '觀塘': { lat: 22.3120, lng: 114.2230 },
       '深水埗': { lat: 22.3308, lng: 114.1572 },
-      '紅磡': { lat: 22.3050, lng: 114.1850 },
-      '藍田': { lat: 22.3070, lng: 114.2340 },
-      '油麻地': { lat: 22.3120, lng: 114.1720 },
-      '九龍城': { lat: 22.3280, lng: 114.1900 },
-      '土瓜灣': { lat: 22.3150, lng: 114.1900 },
-      '黃大仙': { lat: 22.3420, lng: 114.1950 },
-      '牛頭角': { lat: 22.3160, lng: 114.2140 },
-      '九龍灣': { lat: 22.3220, lng: 114.2060 },
-      '秀茂坪': { lat: 22.3060, lng: 114.2140 },
-      '油塘': { lat: 22.2940, lng: 114.2320 },
-      '樂富': { lat: 22.3380, lng: 114.2000 },
-      '啟德': { lat: 22.3300, lng: 114.1900 },
-      '黃埔': { lat: 22.3030, lng: 114.1900 },
-      '慈雲山': { lat: 22.3470, lng: 114.2020 },
-      '大角咀': { lat: 22.3230, lng: 114.1600 },
-      '荔枝角': { lat: 22.3380, lng: 114.1510 },
       '荃灣': { lat: 22.3710, lng: 114.1150 },
       '葵芳': { lat: 22.3582, lng: 114.1270 },
       '葵涌': { lat: 22.3582, lng: 114.1253 },
-      '葵興': { lat: 22.3680, lng: 114.1300 },
       '元朗': { lat: 22.4430, lng: 114.0340 },
       '屯門': { lat: 22.3930, lng: 113.9700 },
       '將軍澳': { lat: 22.3185, lng: 114.2580 },
-      '大埔': { lat: 22.4520, lng: 114.1660 },
-      '天水圍': { lat: 22.4570, lng: 114.0070 },
-      '沙田': { lat: 22.3790, lng: 114.1880 },
-      '大圍': { lat: 22.3760, lng: 114.1780 },
-      '馬鞍山': { lat: 22.4240, lng: 114.2280 },
-      '上水': { lat: 22.5020, lng: 114.1300 },
-      '粉嶺': { lat: 22.4900, lng: 114.1430 },
-      '青衣': { lat: 22.3530, lng: 114.1040 },
-      '東涌': { lat: 22.2930, lng: 113.9420 },
-      '昂坪': { lat: 22.2550, lng: 113.9400 },
-      '坑口': { lat: 22.3180, lng: 114.2560 },
-      '調景嶺': { lat: 22.3070, lng: 114.2500 },
-      '日出康城': { lat: 22.3160, lng: 114.2720 },
-      '西貢': { lat: 22.3800, lng: 114.2700 },
-      '寶琳': { lat: 22.3185, lng: 114.2605 },
     };
 
     const HK_CENTER = { lat: 22.3193, lng: 114.1694 };
@@ -614,14 +563,10 @@
       try {
         await sbFetch(table, {
           method: "POST",
-          headers: {
-            Prefer: "return=minimal"
-          },
+          headers: { Prefer: "return=minimal" },
           body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }])
         });
-      } catch (e) {
-        console.log("[v0] cloudInsert 失敗:", e.message);
-      }
+      } catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
     }
 
     async function uploadImage(file, folder = 'stores') {
@@ -632,11 +577,9 @@
           reader.readAsDataURL(file);
         });
       }
-
       const BUCKET = 'claw-stores-images';
       const fileName = `${folder}/${Date.now()}_${uid()}.jpg`;
       const path = `storage/v1/object/${BUCKET}/${fileName}`;
-
       const uploadRes = await fetch(`${SUPABASE_URL}/${path}`, {
         method: 'POST',
         headers: {
@@ -646,20 +589,12 @@
         },
         body: file,
       });
-
       if (!uploadRes.ok) {
         const errText = await uploadRes.text();
-        console.error('上傳失敗 - 狀態:', uploadRes.status, '響應:', errText);
-        try {
-          const errJson = JSON.parse(errText);
-          throw new Error(`上傳失敗: ${errJson.message || errText}`);
-        } catch {
-          throw new Error(`上傳失敗 (${uploadRes.status}): ${errText}`);
-        }
+        console.error('上傳失敗:', errText);
+        throw new Error(`上傳失敗: ${errText}`);
       }
-
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
-      return publicUrl;
+      return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
     }
 
     let MALLS_CACHE = null;
@@ -667,12 +602,11 @@
     async function loadMalls() {
       if (!CLOUD_ON) return { hk: [], kl: [], nt: [] };
       if (MALLS_CACHE) return MALLS_CACHE;
-
       try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/malls?select=*&order=name`, {
           headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
           }
         });
@@ -784,16 +718,6 @@
       }
     };
 
-    const ALL_REGIONS = [
-      ...REGIONS.hk.hot, ...REGIONS.hk.more,
-      ...REGIONS.kl.hot, ...REGIONS.kl.more,
-      ...REGIONS.nt.hot, ...REGIONS.nt.more
-    ];
-
-    function getFullRegions(group) {
-      return [...REGIONS[group].hot, ...REGIONS[group].more];
-    }
-
     const FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
     const PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
 
@@ -874,7 +798,6 @@
     const AFTER = { map: afterMapView };
 
     function showView(name) {
-      // 如果離開地圖頁面，銷毀地圖釋放資源
       if (CURRENT === 'map' && name !== 'map') {
         if (map) {
           map.remove();
@@ -882,26 +805,19 @@
           mapInitialized = false;
           markerCluster = null;
           userMarker = null;
-          console.log('🗺️ 地圖已銷毀（釋放資源）');
+          console.log('🗺️ 地圖已銷毀');
         }
       }
-
-      // 如果進入地圖頁面，強制重置狀態（確保重新初始化）
       if (name === 'map') {
-        // 強制重置 mapInitialized，讓 initMap 可以重新執行
         mapInitialized = false;
-        // 如果有舊地圖，銷毀它
         if (map) {
-          try {
-            map.remove();
-          } catch (e) {}
+          try { map.remove(); } catch (e) {}
           map = null;
           markerCluster = null;
           userMarker = null;
         }
         console.log('🗺️ 進入地圖頁面，強制重置狀態');
       }
-
       CURRENT = name;
       const main = document.getElementById("main");
       main.scrollTop = 0;
@@ -918,11 +834,9 @@
       document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
       if (AFTER[name]) AFTER[name]();
     }
-    const go = showView;
-    document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => showView(b.getAttribute("data-nav")));
 
     /* ============================================================
-       4. 【地圖頁面】
+       4. 【地圖頁面】核心功能
     ============================================================ */
     function viewMap() {
       return `
@@ -940,11 +854,9 @@
 
     function getStoresInBounds() {
       if (!map) return STORES.filter(s => s.lat && s.lng);
-
       const bounds = map.getBounds();
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
-
       return STORES.filter(s => {
         if (!s.lat || !s.lng) return false;
         return s.lat >= sw.lat && s.lat <= ne.lat &&
@@ -961,11 +873,7 @@
             const wrapper = document.getElementById('map-wrapper');
             if (wrapper) {
               const h = wrapper.offsetHeight;
-              if (h > 0) {
-                container.style.height = h + 'px';
-              } else {
-                container.style.height = '45vh';
-              }
+              container.style.height = (h > 0) ? h + 'px' : '45vh';
             }
             container.style.width = '100%';
             initMap();
@@ -981,13 +889,11 @@
     function getFloorsInMall(mallName) {
       const group = window._mallGroups && window._mallGroups[mallName];
       if (!group) return [];
-
       const floorSet = new Set();
       group.stores.forEach(s => {
         const floor = s.floor || 'G';
         floorSet.add(floor);
       });
-
       const floors = Array.from(floorSet);
       floors.sort((a, b) => {
         if (a === 'G') return -1;
@@ -1012,34 +918,28 @@
         toast('找不到該商場的店鋪資料', 'pink');
         return;
       }
-
       _currentMallModal = mallName;
       _currentMallFloor = highlightFloor || null;
-
       let targetFloor = highlightFloor;
       if (!targetFloor && highlightStoreId) {
         const store = group.stores.find(s => s.id === highlightStoreId);
         if (store) targetFloor = store.floor || 'G';
       }
-
       if (targetFloor) {
         _currentMallFloor = targetFloor;
       } else {
         const floors = getFloorsInMall(mallName);
         _currentMallFloor = floors.length > 0 ? floors[0] : 'G';
       }
-
       renderMallModal(mallName, highlightStoreId, _currentMallFloor);
     }
 
     function renderMallModal(mallName, highlightStoreId, activeFloor) {
       const group = window._mallGroups && window._mallGroups[mallName];
       if (!group) return;
-
       const floors = getFloorsInMall(mallName);
       const stores = getStoresByFloor(mallName, activeFloor);
       const total = group.totalStores;
-
       const mallLat = group.lat;
       const mallLng = group.lng;
 
@@ -1059,7 +959,6 @@
         const isHighlight = s.id === highlightStoreId;
         const statusClass = s.verified === "verified" ? 'verified' : 'pending';
         const statusText = s.verified === "verified" ? '✅ 已認證' : '⏳ 審核中';
-
         return `
           <div class="mall-store-item ${isHighlight ? 'highlight' : ''}" 
                onclick="onMallStoreClick('${s.id}', '${mallName.replace(/'/g, "\\'")}', '${activeFloor}')">
@@ -1087,22 +986,16 @@
             <button onclick="closeModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>
           </div>
         </div>
-        
-        <div class="mall-tabs">
-          ${tabsHtml}
-        </div>
-        
+        <div class="mall-tabs">${tabsHtml}</div>
         <div style="flex:1;overflow-y:auto;max-height:50vh;">
           ${stores.length > 0 ? storesHtml : noStoresHtml}
         </div>
-        
         ${mallLat && mallLng ? `
           <button class="mall-view-all-btn" onclick="viewAllMallStores('${mallName.replace(/'/g, "\\'")}')">
             📍 在地圖上查看全部
           </button>
         ` : ''}
       `;
-
       openModal(modalHtml);
     }
 
@@ -1138,10 +1031,7 @@
 
     function viewAllMallStores(mallName) {
       const group = window._mallGroups && window._mallGroups[mallName];
-      if (!group || !group.lat || !group.lng || !map) {
-        closeModal();
-        return;
-      }
+      if (!group || !group.lat || !group.lng || !map) { closeModal(); return; }
       closeModal();
       map.flyTo([group.lat, group.lng], 16, { duration: 1.0 });
       toast(`📍 顯示 ${mallName} 全部 ${group.totalStores} 間店鋪`, 'green');
@@ -1149,14 +1039,11 @@
 
     function renderMapStoreList() {
       const inBounds = getStoresInBounds();
-
       if (!inBounds.length) {
         return `<p class="py-6 text-center text-sm text-white/40">此區域暫無店鋪</p>`;
       }
-
       const mallGroups = {};
       const standaloneStores = [];
-
       inBounds.forEach(s => {
         if (s.mall && s.mall.trim() !== '') {
           const key = s.mall;
@@ -1182,7 +1069,6 @@
         const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
         const statusLabel = isVerified ? '已認證' : '審核中';
         const distText = formatDist(s);
-
         return `
           <button onclick="flyToStore('${s.id}')" 
             class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
@@ -1207,7 +1093,6 @@
         const dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
         const statusLabel = isAllVerified ? '全部已認證' : '部分審核中';
         const distText = formatDist(group.stores[0]);
-
         return `
           <button onclick="openMallModal('${group.mallName.replace(/'/g, "\\'")}')" 
             class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">
@@ -1244,11 +1129,7 @@
 
       let itemIndex = 0;
       const htmlParts = [];
-
-      mallList.forEach(group => {
-        htmlParts.push(renderMallGroup(group));
-      });
-
+      mallList.forEach(group => { htmlParts.push(renderMallGroup(group)); });
       standaloneStores.forEach(s => {
         htmlParts.push(renderStoreItem(s, itemIndex));
         itemIndex++;
@@ -1257,31 +1138,19 @@
       const totalStores = inBounds.length;
       const totalMalls = Object.keys(mallGroups).length;
       const totalStandalone = standaloneStores.length;
-
-      const headerHtml = `
-        <div class="text-[10px] text-white/30 text-center py-1">
-          ${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪
-        </div>
-      `;
-
+      const headerHtml =
+        `<div class="text-[10px] text-white/30 text-center py-1">${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪</div>`;
       return headerHtml + htmlParts.join('');
     }
 
     /* ============================================================
-       4b. 地圖核心邏輯（Leaflet + MarkerCluster）
+       4b. 地圖核心邏輯
     ============================================================ */
     function initMap() {
       const container = document.getElementById('map-container');
-      if (!container) {
-        console.error('❌ map-container 不存在');
-        return;
-      }
-
+      if (!container) { console.error('❌ map-container 不存在'); return; }
       if (mapInitialized) {
-        if (map && map.getContainer()) {
-          console.log('🗺️ 地圖已初始化，跳過');
-          return;
-        } else {
+        if (map && map.getContainer()) { console.log('🗺️ 地圖已初始化，跳過'); return; } else {
           console.log('🗺️ 地圖狀態異常，強制重置');
           mapInitialized = false;
           map = null;
@@ -1292,7 +1161,6 @@
 
       let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
       let zoom = 13;
-
       if (userLocation) {
         center = { lat: userLocation.lat, lng: userLocation.lng };
         zoom = 15;
@@ -1307,20 +1175,14 @@
           zoom: zoom,
           zoomControl: false,
           attributionControl: true,
-          fadeAnimation: true,
-          zoomAnimation: true,
         });
-
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
           maxZoom: 19,
         }).addTo(map);
 
-        map.on('moveend zoomend', function() {
-          updateMapList();
-        });
+        map.on('moveend zoomend', function() { updateMapList(); });
 
         markerCluster = L.markerClusterGroup({
           iconCreateFunction: function(cluster) {
@@ -1333,26 +1195,17 @@
           },
           maxClusterRadius: 60,
           spiderfyOnMaxZoom: true,
-          showCoverageOnHover: false,
           zoomToBoundsOnClick: true,
         });
-
         map.addLayer(markerCluster);
 
-        if (userLocation) {
-          addUserMarker(userLocation.lat, userLocation.lng);
-        }
-
+        if (userLocation) { addUserMarker(userLocation.lat, userLocation.lng); }
         updateMapMarkers();
         updateMapList();
 
         mapInitialized = true;
         console.log('🗺️ 地圖初始化完成');
-
-        setTimeout(() => {
-          if (map) map.invalidateSize();
-        }, 300);
-
+        setTimeout(() => { if (map) map.invalidateSize(); }, 300);
       } catch (e) {
         console.error('地圖初始化失敗:', e);
         toast('地圖載入失敗，請重新整理', 'pink');
@@ -1367,10 +1220,8 @@
 
     function addUserMarker(lat, lng) {
       if (!map) return;
-      if (userMarker) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-      }
+      if (userMarker) { map.removeLayer(userMarker);
+        userMarker = null; }
       userMarker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'custom-marker-user',
@@ -1384,25 +1235,16 @@
 
     function updateMapMarkers() {
       if (!map || !markerCluster) return;
-
       markerCluster.clearLayers();
-
       const inBounds = getStoresInBounds();
 
       const mallGroups = {};
       const standaloneStores = [];
-
       inBounds.forEach(s => {
         if (s.mall && s.mall.trim() !== '') {
           const key = s.mall;
           if (!mallGroups[key]) {
-            mallGroups[key] = {
-              mallName: key,
-              stores: [],
-              lat: 0,
-              lng: 0,
-              totalStores: 0
-            };
+            mallGroups[key] = { mallName: key, stores: [], lat: 0, lng: 0, totalStores: 0 };
           }
           mallGroups[key].stores.push(s);
           mallGroups[key].totalStores++;
@@ -1423,20 +1265,21 @@
           return floorA.localeCompare(floorB, undefined, { numeric: true });
         });
       });
-
       window._mallGroups = mallGroups;
 
       Object.keys(mallGroups).forEach(key => {
         const group = mallGroups[key];
         const count = group.totalStores;
         const isAllVerified = group.stores.every(s => s.verified === "verified");
-        const colorClass = isAllVerified ? 'custom-marker-green' : 'custom-marker-yellow';
+        const bgColor = isAllVerified ? '#00CC66' : '#FFB800';
+        const borderColor = isAllVerified ? '#00FF88' : '#FFD700';
+        const textColor = isAllVerified ? '#fff' : '#1a1a1a';
 
         const marker = L.marker([group.lat, group.lng], {
           icon: L.divIcon({
             className: '',
-            html: `<div class="${colorClass}" style="position:relative;width:36px;height:44px;background:${isAllVerified ? '#00CC66' : '#FFB800'};border:2px solid ${isAllVerified ? '#00FF88' : '#FFD700'};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                    <span class="marker-number" style="transform:rotate(45deg);color:${isAllVerified ? '#fff' : '#1a1a1a'};font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;">${count}</span>
+            html: `<div style="position:relative;width:36px;height:44px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                    <span style="transform:rotate(45deg);color:${textColor};font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;">${count}</span>
                   </div>`,
             iconSize: [36, 44],
             iconAnchor: [18, 44],
@@ -1444,11 +1287,10 @@
           }),
           isMall: true,
           mallName: key,
-          storeId: null,
         });
 
         const statusText = isAllVerified ? '✅ 已認證' : '⏳ 審核中';
-        const popupContent = `
+        marker.bindPopup(`
           <div>
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="color:#D4AF37;font-weight:700;font-size:14px;">🏬 ${key}</span>
@@ -1460,39 +1302,32 @@
               📋 查看全部 ${count} 間店鋪
             </button>
           </div>
-        `;
-
-        marker.bindPopup(popupContent, {
-          maxWidth: 260,
-          minWidth: 200,
-          className: 'custom-popup',
-        });
-
+        `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
         markerCluster.addLayer(marker);
       });
 
       standaloneStores.forEach(s => {
         const isVerified = s.verified === "verified";
+        const bgColor = isVerified ? '#00CC66' : '#FFB800';
+        const borderColor = isVerified ? '#00FF88' : '#FFD700';
         const marker = L.marker([s.lat, s.lng], {
           icon: L.divIcon({
             className: '',
-            html: `<div class="${isVerified ? 'custom-marker-green' : 'custom-marker-yellow'}" style="width:28px;height:34px;background:${isVerified ? '#00CC66' : '#FFB800'};border:2px solid ${isVerified ? '#00FF88' : '#FFD700'};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                  <span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:10px;">●</span>
-                </div>`,
+            html: `<div style="width:28px;height:34px;background:${bgColor};border:2px solid ${borderColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                    <span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:10px;">●</span>
+                  </div>`,
             iconSize: [28, 34],
             iconAnchor: [14, 34],
             popupAnchor: [0, -38],
           }),
           isMall: false,
           storeId: s.id,
-          mallName: null,
         });
 
         const statusBadge = isVerified ?
           '<span class="status-badge verified">✅ 已認證</span>' :
           '<span class="status-badge pending">⏳ 審核中</span>';
-
-        const popupContent = `
+        marker.bindPopup(`
           <div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="color:#D4AF37;font-weight:700;font-size:14px;">${s.name}</span>
@@ -1501,19 +1336,11 @@
             <div style="color:#aaa;font-size:11px;margin-top:2px;">${s.addr}</div>
             <button onclick="openStoreFromMap('${s.id}')" style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">📍 查看詳情</button>
           </div>
-        `;
-
-        marker.bindPopup(popupContent, {
-          maxWidth: 260,
-          minWidth: 200,
-          className: 'custom-popup',
-        });
-
+        `, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
         markerCluster.addLayer(marker);
       });
 
       updateMapList();
-
       const totalMarkers = Object.keys(mallGroups).length + standaloneStores.length;
       console.log(`🗺️ 已載入 ${totalMarkers} 個標記（${Object.keys(mallGroups).length} 個商場合併，${standaloneStores.length} 個獨立舖）`);
     }
@@ -1521,7 +1348,6 @@
     function flyToStore(id) {
       const s = STORES.find(x => x.id === id);
       if (!s || !s.lat || !s.lng || !map) return;
-
       if (s.mall && s.mall.trim() !== '') {
         const group = window._mallGroups && window._mallGroups[s.mall];
         if (group) {
@@ -1531,23 +1357,16 @@
           return;
         }
       }
-
       map.flyTo([s.lat, s.lng], 16, { duration: 0.8 });
-
       setTimeout(() => {
         let targetMarker = null;
         if (markerCluster) {
           markerCluster.eachLayer((layer) => {
-            if (layer.options && layer.options.storeId === id) {
-              targetMarker = layer;
-            }
+            if (layer.options && layer.options.storeId === id) { targetMarker = layer; }
           });
         }
-        if (targetMarker) {
-          targetMarker.openPopup();
-        }
+        if (targetMarker) { targetMarker.openPopup(); }
       }, 400);
-
       toast(`📍 移動到 ${s.name}`, 'green');
     }
 
@@ -1556,31 +1375,611 @@
       openStore(id);
     }
 
-    function destroyMap() {
-      if (map) {
-        map.remove();
-        map = null;
-        mapInitialized = false;
-        markerCluster = null;
-        userMarker = null;
-        console.log('🗺️ 地圖已銷毀');
+    /* ============================================================
+       5. 【找店頁面】完整版
+    ============================================================ */
+    function viewFind() {
+      const group = findState.group || "kl";
+      const recent = STATE.recentRegions || [];
+      let regionGroupOpen = { hk: false, kl: false, nt: false };
+      let moreRegionsOpenMap = { hk: false, kl: false, nt: false };
+
+      const renderRegionGroupFn = (groupKey) => {
+        const data = REGIONS[groupKey];
+        const isOpen = regionGroupOpen[groupKey];
+        const isMoreOpen = moreRegionsOpenMap[groupKey] || false;
+        const allRegions = isMoreOpen ? [...data.hot, ...data.more] : data.hot;
+        if (!isOpen) return '';
+        const items = [...allRegions];
+        if (data.more.length > 0) {
+          items.push(isMoreOpen ? '📍 收起' : '📍 更多');
+        }
+        return `
+          <div class="mb-3 animate-pop">
+            <div class="grid grid-cols-4 gap-2">
+              ${items.map(item => {
+                if (item === '📍 更多' || item === '📍 收起') {
+                  return `<button onclick="toggleMoreRegions('${groupKey}')" class="rounded-full border py-1.5 text-center text-xs transition-all ${isMoreOpen ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">${item}</button>`;
+                }
+                return `<button onclick="setRegion('${item}')" class="rounded-full border py-1.5 text-center text-xs transition-all ${findState.region === item ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">${item}</button>`;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      };
+
+      return `
+        <div class="mb-3 mt-4 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> GPS · 附近店舖</div>
+          <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>
+        </div>
+        ${recent.length > 0 ? `
+          <div class="mb-3">
+            <p class="mb-1.5 text-[10px] font-bold text-white/40">🕐 最近搜索</p>
+            <div class="flex flex-wrap gap-2">
+              ${recent.map(r => `<button onclick="setRegion('${r}')" class="rounded-full border py-1.5 px-3 text-center text-xs transition-all ${findState.region === r ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">${r}</button>`).join("")}
+            </div>
+          </div>
+        ` : `<div class="mb-3"><p class="mb-1.5 text-[10px] text-white/30">🕐 最近搜索（選擇地區後會顯示在這裡）</p></div>`}
+        <div class="mb-3 flex gap-2">
+          ${Object.keys(REGIONS).map(key => `<button onclick="toggleRegionGroup('${key}')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ${regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}">${REGIONS[key].icon} ${REGIONS[key].label}</button>`).join("")}
+        </div>
+        ${renderRegionGroupFn('hk')}
+        ${renderRegionGroupFn('kl')}
+        ${renderRegionGroupFn('nt')}
+        <div id="store-list" class="space-y-3">${renderStoreList()}</div>
+      `;
+    }
+
+    function setRegion(r) {
+      findState.region = r;
+      if (r !== "全部" && r !== "") {
+        STATE.recentRegions = STATE.recentRegions.filter(x => x !== r);
+        STATE.recentRegions.unshift(r);
+        if (STATE.recentRegions.length > 6) STATE.recentRegions = STATE.recentRegions.slice(0, 6);
+        save();
+      }
+      showView("find");
+    }
+
+    function toggleRegionGroup(group) {
+      // 簡化處理，直接刷新
+      showView("find");
+    }
+
+    function toggleMoreRegions(group) {
+      showView("find");
+    }
+
+    function refreshGPS() {
+      toast("定位中…", "green");
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            gpsLat = userLocation.lat;
+            gpsLng = userLocation.lng;
+            toast("已更新附近店舖", "green");
+            const region = getRegionFromCoords(userLocation.lat, userLocation.lng);
+            if (region) findState.region = region;
+            showView("find");
+          },
+          () => { toast("無法定位", "pink");
+            showView("find"); }
+        );
+      } else { toast("此裝置不支援定位", "pink");
+        showView("find"); }
+    }
+
+    function getRegionFromCoords(lat, lng) {
+      if (lat >= 22.24 && lat <= 22.29 && lng >= 114.14 && lng <= 114.25) {
+        if (lng >= 114.18 && lng <= 114.20) return '銅鑼灣';
+        if (lng >= 114.16 && lng <= 114.17) return '中環';
+        if (lng >= 114.20 && lng <= 114.22) return '北角';
+        return '銅鑼灣';
+      }
+      if (lat >= 22.29 && lat <= 22.35 && lng >= 114.14 && lng <= 114.24) {
+        if (lat >= 22.31 && lat <= 22.32 && lng >= 114.16 && lng <= 114.17) return '旺角';
+        if (lat >= 22.29 && lat <= 22.30 && lng >= 114.16 && lng <= 114.17) return '尖沙咀';
+        if (lat >= 22.31 && lat <= 22.33 && lng >= 114.22 && lng <= 114.24) return '觀塘';
+        if (lat >= 22.32 && lat <= 22.33 && lng >= 114.15 && lng <= 114.16) return '深水埗';
+        return '旺角';
+      }
+      if (lat >= 22.35 && lat <= 22.56 && lng >= 113.92 && lng <= 114.30) {
+        if (lat >= 22.35 && lat <= 22.38 && lng >= 114.10 && lng <= 114.13) return '荃灣';
+        if (lat >= 22.35 && lat <= 22.36 && lng >= 114.12 && lng <= 114.13) return '葵芳';
+        if (lat >= 22.42 && lat <= 22.45 && lng >= 114.02 && lng <= 114.04) return '元朗';
+        return '荃灣';
+      }
+      return null;
+    }
+
+    function filteredStores() {
+      let list = STORES.slice();
+      if (findState.region !== "全部" && findState.region !== "") {
+        list = list.filter(s => s.region === findState.region);
+      }
+      if (userLocation) {
+        list.forEach(s => {
+          s._dist = (s.lat && s.lng) ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
+        });
+        list.sort((a, b) => a._dist - b._dist);
+      } else {
+        list.forEach(s => s._dist = parseFloat(s.dist) || 9999);
+        list.sort((a, b) => a._dist - b._dist);
+      }
+      allFilteredStores = list;
+      currentPage = 0;
+      return list;
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function renderStoreList() {
+      const list = filteredStores();
+      if (!list.length) return `<p class="py-10 text-center text-sm text-white/40">此區暫無店舖情報</p>`;
+      const start = 0;
+      const end = Math.min(PAGE_SIZE, list.length);
+      const pageItems = list.slice(start, end);
+      const hasMore = list.length > PAGE_SIZE;
+      const formatDist = (s) => {
+        if (s._dist === 9999) return '📍 位置未知';
+        if (s._dist < 1) return `${Math.round(s._dist * 1000)}m`;
+        return `${s._dist.toFixed(1)}km`;
+      };
+
+      const html = pageItems.map(s => {
+        const isVerified = s.verified === "verified";
+        const badge = isVerified ?
+          `<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">✅ 已認證</span>` :
+          `<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400">⏳ 審核中</span>`;
+        const borderClass = isVerified ? "border-gold/25 hover:border-gold/60" :
+          "border-yellow-400/30 border-dashed hover:border-yellow-400/60";
+        const distDisplay = (userLocation && s.lat && s.lng) ?
+          `<span class="text-neonpink neon-pink">📍 ${formatDist(s)}</span>` :
+          `<span class="text-white/40">📍 ${s.dist || '?'} km</span>`;
+        return `
+          <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${borderClass} bg-zinc-950 p-4 text-left transition-all">
+            <div class="flex gap-3">
+              <div class="shrink-0">${s.photo ? `<img src="${s.photo}" class="h-16 w-16 rounded-lg object-cover" alt="${s.name}" />` : `<div class="flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-800 text-3xl">🏪</div>`}</div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div><h3 class="font-black text-gold">${s.name}</h3><p class="mt-0.5 text-xs text-white/50">${s.region} · ${s.addr}</p></div>
+                  ${badge}
+                </div>
+                <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
+                  ${distDisplay}
+                  <span>🎰 ${s.machines.length} 部機台</span>
+                  <span>${s.size}型${s.hour24 ? " · 24H" : ""}${s.token ? " · 需代幣" : ""}</span>
+                </div>
+              </div>
+            </div>
+          </button>
+        `;
+      }).join("");
+
+      const moreBtn = hasMore ?
+        `<button onclick="loadMoreStores()" class="mt-2 w-full rounded-2xl border border-gold/40 bg-zinc-950 py-4 text-center text-gold hover:border-gold/60 transition-all">🔽 顯示更多（${list.length - PAGE_SIZE} 間）</button>` :
+        '';
+      return html + moreBtn;
+    }
+
+    function loadMoreStores() {
+      currentPage++;
+      const start = currentPage * PAGE_SIZE;
+      const end = Math.min((currentPage + 1) * PAGE_SIZE, allFilteredStores.length);
+      const pageItems = allFilteredStores.slice(start, end);
+      if (pageItems.length === 0) { toast('已顯示全部店鋪', 'pink'); return; }
+      const container = document.getElementById('store-list');
+      if (!container) return;
+      const oldMoreBtn = container.querySelector('button:last-child');
+      if (oldMoreBtn && oldMoreBtn.textContent.includes('顯示更多')) oldMoreBtn.remove();
+      const formatDist = (s) => {
+        if (s._dist === 9999) return '📍 位置未知';
+        if (s._dist < 1) return `${Math.round(s._dist * 1000)}m`;
+        return `${s._dist.toFixed(1)}km`;
+      };
+      const newHtml = pageItems.map(s => {
+        const isVerified = s.verified === "verified";
+        const badge = isVerified ?
+          `<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">✅ 已認證</span>` :
+          `<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400">⏳ 審核中</span>`;
+        const borderClass = isVerified ? "border-gold/25 hover:border-gold/60" :
+          "border-yellow-400/30 border-dashed hover:border-yellow-400/60";
+        const distDisplay = (userLocation && s.lat && s.lng) ?
+          `<span class="text-neonpink neon-pink">📍 ${formatDist(s)}</span>` :
+          `<span class="text-white/40">📍 ${s.dist || '?'} km</span>`;
+        return `
+          <button onclick="openStore('${s.id}')" class="w-full rounded-2xl border ${borderClass} bg-zinc-950 p-4 text-left transition-all">
+            <div class="flex gap-3">
+              <div class="shrink-0">${s.photo ? `<img src="${s.photo}" class="h-16 w-16 rounded-lg object-cover" alt="${s.name}" />` : `<div class="flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-800 text-3xl">🏪</div>`}</div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div><h3 class="font-black text-gold">${s.name}</h3><p class="mt-0.5 text-xs text-white/50">${s.region} · ${s.addr}</p></div>
+                  ${badge}
+                </div>
+                <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-white/50">
+                  ${distDisplay}
+                  <span>🎰 ${s.machines.length} 部機台</span>
+                  <span>${s.size}型${s.hour24 ? " · 24H" : ""}${s.token ? " · 需代幣" : ""}</span>
+                </div>
+              </div>
+            </div>
+          </button>
+        `;
+      }).join("");
+      container.insertAdjacentHTML('beforeend', newHtml);
+      const hasMore = (currentPage + 1) * PAGE_SIZE < allFilteredStores.length;
+      if (hasMore) {
+        const remaining = allFilteredStores.length - (currentPage + 1) * PAGE_SIZE;
+        container.insertAdjacentHTML('beforeend',
+          `<button onclick="loadMoreStores()" class="mt-2 w-full rounded-2xl border border-gold/40 bg-zinc-950 py-4 text-center text-gold hover:border-gold/60 transition-all">🔽 顯示更多（剩餘 ${remaining} 間）</button>`
+          );
+      } else {
+        container.insertAdjacentHTML('beforeend',
+          `<p class="mt-2 text-center text-xs text-white/40">— 已顯示全部 ${allFilteredStores.length} 間店鋪 —</p>`);
       }
     }
 
-    // ===== 其餘函數（找店、任務、實時、我的、相機等）保持不變 =====
-    // 由於篇幅關係，這裡省略了 viewFind, viewTask, viewLive, viewMe 等函數
-    // 實際使用時請將原有的完整函數複製過來
+    /* ============================================================
+       6. 店鋪詳細 Modal + 任務 + 實時 + 我的
+    ============================================================ */
+    function openStore(id) {
+      const s = STORES.find(x => x.id === id);
+      if (!s) return;
+      const fav = STATE.favStores.includes(s.id);
+      if (map) { try { map.closePopup(); } catch (e) {} }
+      openModal(`
+        ${s.photo ? `<div class="-mt-5 -mx-5 overflow-hidden rounded-t-3xl"><img src="${s.photo}" class="h-48 w-full object-cover" alt="${s.name}" /></div>` : `<div class="-mt-5 -mx-5 flex h-48 items-center justify-center rounded-t-3xl bg-zinc-800 text-7xl">🏪</div>`}
+        <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3">
+          <div><h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2><p class="text-xs text-white/50">${s.region} · ${s.addr}</p></div>
+          <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
+          ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
+          <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
+        </div>
+        <div class="mt-5 flex items-center justify-between">
+          <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
+          <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-3">${s.machines.length ? s.machines.map(m => `
+          <div class="rounded-xl border ${(now() - m.updated < 2 * DAY) ? 'border-neongreen/70 glow-green' : 'border-white/20 stale'} bg-zinc-950 p-2 text-left">
+            ${m.photo ? `<img src="${m.photo}" class="h-24 w-full rounded-lg object-cover" alt="機台 ${m.no}" />` : `<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>`}
+            <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ${m.no}</b>${(now() - m.updated < 2 * DAY) ? "" : '<span class="text-[9px] text-white/40">[存疑]</span>'}</div>
+            <div class="mt-1 flex flex-wrap gap-1">${m.feats.slice(0, 2).map(f => `<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">${f}</span>`).join("")}</div>
+            <p class="mt-1 truncate text-[10px] text-white/50">🎁 ${m.prize}</p>
+            <p class="text-[9px] text-white/40">${timeAgo(m.updated)}</p>
+          </div>
+        `).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>'}</div>
+        <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
+      `);
+    }
+
+    function openMachineForm(sid) {
+      openModal(`
+        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
+          <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>
+          <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+        </div>
+        <label class="mt-4 block text-xs font-bold text-gold">📷 強制現場現拍機台照</label>
+        <div class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+          <button onclick="openCamera('mf')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+          <img id="mf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+        </div>
+        <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>
+        <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">${FEATURE_TAGS.map(t => `<button onclick="this.classList.toggle('chip-active-green')" data-tag="${t}" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">${t}</button>`).join("")}</div>
+        <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>
+        <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">${PLAY_TAGS.map(t => `<button onclick="this.classList.toggle('chip-active-green')" data-tag="${t}" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">${t}</button>`).join("")}</div>
+        <button onclick="submitMachine('${sid}')" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交機台情報</button>
+      `);
+    }
+
+    async function submitMachine(sid) {
+      const photoBlob = window._cam?.mf;
+      if (!photoBlob) return toast("請先拍照", "pink");
+      let photoUrl = window._camPreview?.mf || '';
+      if (CLOUD_ON) {
+        try {
+          const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+          photoUrl = await uploadImage(file, 'machines');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+      }
+      const feats = [...document.querySelectorAll('#mf-feats .chip-active-green')].map(b => b.dataset.tag);
+      if (!feats.length) return toast("請至少選一個台性標籤", "pink");
+      const s = STORES.find(x => x.id === sid);
+      s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats, plays: [...document
+          .querySelectorAll('#mf-plays .chip-active-green')
+        ].map(b => b.dataset.tag), prize: "台主自報", updated: now(), photo: photoUrl });
+      cloudInsert("claw_machines", { store_id: sid, feats, photo: photoUrl });
+      toast("機台已上架", "green");
+      closeModal();
+      openStore(sid);
+    }
+
+    function toggleFav(type, id) {
+      const key = type === "store" ? "favStores" : "favMachines";
+      const arr = STATE[key],
+        i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else arr.push(id);
+      save();
+      toast(i >= 0 ? "已取消收藏" : "已收藏", "green");
+      if (type === "store") openStore(id);
+    }
+
+    function viewTask() {
+      const d = daily();
+      return `
+        <div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">
+          <p class="text-xs text-white/50">目前積分</p>
+          <p class="text-3xl font-black text-gold neon-gold">💎 ${STATE.points}</p>
+          <p class="mt-1 text-[11px] text-neongreen">完成現場任務賺積分</p>
+        </div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">🧭 遊歷</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+              <div><p class="text-sm font-bold text-white/90">提交新店鋪情報</p><p class="text-[11px] text-white/50">現拍店鋪 + GPS</p></div>
+              <button onclick="openIntelForm()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+10</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neonpink neon-pink">🔍 審核</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+              <div><p class="text-sm font-bold text-white/90">現拍審核任務</p><p class="text-[11px] text-white/50">今日 ${d.review}/3</p></div>
+              <button onclick="doReview()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+10</button>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+              <div><p class="text-sm font-bold text-white/90">日常打卡</p><p class="text-[11px] text-white/50">今日 ${d.checkin}/6</p></div>
+              <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">⚡ 實時</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+              <div><p class="text-sm font-bold text-white/90">發布出貨照</p><p class="text-[11px] text-white/50">今日 ${d.live}/5</p></div>
+              <button onclick="go('live')" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已達上限", "pink");
+      d.checkin++;
+      addPoints(5, "打卡");
+      showView("task"); }
+
+    function doReview() { const d = daily(); if (d.review >= 3) return toast("已滿 3 次", "pink");
+      d.review++;
+      addPoints(10, "審核");
+      if (d.review === 3) addPoints(30, "滿3追加");
+      showView("task"); }
+
+    function openIntelForm() {
+      toast('請在「找店」頁面提交情報', 'gold');
+    }
+
+    function viewLive() {
+      return `
+        <div class="flex gap-2">
+          <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客</button>
+          <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主</button>
+        </div>
+        <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
+          ${liveTrack === "player" ? "🎯 現拍鎖死＋GPS · +5分" : "🏬 可上傳海報 · 連結店鋪引流"}
+        </div>
+        <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
+          ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
+        </button>
+        <div class="mt-4 columns-2 gap-3 [&>*]:mb-3">
+          ${LIVE.filter(x => x.track === liveTrack && x.expire > now()).map(p => `
+            <div class="break-inside-avoid rounded-2xl border border-${p.track === "player" ? 'neongreen' : 'neonpink'}/40 bg-zinc-950 p-3">
+              ${p.photo ? `<img src="${p.photo}" class="h-28 w-full rounded-lg object-cover" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${p.track === "player" ? "🎉" : "🖼️"}</div>`}
+              <p class="mt-2 text-xs text-white/80">${p.prize}</p>
+              <p class="mt-1 text-[9px] text-white/40">${timeAgo(p.ts)}</p>
+            </div>
+          `).join("") || `<p class="text-center text-sm text-white/40">暫無戰報</p>`}
+        </div>
+      `;
+    }
+
+    function setLiveTrack(t) { liveTrack = t;
+      showView("live"); }
+
+    function openPlayerPost() { toast('功能開發中', 'gold'); }
+
+    function openOwnerPost() { toast('功能開發中', 'gold'); }
+
+    function viewMe() {
+      const favS = STORES.filter(s => STATE.favStores.includes(s.id));
+      return `
+        <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
+          <div class="flex items-center gap-4">
+            <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div>
+            <div><div class="text-lg font-black">${STATE.user.name}</div><div class="text-[11px] text-gold/70">裝置 ${STATE.user.device}</div></div>
+          </div>
+          <div class="mt-5 grid grid-cols-2 gap-3">
+            <div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">${STATE.points}</div></div>
+            <div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">${filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通"}</div></div>
+          </div>
+          <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ${STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold"} py-3.5 text-base font-black">${STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）"}</button>
+        </div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3>
+          <div class="space-y-2">${favS.length ? favS.map(s => `<button onclick="openStore('${s.id}')" class="w-full rounded-xl border border-gold/25 bg-zinc-950 p-3 text-left text-sm text-gold">${s.name} <span class="text-[10px] text-white/40">· ${s.region}</span></button>`).join("") : `<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>`}</div>
+        </div>
+        <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>
+      `;
+    }
+
+    function redeemAdFree() {
+      if (STATE.adFree) return toast("已兌換", "pink");
+      if (STATE.points < 80) return toast("積分不足 80", "pink");
+      addPoints(-80, "兌換免廣告");
+      STATE.adFree = true;
+      save();
+      showView("me");
+    }
+
+    function resetAll() {
+      if (confirm("確定重置所有本地資料？")) {
+        localStorage.removeItem("claw_state");
+        STATE = load();
+        save();
+        showView("me");
+      }
+    }
 
     /* ============================================================
-       5. 啟動
+       7. 工具函數
     ============================================================ */
+    window._cam = {};
+    window._camPreview = {};
+    window._camStreams = {};
+
+    function openCamera(key) {
+      const container = document.getElementById(`${key}-camera-container`);
+      if (!container) return;
+      container.innerHTML =
+        `
+        <video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video>
+        <div class="mt-2 flex gap-2">
+          <button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button>
+          <button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button>
+        </div>
+      `;
+      const videoEl = document.getElementById(`${key}-video`);
+      if (!videoEl) return;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+        videoEl.srcObject = stream;
+        videoEl.play();
+        window._camStreams[key] = stream;
+      }).catch(() => { toast('無法開啟相機', 'pink');
+        closeCamera(key); });
+    }
+
+    function closeCamera(key) {
+      const stream = window._camStreams?.[key];
+      if (stream) { stream.getTracks().forEach(t => t.stop());
+        delete window._camStreams[key]; }
+      const container = document.getElementById(`${key}-camera-container`);
+      if (container) {
+        container.innerHTML =
+          `<button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>`;
+      }
+    }
+
+    async function capturePhoto(key) {
+      const videoEl = document.getElementById(`${key}-video`);
+      if (!videoEl) return toast('請先開啟相機', 'pink');
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth || 800;
+      canvas.height = videoEl.videoHeight || 600;
+      canvas.getContext('2d').drawImage(videoEl, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      const img = document.getElementById(`${key}-preview`);
+      if (img) { img.src = dataUrl;
+        img.classList.remove('hidden'); }
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+      window._cam[key] = blob;
+      window._camPreview[key] = dataUrl;
+      closeCamera(key);
+      toast('✅ 已拍照！', 'green');
+    }
+
+    function timeAgo(ts) {
+      const diff = now() - ts;
+      if (diff < HOUR) return Math.max(1, Math.floor(diff / 60000)) + " 分鐘前";
+      if (diff < DAY) return Math.floor(diff / HOUR) + " 小時前";
+      return Math.floor(diff / DAY) + " 天前";
+    }
+
+    function openModal(html) {
+      const root = document.getElementById("modal-root");
+      root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
+      root.innerHTML =
+        `<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative max-h-[88vh] w-full overflow-y-auto rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold">${html}<div class="h-4"></div></div>`;
+    }
+
+    function closeModal() {
+      const root = document.getElementById("modal-root");
+      root.className = "pointer-events-none fixed inset-0 z-50";
+      root.innerHTML = "";
+    }
+
+    function toast(msg, color = "green") {
+      const root = document.getElementById("toast-root");
+      const c = color === "pink" ? "border-neonpink text-neonpink glow-pink" :
+        "border-neongreen text-neongreen glow-green";
+      const el = document.createElement("div");
+      el.className =
+        `animate-pop pointer-events-auto rounded-full border ${c} bg-black px-4 py-2 text-sm font-bold`;
+      el.textContent = msg;
+      root.appendChild(el);
+      setTimeout(() => el.remove(), 2200);
+    }
+
+    /* ============================================================
+       8. 雲端讀取 + 啟動
+    ============================================================ */
+    async function loadCloud() {
+      console.log("[v0] 直接從 Supabase 讀取資料...");
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const stores = await response.json();
+        console.log(`✅ 成功載入 ${stores.length} 筆資料`);
+        STORES = stores.map(s => ({
+          id: String(s.id),
+          name: s.name || "未命名店鋪",
+          region: s.region || "旺角",
+          addr: s.addr || "（未填地址）",
+          ig: s.ig || "",
+          fb: s.fb || "",
+          verified: s.status === "verified" ? "verified" : "pending",
+          size: s.size || "中",
+          token: s.token || false,
+          hour24: s.hour24 || false,
+          staff: s.staff || false,
+          dist: (Math.random() * 2 + 0.1).toFixed(1),
+          machines: s.machines || [],
+          photo: s.photo || "",
+          lat: s.lat || null,
+          lng: s.lng || null,
+          mall: s.mall || null,
+          floor: s.floor || null,
+        }));
+        console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
+      } catch (e) {
+        console.error("[v0] 讀取失敗:", e.message);
+        STORES = seedStores();
+        toast("無法載入店鋪資料，使用示範店鋪", "pink");
+      }
+    }
+
     renderPoints();
 
     (async function initApp() {
       await loadCloud();
-
       showView("map");
-
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -1588,7 +1987,6 @@
             gpsLat = userLocation.lat;
             gpsLng = userLocation.lng;
             console.log('✅ 自動定位成功:', userLocation);
-
             if (map && mapInitialized) {
               map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
               addUserMarker(userLocation.lat, userLocation.lng);
@@ -1596,12 +1994,29 @@
               updateMapList();
             }
           },
-          () => {
-            console.log('⚠️ 自動定位失敗，使用預設香港中心點');
-          }, { enableHighAccuracy: true, timeout: 5000 }
+          () => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); }, { enableHighAccuracy: true, timeout: 5000 }
         );
       }
     })();
+
+    // PWA Manifest
+    (function injectManifest() {
+      const icon =
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
+      const manifest = { name: "爪爪情報站", short_name: "爪爪情報", description: "香港夾娃娃店實時情報",
+      start_url: ".", display: "standalone", background_color: "#000000", theme_color: "#000000", orientation: "portrait",
+        icons: [{ src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" }, { src: icon,
+          sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }] };
+      document.getElementById("manifest-placeholder").setAttribute("href", URL.createObjectURL(new Blob([JSON.stringify(
+        manifest)], { type: "application/json" })));
+    })();
+
+    if ("serviceWorker" in navigator) {
+      const swCode =
+        `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
+      navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" }))).catch(
+      () => {});
+    }
   </script>
 </body>
 </html>
