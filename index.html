@@ -58,6 +58,25 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+    /* ===== 新增：地圖頁面固定布局 ===== */
+  #main.map-page {
+    overflow: hidden !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  #map-wrapper {
+    flex-shrink: 0;
+    height: 40vh;
+    min-height: 200px;
+  }
+  
+  #map-store-list-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .neon-green {
     text-shadow: 0 0 4px #00FF00, 0 0 12px #00FF00;
   }
@@ -158,13 +177,6 @@
   }
 
   /* ===== 地圖與列表布局 ===== */
-  #map-wrapper {
-    height: 45vh;
-    min-height: 200px;
-    width: 100%;
-    flex-shrink: 0;
-    position: relative;
-  }
   #map-container {
     height: 100%;
     width: 100%;
@@ -874,12 +886,20 @@
         console.log('🗺️ 進入地圖頁面，強制重置狀態');
       }
       CURRENT = name;
-      const main = document.getElementById("main");
-      main.scrollTop = 0;
-      main.classList.remove("view-enter");
-      void main.offsetWidth;
-      main.classList.add("view-enter");
-      main.innerHTML = VIEWS[name]();
+        const main = document.getElementById("main");
+  main.scrollTop = 0;
+  main.classList.remove("view-enter");
+  
+  // ===== 新增：管理地圖頁面的特殊 class =====
+  if (name === 'map') {
+    main.classList.add('map-page');
+  } else {
+    main.classList.remove('map-page');
+  }
+  
+  void main.offsetWidth;
+  main.classList.add("view-enter");
+  main.innerHTML = VIEWS[name]();
       document.querySelectorAll(".nav-btn").forEach(b => {
         const on = b.getAttribute("data-nav") === name;
         b.classList.toggle("active", on);
@@ -894,18 +914,24 @@
        4. 【地圖頁面】核心功能
     ============================================================ */
     function viewMap() {
-      return `
-        <div id="map-wrapper" style="height:45vh; min-height:200px; flex-shrink:0;">
-          <div id="map-container" style="height:100%; width:100%;"></div>
+  return `
+    <div style="display:flex; flex-direction:column; height:100%;">
+      <!-- 地圖區域 - 固定高度，不滾動 -->
+      <div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
+        <div id="map-container" style="height:100%; width:100%;"></div>
+      </div>
+      
+      <div class="map-divider" style="flex-shrink:0;"></div>
+      
+      <!-- 列表區域 - 獨立滾動 -->
+      <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
+        <div id="map-store-list" class="space-y-2 pb-2">
+          ${renderMapStoreList()}
         </div>
-        <div class="map-divider"></div>
-        <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px;">
-          <div id="map-store-list" class="space-y-2 pb-2">
-            ${renderMapStoreList()}
-          </div>
-        </div>
-      `;
-    }
+      </div>
+    </div>
+  `;
+}
 
     function getStoresInBounds() {
       if (!map) return STORES.filter(s => s.lat && s.lng);
@@ -920,25 +946,33 @@
     }
 
     function afterMapView() {
-      window._mallGroups = {};
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const container = document.getElementById('map-container');
-          if (container) {
-            const wrapper = document.getElementById('map-wrapper');
-            if (wrapper) {
-              const h = wrapper.offsetHeight;
-              container.style.height = (h > 0) ? h + 'px' : '45vh';
-            }
-            container.style.width = '100%';
-            initMap();
-          } else {
-            console.error('❌ map-container 不存在');
-            toast('地圖載入失敗，請重新整理', 'pink');
-          }
-        }, 300);
-      });
-    }
+  window._mallGroups = {};
+  
+  // 確保主容器是 flex 布局
+  const main = document.getElementById('main');
+  if (main) {
+    main.classList.add('map-page');
+  }
+  
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const container = document.getElementById('map-container');
+      if (container) {
+        // 高度由 CSS 控制，只需要確保寬度
+        container.style.width = '100%';
+        // 確保地圖容器有高度
+        const wrapper = document.getElementById('map-wrapper');
+        if (wrapper && wrapper.offsetHeight === 0) {
+          wrapper.style.height = '40vh';
+        }
+        initMap();
+      } else {
+        console.error('❌ map-container 不存在');
+        toast('地圖載入失敗，請重新整理', 'pink');
+      }
+    }, 300);
+  });
+}
 
     // ===== 商場 Modal 功能 =====
     function getFloorsInMall(mallName) {
@@ -1496,11 +1530,189 @@ function onSubmitMissingStore(mallName) {
       toast(`📍 移動到 ${s.name}`, 'green');
     }
 
-    function openStoreFromMap(id) {
-      closeModal();
-      openStore(id);
+   function openStore(id, isSwitch = false) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  
+  // 如果是切換操作，只更新內容
+  if (isSwitch) {
+    updateStoreContent(id);
+    return;
+  }
+  
+  // 第一次打開：創建完整 Modal
+  createStoreModal(id);
+}
+function createStoreModal(id) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  
+  const fav = STATE.favStores.includes(s.id);
+  
+  // 獲取商場店鋪列表和當前索引
+  const { mallStores, currentIndex, mallName } = getMallStores(s);
+  const hasNav = mallStores.length > 1 && currentIndex >= 0;
+  const prevId = hasNav ? mallStores[(currentIndex - 1 + mallStores.length) % mallStores.length].id : null;
+  const nextId = hasNav ? mallStores[(currentIndex + 1) % mallStores.length].id : null;
+  
+  // 構建內容
+  const contentHtml = buildStoreContent(s, { fav, hasNav, currentIndex, mallStores, mallName, prevId, nextId });
+  
+  // 打開 Modal（第一次有動畫）
+  openModal(`
+    <div id="store-modal-container" class="flex flex-col h-full">
+      ${contentHtml}
+    </div>
+  `);
+}function updateStoreContent(id) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  
+  const container = document.getElementById('store-modal-container');
+  if (!container) return;
+  
+  const fav = STATE.favStores.includes(s.id);
+  
+  // 獲取商場店鋪列表和當前索引
+  const { mallStores, currentIndex, mallName } = getMallStores(s);
+  const hasNav = mallStores.length > 1 && currentIndex >= 0;
+  const prevId = hasNav ? mallStores[(currentIndex - 1 + mallStores.length) % mallStores.length].id : null;
+  const nextId = hasNav ? mallStores[(currentIndex + 1) % mallStores.length].id : null;
+  
+  // 構建新內容
+  const newContent = buildStoreContent(s, { fav, hasNav, currentIndex, mallStores, mallName, prevId, nextId });
+  
+  // 直接替換內容（無動畫，流暢切換）
+  container.innerHTML = newContent;
+}function getMallStores(s) {
+  let mallStores = [];
+  let currentIndex = -1;
+  let mallName = '';
+  
+  if (s.mall && s.mall.trim() !== '') {
+    mallName = s.mall;
+    const group = window._mallGroups && window._mallGroups[mallName];
+    if (group && group.stores) {
+      mallStores = group.stores.slice().sort((a, b) => {
+        const floorA = a.floor || 'G';
+        const floorB = b.floor || 'G';
+        if (floorA === 'G') return -1;
+        if (floorB === 'G') return 1;
+        const numA = parseInt(floorA);
+        const numB = parseInt(floorB);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return floorA.localeCompare(floorB);
+      });
+      currentIndex = mallStores.findIndex(store => store.id === s.id);
     }
-
+  }
+  
+  return { mallStores, currentIndex, mallName };
+}function buildStoreContent(s, { fav, hasNav, currentIndex, mallStores, mallName, prevId, nextId }) {
+  const backBtn = (_storeContext && _storeContext.from === 'mall') 
+    ? `<button onclick="backToMall()" class="text-sm text-gold mr-2">← 返回</button>`
+    : '';
+  
+  // 生成樓層 + 第幾間
+  let locationLabel = '';
+  if (hasNav && mallStores.length > 0) {
+    const floor = s.floor || 'G';
+    // 計算同一樓層的店鋪編號
+    const sameFloorStores = mallStores.filter(store => (store.floor || 'G') === floor);
+    const storeIndex = sameFloorStores.findIndex(store => store.id === s.id);
+    locationLabel = `${floor}F  #${storeIndex + 1}`;
+  }
+  
+  const isInMall = s.mall && s.mall.trim() !== '';
+  const mallInfo = isInMall ? `<span class="text-[10px] text-white/30 ml-2">${s.mall}</span>` : '';
+  
+  // 照片 HTML（含左右箭頭）
+  const photoHtml = buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel);
+  
+  return `
+    <!-- 頂部標題欄 -->
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          ${backBtn}
+          <h2 class="text-lg font-black text-gold neon-gold">${s.name}</h2>
+          ${mallInfo}
+        </div>
+        <p class="text-xs text-white/50">${s.region} · ${s.addr}</p>
+      </div>
+      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+    </div>
+    
+    <!-- 照片區（含箭頭） -->
+    ${photoHtml}
+    
+    <!-- 標籤區 -->
+    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">
+      ${s.ig ? `<a href="https://instagram.com/${s.ig}" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @${s.ig}</a>` : ""}
+      ${s.fb ? `<a href="https://facebook.com/${s.fb}" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>` : ""}
+      <button onclick="toggleFav('store','${s.id}')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">${fav ? "★ 已收藏" : "☆ 收藏"}</button>
+      ${isInMall ? `<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>` : ''}
+    </div>
+    
+    <!-- 機台列表 -->
+    <div class="mt-4 flex-1 overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>
+        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        ${s.machines.length ? s.machines.map(m => `
+          <div class="rounded-xl border ${(now() - m.updated < 2 * DAY) ? 'border-neongreen/70 glow-green' : 'border-white/20 stale'} bg-zinc-950 p-2 text-left">
+            ${m.photo ? `<img src="${m.photo}" class="h-24 w-full rounded-lg object-cover" alt="機台 ${m.no}" />` : `<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>`}
+            <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ${m.no}</b>${(now() - m.updated < 2 * DAY) ? "" : '<span class="text-[9px] text-white/40">[存疑]</span>'}</div>
+            <div class="mt-1 flex flex-wrap gap-1">${m.feats.slice(0, 2).map(f => `<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">${f}</span>`).join("")}</div>
+            <p class="mt-1 truncate text-[10px] text-white/50">🎁 ${m.prize}</p>
+            <p class="text-[9px] text-white/40">${timeAgo(m.updated)}</p>
+          </div>
+        `).join("") : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>'}
+      </div>
+      <button onclick="openMachineForm('${s.id}')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>
+    </div>
+  `;
+}function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
+  const photoContent = s.photo 
+    ? `<img src="${s.photo}" class="w-full h-full object-cover" alt="${s.name}" />`
+    : `<div class="flex h-full w-full items-center justify-center bg-zinc-800 text-7xl">🏪</div>`;
+  
+  return `
+    <div class="relative mt-3 rounded-xl overflow-hidden" style="height:200px; flex-shrink:0; background:#111;">
+      ${photoContent}
+      
+      <!-- 左箭頭 -->
+      ${hasNav ? `
+        <button onclick="switchStore('${prevId}')" 
+          class="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-2xl text-white transition-all hover:scale-110 active:scale-95 border border-white/20"
+          style="z-index:10;">
+          ‹
+        </button>
+      ` : ''}
+      
+      <!-- 右箭頭 -->
+      ${hasNav ? `
+        <button onclick="switchStore('${nextId}')" 
+          class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-2xl text-white transition-all hover:scale-110 active:scale-95 border border-white/20"
+          style="z-index:10;">
+          ›
+        </button>
+      ` : ''}
+      
+      <!-- 樓層標籤（照片底部） -->
+      ${locationLabel ? `
+        <div class="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/70 text-xs text-gold font-bold border border-gold/30" style="z-index:10;">
+          ${locationLabel}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}function switchStore(id) {
+  // 直接更新內容，不重新創建 Modal
+  updateStoreContent(id);
+}
     /* ============================================================
        5. 【找店頁面】完整版
     ============================================================ */
@@ -1852,10 +2064,9 @@ function onSubmitMissingStore(mallName) {
   `);
 }
 function closeStoreModal() {
-  // 關閉 Modal
   closeModal();
   
-  // 如果來源是商場，回到商場列表
+  // 清理 _storeContext（保持不變）
   if (_storeContext && _storeContext.from === 'mall') {
     const ctx = _storeContext;
     setTimeout(() => {
@@ -1968,7 +2179,135 @@ function backToMall() {
         </div>
       `;
     }
+// ===== 表單狀態變量（在 openIntelForm 之前定義） =====
+let intelGroup = "kl";
+let intelRegionSelected = false;
+let selectedIntelRegion = '';
+let locationType = 'independent';
+let selectedMall = '';
+let intelMoreOpenMap = { hk: false, kl: false, nt: false };
 
+// ===== 輔助函數（簡單版本） =====
+
+// 渲染地區選擇器
+function renderIntelForm() {
+  const container = document.querySelector('.intel-selector-container');
+  if (!container) return;
+  
+  const group = intelGroup || "kl";
+  const currentGroup = REGIONS[group];
+  const isMoreOpen = intelMoreOpenMap[group] || false;
+  const allRegions = isMoreOpen ? [...currentGroup.hot, ...currentGroup.more] : currentGroup.hot;
+  
+  container.innerHTML = allRegions.map(r => `
+    <button onclick="selectIntelRegion('${r}')" 
+      class="rounded-full border py-1.5 px-3 text-xs transition-all m-1
+      ${selectedIntelRegion === r ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">
+      ${r}
+    </button>
+  `).join('');
+}
+
+function selectIntelRegion(region) {
+  selectedIntelRegion = region;
+  intelRegionSelected = true;
+  renderIntelForm();
+}
+
+// 位置類型切換
+function selectLocationType(type) {
+  locationType = type;
+  
+  // 更新按鈕樣式
+  ['independent', 'mall'].forEach(t => {
+    const btn = document.getElementById(`location-${t}`);
+    if (btn) {
+      if (t === type) {
+        btn.className = 'flex-1 rounded-xl border py-2 text-sm font-black border-gold bg-gold/20 text-gold glow-gold';
+      } else {
+        btn.className = 'flex-1 rounded-xl border py-2 text-sm font-black border-white/20 text-white/45 hover:border-gold/40 hover:text-gold';
+      }
+    }
+  });
+  
+  // 顯示/隱藏商場區
+  const section = document.getElementById('nt-mall-section');
+  if (section) {
+    section.classList.toggle('hidden', type !== 'mall');
+  }
+}
+
+// 相機
+function cameraBlock(key, quality) {
+  return `
+    <div id="${key}-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+      <button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+      <img id="${key}-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+    </div>
+  `;
+}
+
+function bindCamera(key, quality) {
+  // 相機功能已在 openCamera 和 capturePhoto 中實現
+  console.log('📷 相機已準備:', key);
+}
+
+// GPS
+function grabGPS(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        el.textContent = `📍 ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+      },
+      () => {
+        el.textContent = '⚠️ 無法獲取 GPS，請手動輸入地址';
+      }
+    );
+  } else {
+    el.textContent = '⚠️ 此裝置不支援 GPS';
+  }
+}
+
+// 提交
+function submitIntel() {
+  const name = document.getElementById('nt-name')?.value.trim();
+  if (!name) return toast('請輸入店名', 'pink');
+  if (!selectedIntelRegion) return toast('請選擇地區', 'pink');
+  
+  const photoBlob = window._cam?.nt;
+  if (!photoBlob) return toast('請先拍攝店鋪照片', 'pink');
+  
+  // 收集數據
+  const data = {
+    name: name,
+    region: selectedIntelRegion,
+    addr: document.getElementById('nt-addr')?.value.trim() || '',
+    mall: document.getElementById('nt-mall-input')?.value.trim() || '',
+    floor: document.getElementById('nt-floor')?.value.trim() || '',
+    locationType: locationType,
+  };
+  
+  console.log('📝 提交數據:', data);
+  toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
+  addPoints(10, '提交店鋪情報');
+  closeModal();
+}
+
+// 自動補全（簡化版）
+function handleNameSuggestions(value) {
+  // 可選功能，暫時不實作
+}
+
+function handleMallInputChange(e) {
+  // 可選功能，暫時不實作
+}
+
+function handleMallInputFocus(e) {
+  // 可選功能，暫時不實作
+}
     function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已達上限", "pink");
       d.checkin++;
       addPoints(5, "打卡");
