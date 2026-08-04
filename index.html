@@ -2198,21 +2198,19 @@ function selectType(type) {
   updateSubmitButton();
 }
 
-// ===== 渲染商場選項（從 MALLS_CACHE 讀取） =====
-function renderMallOptions() {
+// ===== 渲染商場選項（從 MALLS_CACHE 讀取，保留輸入框焦點） =====
+function renderMallOptions(keepFocus = false) {
   const container = document.getElementById('mall-options');
   if (!container) return;
   
   // 從 MALLS_CACHE 提取該地區的商場
   let malls = [];
   
-  // 根據 selectedRegion 對應到 MALLS_CACHE 的 key
   let regionKey = '';
   if (selectedRegion === '港島區') regionKey = 'hk';
   else if (selectedRegion === '九龍區') regionKey = 'kl';
   else if (selectedRegion === '新界區') regionKey = 'nt';
   else {
-    // 如果是具體地區名（如旺角），找到對應的區域
     Object.keys(REGIONS).forEach(key => {
       const group = REGIONS[key];
       if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
@@ -2260,18 +2258,21 @@ function renderMallOptions() {
       </div>
     `;
   } else {
+    // 輸入模式：保留輸入框實例，只更新按鈕列表
+    const inputValue = mallInputValue;
     html += `
       <div class="flex gap-2 mb-2">
         <input id="mall-custom-input" placeholder="請輸入商場名稱" 
           class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
-          value="${mallInputValue}"
-          oninput="onMallCustomInput(this.value)" />
+          value="${inputValue}"
+          oninput="onMallCustomInput(this.value)" 
+          onfocus="this.select()" />
         <button onclick="confirmMallInput()" 
           class="px-4 py-2 rounded-lg bg-gold/20 border border-gold/40 text-sm text-gold font-bold hover:bg-gold/30 transition-all">
           ✅ 確認
         </button>
       </div>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2" id="mall-button-list">
         ${filteredMalls.map(m => `
           <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
             class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
@@ -2286,24 +2287,81 @@ function renderMallOptions() {
   }
   
   container.innerHTML = html;
+  
+  // 如果是輸入模式，重新聚焦到輸入框
+  if (mallSelectionMode === 'input' && !keepFocus) {
+    setTimeout(() => {
+      const input = document.getElementById('mall-custom-input');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }, 50);
+  }
 }
 
 // ===== 切換到輸入模式 =====
 function switchToMallInput() {
   mallSelectionMode = 'input';
   mallInputValue = '';
-  renderMallOptions();
+  renderMallOptions(false);
   // 聚焦到輸入框
   setTimeout(() => {
     const input = document.getElementById('mall-custom-input');
-    if (input) input.focus();
+    if (input) {
+      input.focus();
+    }
   }, 100);
 }
 
-// ===== 商場自定義輸入 =====
+// ===== 商場自定義輸入（只更新列表，不重建整個區塊） =====
 function onMallCustomInput(value) {
   mallInputValue = value;
-  renderMallOptions();
+  
+  // 只更新按鈕列表，不重建整個容器
+  const buttonList = document.getElementById('mall-button-list');
+  if (buttonList) {
+    // 從 MALLS_CACHE 提取該地區的商場
+    let malls = [];
+    let regionKey = '';
+    if (selectedRegion === '港島區') regionKey = 'hk';
+    else if (selectedRegion === '九龍區') regionKey = 'kl';
+    else if (selectedRegion === '新界區') regionKey = 'nt';
+    else {
+      Object.keys(REGIONS).forEach(key => {
+        const group = REGIONS[key];
+        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+          regionKey = key;
+        }
+      });
+    }
+    
+    if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
+      malls = MALLS_CACHE[regionKey].map(m => m.name);
+    }
+    if (malls.length === 0) {
+      malls = [...new Set(
+        STORES
+          .filter(s => s.region === selectedRegion && s.mall)
+          .map(s => s.mall)
+      )];
+    }
+    
+    const query = value.trim().toLowerCase();
+    const filteredMalls = query ? malls.filter(m => m.toLowerCase().includes(query)) : malls;
+    
+    buttonList.innerHTML = `
+      ${filteredMalls.map(m => `
+        <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
+          class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
+          🏬 ${m}
+        </button>
+      `).join('')}
+      ${filteredMalls.length === 0 && value.trim() ? `
+        <span class="text-[10px] text-white/40 py-1">找不到匹配的商場，將建立新商場</span>
+      ` : ''}
+    `;
+  }
 }
 
 // ===== 確認商場輸入 =====
@@ -2313,7 +2371,6 @@ function confirmMallInput() {
     toast('請輸入商場名稱', 'pink');
     return;
   }
-  // 直接使用輸入的文字作為商場名稱
   selectedMall = value;
   const display = document.getElementById('mall-display');
   if (display) display.textContent = value;
@@ -2323,13 +2380,11 @@ function confirmMallInput() {
   if (confirmed) confirmed.classList.remove('hidden');
   const floorSection = document.getElementById('floor-section');
   if (floorSection) floorSection.classList.remove('hidden');
-  // 重置樓層輸入
   const floorInput = document.getElementById('nt-floor');
   if (floorInput) floorInput.value = '';
   selectedFloor = '';
   const addressPreview = document.getElementById('address-preview');
   if (addressPreview) addressPreview.classList.add('hidden');
-  // 重置模式
   mallSelectionMode = 'button';
   mallInputValue = '';
   updateSubmitButton();
@@ -2861,15 +2916,11 @@ ${cameraBlock("nt", 80)}
 // ===== 渲染地區選擇器（Tab 切頁模式） =====
 let currentTab = 'hk'; // 'hk' | 'kl' | 'nt'
 
-// ===== 渲染地區選擇器（Tab 切頁模式） =====
 function renderRegionSelectorTab() {
   const container = document.querySelector('.region-selector-container');
   if (!container) return;
   
-  // 如果還沒有選擇地區，才重置 Tab 為港島區
-  if (!selectedRegion) {
-    currentTab = 'hk';
-  }
+  // 不再強制重置 currentTab，保留用戶點擊的選擇
   
   const tabsHtml = `
     <div class="flex gap-2 mb-3">
@@ -2932,7 +2983,6 @@ function toggleMoreRegionsTab() {
 
 // ===== 更新 Tab 高亮 =====
 function updateTabHighlight(region) {
-  // 根據地區找到對應的 Tab
   let foundTab = 'hk';
   Object.keys(REGIONS).forEach(key => {
     const group = REGIONS[key];
@@ -3033,26 +3083,53 @@ function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已�
     window._camPreview = {};
     window._camStreams = {};
 
-    function openCamera(key) {
-      const container = document.getElementById(`${key}-camera-container`);
-      if (!container) return;
-      container.innerHTML =
-        `
-        <video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video>
+    // ===== 開啟相機 =====
+function openCamera(key) {
+  const container = document.getElementById(`${key}-camera-container`);
+  if (!container) return;
+  
+  // 檢查是否已有照片
+  if (window._camPreview && window._camPreview[key]) {
+    container.innerHTML = `
+      <div class="relative">
+        <img src="${window._camPreview[key]}" class="w-full rounded-lg" alt="店鋪照片" />
         <div class="mt-2 flex gap-2">
-          <button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button>
-          <button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button>
+          <button onclick="reopenCamera('${key}')" 
+            class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">
+            🔄 重新拍攝
+          </button>
+          <button onclick="clearPhoto('${key}')" 
+            class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">
+            ✕ 移除
+          </button>
         </div>
-      `;
-      const videoEl = document.getElementById(`${key}-video`);
-      if (!videoEl) return;
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
-        videoEl.srcObject = stream;
-        videoEl.play();
-        window._camStreams[key] = stream;
-      }).catch(() => { toast('無法開啟相機', 'pink');
-        closeCamera(key); });
-    }
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML = `
+    <video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video>
+    <div class="mt-2 flex gap-2">
+      <button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button>
+      <button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button>
+    </div>
+  `;
+  
+  const videoEl = document.getElementById(`${key}-video`);
+  if (!videoEl) return;
+  
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      videoEl.srcObject = stream;
+      videoEl.play();
+      window._camStreams[key] = stream;
+    })
+    .catch(() => { 
+      toast('無法開啟相機', 'pink');
+      closeCamera(key); 
+    });
+}
 
     function closeCamera(key) {
       const stream = window._camStreams?.[key];
@@ -3065,23 +3142,85 @@ function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已�
       }
     }
 
-    async function capturePhoto(key) {
-      const videoEl = document.getElementById(`${key}-video`);
-      if (!videoEl) return toast('請先開啟相機', 'pink');
-      const canvas = document.createElement('canvas');
-      canvas.width = videoEl.videoWidth || 800;
-      canvas.height = videoEl.videoHeight || 600;
-      canvas.getContext('2d').drawImage(videoEl, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      const img = document.getElementById(`${key}-preview`);
-      if (img) { img.src = dataUrl;
-        img.classList.remove('hidden'); }
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-      window._cam[key] = blob;
-      window._camPreview[key] = dataUrl;
-      closeCamera(key);
-      toast('✅ 已拍照！', 'green');
-    }
+    // ===== 拍照 =====
+async function capturePhoto(key) {
+  const videoEl = document.getElementById(`${key}-video`);
+  if (!videoEl) return toast('請先開啟相機', 'pink');
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = videoEl.videoWidth || 800;
+  canvas.height = videoEl.videoHeight || 600;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+  
+  // 顯示預覽
+  const img = document.getElementById(`${key}-preview`);
+  if (img) {
+    img.src = dataUrl;
+    img.classList.remove('hidden');
+    img.style.display = 'block';
+  }
+  
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+  window._cam[key] = blob;
+  window._camPreview[key] = dataUrl;
+  
+  // 關閉相機，顯示重拍按鈕
+  closeCamera(key);
+  
+  // 在相機容器中顯示預覽 + 重拍按鈕
+  const container = document.getElementById(`${key}-camera-container`);
+  if (container) {
+    container.innerHTML = `
+      <div class="relative">
+        <img src="${dataUrl}" class="w-full rounded-lg" alt="店鋪照片" />
+        <div class="mt-2 flex gap-2">
+          <button onclick="reopenCamera('${key}')" 
+            class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">
+            🔄 重新拍攝
+          </button>
+          <button onclick="clearPhoto('${key}')" 
+            class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">
+            ✕ 移除
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  
+  toast('✅ 已拍照！', 'green');
+}
+
+// ===== 重新打開相機（重拍） =====
+function reopenCamera(key) {
+  // 清除照片
+  window._cam[key] = null;
+  window._camPreview[key] = null;
+  // 重新打開相機
+  openCamera(key);
+}
+
+// ===== 清除照片 =====
+function clearPhoto(key) {
+  window._cam[key] = null;
+  window._camPreview[key] = null;
+  const container = document.getElementById(`${key}-camera-container`);
+  if (container) {
+    container.innerHTML = `
+      <button onclick="openCamera('${key}')" 
+        class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">
+        📸 開啟相機拍照
+      </button>
+    `;
+  }
+  const img = document.getElementById(`${key}-preview`);
+  if (img) {
+    img.classList.add('hidden');
+    img.style.display = 'none';
+  }
+  toast('已移除照片', 'pink');
+}
 
     function timeAgo(ts) {
       const diff = now() - ts;
