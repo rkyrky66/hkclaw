@@ -2793,30 +2793,29 @@ function openIntelForm(prefillMall, prefillRegion) {
   bindCamera("nt", 80);
   grabGPS("nt-gps");
   
-  // ===== 重置地區選擇狀態 =====
-  intelRegionSelected = false;
-  renderIntelForm();
-  
-  // ===== 如果有預填商場名稱，自動觸發邏輯 =====
-  if (prefillMall) {
-    setTimeout(() => {
-      const mallInput = document.getElementById('nt-mall-input');
-      if (mallInput) {
-        mallInput.value = prefillMall;
-        if (prefillRegion) {
-          selectedIntelRegion = prefillRegion;
-          intelRegionSelected = true;
-          renderIntelForm();
-        }
-        if (locationType !== 'mall') {
-          selectLocationType('mall');
-        }
-        // 觸發商場列表更新
-        setTimeout(updateMallSuggestions, 200);
-        toast(`已自動填入「${prefillMall}」`, 'green');
+  /// ===== 重置地區選擇狀態 =====
+intelRegionSelected = false;
+renderRegionSelector();  // ← 改這裡
+
+// ===== 如果有預填商場名稱，自動觸發邏輯 =====
+if (prefillMall) {
+  setTimeout(() => {
+    const mallInput = document.getElementById('nt-mall-input');
+    if (mallInput) {
+      mallInput.value = prefillMall;
+      if (prefillRegion) {
+        selectedIntelRegion = prefillRegion;
+        intelRegionSelected = true;
+        renderRegionSelector();  // ← 改這裡
       }
-    }, 400);
-  }
+      if (locationType !== 'mall') {
+        selectLocationType('mall');
+      }
+      setTimeout(updateMallSuggestions, 200);
+      toast(`已自動填入「${prefillMall}」`, 'green');
+    }
+  }, 400);
+}
   
   // ===== 店名自動補全 =====
   const nameInput = document.getElementById('nt-name');
