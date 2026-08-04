@@ -2225,8 +2225,8 @@ function handleMallInputFocus(e) {
       if (d.review === 3) addPoints(30, "滿3追加");
       showView("task"); }
 
-    function openIntelForm(prefillMall, prefillRegion) {
-  // ===== 強制重置所有表單狀態（讓它獨立工作，不受頁面影響） =====
+function openIntelForm(prefillMall, prefillRegion) {
+  // ===== 重置表單狀態 =====
   intelGroup = "kl";
   intelRegionSelected = false;
   selectedIntelRegion = prefillRegion || '';
@@ -2234,18 +2234,6 @@ function handleMallInputFocus(e) {
   selectedMall = '';
   window._selectedMallName = '';
   window._selectedMallBaseAddress = '';
-  
-  // ===== 其餘原本的 openIntelForm 代碼保持完全不變 =====
-  const group = intelGroup || "kl";
-  const currentGroup = REGIONS[group];
-  const moreRegions = currentGroup.more;
-  const isMoreOpen = intelMoreOpenMap[group] || false;
-  const allRegions = isMoreOpen ? [...currentGroup.hot, ...currentGroup.more] : currentGroup.hot;
-  
-  const items = [...allRegions];
-  if (currentGroup.more.length > 0) {
-    items.push(isMoreOpen ? '📍 收起' : '📍 更多');
-  }
   
   openModal(`
     <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
@@ -2262,7 +2250,7 @@ function handleMallInputFocus(e) {
       <div id="nt-name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>
     </div>
     
-    <!-- ===== 地區（必填） ===== -->
+    <!-- ===== 地區（必填）- 按港島/九龍/新界分組 ===== -->
     <div class="mt-4">
       <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>
       <div class="intel-selector-container mt-2"></div>
@@ -2293,7 +2281,7 @@ function handleMallInputFocus(e) {
         <input id="nt-mall-input" placeholder="請輸入商場名稱" 
           class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600"
           value="${prefillMall || ''}" />
-        <div id="nt-mall-list" class="mt-2"></div>
+        <div id="nt-mall-list" class="mt-2 text-xs text-white/40">請先選擇地區</div>
         <div id="nt-floor-section" class="hidden mt-3">
           <label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label>
           <input id="nt-floor" placeholder="如：G、2、3" 
@@ -2323,7 +2311,7 @@ function handleMallInputFocus(e) {
   bindCamera("nt", 80);
   grabGPS("nt-gps");
   
-  // 重置地區選擇狀態
+  // ===== 重置地區選擇狀態 =====
   intelRegionSelected = false;
   renderIntelForm();
   
@@ -2333,7 +2321,6 @@ function handleMallInputFocus(e) {
       const mallInput = document.getElementById('nt-mall-input');
       if (mallInput) {
         mallInput.value = prefillMall;
-        mallInput.dispatchEvent(new Event('input'));
         if (prefillRegion) {
           selectedIntelRegion = prefillRegion;
           intelRegionSelected = true;
@@ -2342,6 +2329,8 @@ function handleMallInputFocus(e) {
         if (locationType !== 'mall') {
           selectLocationType('mall');
         }
+        // 觸發商場列表更新
+        setTimeout(updateMallSuggestions, 200);
         toast(`已自動填入「${prefillMall}」`, 'green');
       }
     }, 400);
@@ -2387,7 +2376,6 @@ function handleMallInputFocus(e) {
     }, 100);
   }
 }
-
     function viewLive() {
       return `
         <div class="flex gap-2">
