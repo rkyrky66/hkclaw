@@ -539,29 +539,26 @@
 
     <!-- ===== 底部導航（5 欄）===== -->
     <nav id="bottom-nav" class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
-      <button data-nav="map" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
-        <span class="nav-ico text-2xl relative">
-          🗺️
-          <span class="absolute -top-1 -right-1 text-[8px]">🌍</span>
-        </span>
-        <span class="text-[9px] font-bold">地圖</span>
-      </button>
-      <button data-nav="find" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">🏪</span>
-        <span class="text-[9px] font-bold">找店</span>
-      </button>
-      <button data-nav="live" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">⚡</span>
-        <span class="text-[9px] font-bold">實時</span>
-      </button>
-      <button data-nav="task" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">🎯</span>
-        <span class="text-[9px] font-bold">任務</span>
-      </button>
-      <button data-nav="me" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
-        <span class="nav-ico text-xl">👤</span>
-        <span class="text-[9px] font-bold">我的</span>
-      </button>
+      <button data-nav="map" onclick="showView('map')" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
+  <span class="nav-ico text-2xl relative">🗺️<span class="absolute -top-1 -right-1 text-[8px]">🌍</span></span>
+  <span class="text-[9px] font-bold">地圖</span>
+</button>
+<button data-nav="find" onclick="showView('find')" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+  <span class="nav-ico text-xl">🏪</span>
+  <span class="text-[9px] font-bold">找店</span>
+</button>
+<button data-nav="live" onclick="showView('live')" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+  <span class="nav-ico text-xl">⚡</span>
+  <span class="text-[9px] font-bold">實時</span>
+</button>
+<button data-nav="task" onclick="showView('task')" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+  <span class="nav-ico text-xl">🎯</span>
+  <span class="text-[9px] font-bold">任務</span>
+</button>
+<button data-nav="me" onclick="showView('me')" class="nav-btn flex flex-col items-center gap-0.5 text-white/45">
+  <span class="nav-ico text-xl">👤</span>
+  <span class="text-[9px] font-bold">我的</span>
+</button>
     </nav>
   </div>
 
