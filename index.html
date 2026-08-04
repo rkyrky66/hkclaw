@@ -2160,22 +2160,49 @@ function selectRegion(region, groupKey) {
     btn.classList.remove('opacity-50', 'cursor-not-allowed');
   });
   
-  // ===== 啟用相機按鈕 =====
+  // ===== 重置店鋪類型選擇（用戶需重新選擇） =====
+  selectedType = '';
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+    btn.classList.add('border-white/20', 'text-white/45');
+  });
+  
+  // ===== 禁用相機按鈕（等待選店鋪類型） =====
   const camBtn = document.getElementById('nt-camera-btn');
   if (camBtn) {
-    camBtn.disabled = false;
-    camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
-    camBtn.onclick = function() { openCamera('nt'); };
+    camBtn.disabled = true;
+    camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
+    camBtn.onclick = null;
   }
   
-  // 如果已選擇商場鋪，自動更新商場列表（只顯示該地區）
-  if (selectedType === 'mall') {
-    renderMallOptions();
-  }
+  // 隱藏商場區
+  const mallSection = document.getElementById('mall-section');
+  if (mallSection) mallSection.classList.add('hidden');
+  const floorSection = document.getElementById('floor-section');
+  if (floorSection) floorSection.classList.add('hidden');
+  const streetSection = document.getElementById('street-address-section');
+  if (streetSection) streetSection.classList.add('hidden');
+  
+  // 重置商場顯示
+  const mallSelector = document.getElementById('mall-selector');
+  if (mallSelector) mallSelector.classList.remove('hidden');
+  const mallConfirmed = document.getElementById('mall-confirmed');
+  if (mallConfirmed) mallConfirmed.classList.add('hidden');
+  const mallOptions = document.getElementById('mall-options');
+  if (mallOptions) mallOptions.innerHTML = '';
+  const mallDisplay = document.getElementById('mall-display');
+  if (mallDisplay) mallDisplay.textContent = '';
+  const addressPreview = document.getElementById('address-preview');
+  if (addressPreview) addressPreview.classList.add('hidden');
+  const floorInput = document.getElementById('nt-floor');
+  if (floorInput) floorInput.value = '';
+  selectedMall = '';
+  selectedFloor = '';
+  mallSelectionMode = 'button';
+  mallInputValue = '';
   
   updateSubmitButton();
 }
-
 // ===== 重新選擇地區 =====
 function reselectRegion() {
   // 重置店鋪類型
@@ -2233,9 +2260,14 @@ function reselectRegion() {
   
   updateSubmitButton();
 }
-
 // ===== 選擇店鋪類型 =====
 function selectType(type) {
+  // ===== 如果沒有選擇地區，不允許選擇店鋪類型 =====
+  if (!selectedRegion) {
+    toast('請先選擇地區', 'pink');
+    return;
+  }
+  
   selectedType = type;
   document.querySelectorAll('.type-btn').forEach(btn => {
     const isActive = btn.dataset.type === type;
@@ -2293,7 +2325,6 @@ function selectType(type) {
   
   updateSubmitButton();
 }
-
 // ===== 渲染商場選項（只顯示所選地區的商場） =====
 function renderMallOptions(forceRefresh = false) {
   const container = document.getElementById('mall-options');
@@ -2307,17 +2338,14 @@ function renderMallOptions(forceRefresh = false) {
   
   let malls = [];
   let regionKey = '';
-  if (selectedRegion === '港島區') regionKey = 'hk';
-  else if (selectedRegion === '九龍區') regionKey = 'kl';
-  else if (selectedRegion === '新界區') regionKey = 'nt';
-  else {
-    Object.keys(REGIONS).forEach(key => {
-      const group = REGIONS[key];
-      if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
-        regionKey = key;
-      }
-    });
-  }
+  
+  // ===== 從 REGIONS 找出所選地區屬於哪個區域 =====
+  Object.keys(REGIONS).forEach(key => {
+    const group = REGIONS[key];
+    if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+      regionKey = key;  // 'hk', 'kl', 'nt'
+    }
+  });
   
   // 從 MALLS_CACHE 獲取該地區的商場
   if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
