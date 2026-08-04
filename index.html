@@ -2114,6 +2114,7 @@ function isFormComplete() {
   if (!selectedType) return false;
   if (!isGpsReady) return false;
   
+  // 商場鋪必須選商場
   if (selectedType === 'mall') {
     if (!selectedMall) return false;
   }
@@ -2152,20 +2153,84 @@ function selectRegion(region, groupKey) {
   if (selector) selector.classList.add('hidden');
   const confirmed = document.getElementById('region-confirmed');
   if (confirmed) confirmed.classList.remove('hidden');
-  // ===== 如果已選擇商場鋪，自動更新商場列表 =====
+  
+  // ===== 啟用店鋪類型按鈕 =====
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+  });
+  
+  // ===== 啟用相機按鈕 =====
+  const camBtn = document.getElementById('nt-camera-btn');
+  if (camBtn) {
+    camBtn.disabled = false;
+    camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
+    camBtn.onclick = function() { openCamera('nt'); };
+  }
+  
+  // 如果已選擇商場鋪，自動更新商場列表（只顯示該地區）
   if (selectedType === 'mall') {
     renderMallOptions();
   }
+  
   updateSubmitButton();
 }
 
 // ===== 重新選擇地區 =====
 function reselectRegion() {
+  // 重置店鋪類型
+  selectedType = '';
+  selectedMall = '';
+  selectedFloor = '';
+  mallSelectionMode = 'button';
+  mallInputValue = '';
+  
+  // ===== 禁用店鋪類型按鈕 =====
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+    btn.classList.add('border-white/20', 'text-white/45');
+  });
+  
+  // ===== 禁用相機按鈕 =====
+  const camBtn = document.getElementById('nt-camera-btn');
+  if (camBtn) {
+    camBtn.disabled = true;
+    camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
+    camBtn.onclick = null;
+  }
+  
+  // 隱藏商場區
+  const mallSection = document.getElementById('mall-section');
+  if (mallSection) mallSection.classList.add('hidden');
+  const floorSection = document.getElementById('floor-section');
+  if (floorSection) floorSection.classList.add('hidden');
+  const streetSection = document.getElementById('street-address-section');
+  if (streetSection) streetSection.classList.add('hidden');
+  
+  // 重置商場顯示
+  const mallSelector = document.getElementById('mall-selector');
+  if (mallSelector) mallSelector.classList.remove('hidden');
+  const mallConfirmed = document.getElementById('mall-confirmed');
+  if (mallConfirmed) mallConfirmed.classList.add('hidden');
+  const mallOptions = document.getElementById('mall-options');
+  if (mallOptions) mallOptions.innerHTML = '';
+  const mallDisplay = document.getElementById('mall-display');
+  if (mallDisplay) mallDisplay.textContent = '';
+  const addressPreview = document.getElementById('address-preview');
+  if (addressPreview) addressPreview.classList.add('hidden');
+  const floorInput = document.getElementById('nt-floor');
+  if (floorInput) floorInput.value = '';
+  
+  // 顯示地區選擇器
   const selector = document.getElementById('region-selector');
   if (selector) selector.classList.remove('hidden');
   const confirmed = document.getElementById('region-confirmed');
   if (confirmed) confirmed.classList.add('hidden');
+  
   selectedRegion = '';
+  
   updateSubmitButton();
 }
 
@@ -2182,12 +2247,30 @@ function selectType(type) {
     btn.classList.toggle('text-white/45', !isActive);
   });
   
+  // ===== 啟用相機按鈕 =====
+  const camBtn = document.getElementById('nt-camera-btn');
+  if (camBtn) {
+    camBtn.disabled = false;
+    camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
+    camBtn.onclick = function() { openCamera('nt'); };
+  }
+  
   const mallSection = document.getElementById('mall-section');
+  const streetSection = document.getElementById('street-address-section');
+  
   if (type === 'mall') {
     if (mallSection) mallSection.classList.remove('hidden');
-    renderMallOptions();
+    if (streetSection) streetSection.classList.add('hidden');
+    // 如果有選擇地區，顯示該地區的商場
+    if (selectedRegion) {
+      renderMallOptions();
+    } else {
+      const mallOptions = document.getElementById('mall-options');
+      if (mallOptions) mallOptions.innerHTML = `<span class="text-[10px] text-white/40 py-1">⚠️ 請先選擇地區</span>`;
+    }
   } else {
     if (mallSection) mallSection.classList.add('hidden');
+    if (streetSection) streetSection.classList.remove('hidden');
     selectedMall = '';
     selectedFloor = '';
     const floorSection = document.getElementById('floor-section');
@@ -2198,14 +2281,29 @@ function selectType(type) {
     if (mallConfirmed) mallConfirmed.classList.add('hidden');
     const addressPreview = document.getElementById('address-preview');
     if (addressPreview) addressPreview.classList.add('hidden');
+    const mallDisplay = document.getElementById('mall-display');
+    if (mallDisplay) mallDisplay.textContent = '';
+    const mallOptions = document.getElementById('mall-options');
+    if (mallOptions) mallOptions.innerHTML = '';
+    const floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    mallSelectionMode = 'button';
+    mallInputValue = '';
   }
+  
   updateSubmitButton();
 }
 
-// ===== 渲染商場選項（從 MALLS_CACHE 讀取） =====
-function renderMallOptions(keepFocus = false) {
+// ===== 渲染商場選項（只顯示所選地區的商場） =====
+function renderMallOptions(forceRefresh = false) {
   const container = document.getElementById('mall-options');
   if (!container) return;
+  
+  // ===== 如果沒有選擇地區，顯示提示且不可操作 =====
+  if (!selectedRegion) {
+    container.innerHTML = `<span class="text-[10px] text-white/40 py-1">⚠️ 請先選擇地區</span>`;
+    return;
+  }
   
   let malls = [];
   let regionKey = '';
@@ -2221,25 +2319,30 @@ function renderMallOptions(keepFocus = false) {
     });
   }
   
+  // 從 MALLS_CACHE 獲取該地區的商場
   if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
     malls = MALLS_CACHE[regionKey].map(m => m.name);
   }
+  
+  // 如果 MALLS_CACHE 為空，從 STORES 提取作為備用
   if (malls.length === 0) {
     malls = [...new Set(
       STORES.filter(s => s.region === selectedRegion && s.mall).map(s => s.mall)
     )];
   }
   
-  // 過濾
+  // 過濾（輸入模式）
   let filteredMalls = malls;
   if (mallSelectionMode === 'input' && mallInputValue.trim()) {
     const query = mallInputValue.trim().toLowerCase();
     filteredMalls = malls.filter(m => m.toLowerCase().includes(query));
   }
   
+  // 顯示模式：輸入模式有匹配時顯示匹配，否則顯示全部
+  const displayMalls = (mallSelectionMode === 'input' && filteredMalls.length > 0) ? filteredMalls : malls;
+  
   let html = '';
   if (mallSelectionMode === 'button') {
-    // 按鈕模式：顯示自行輸入 + 所有商場
     html += `
       <div class="flex flex-wrap gap-2 mb-2">
         <button onclick="switchToMallInput()" 
@@ -2255,8 +2358,6 @@ function renderMallOptions(keepFocus = false) {
       </div>
     `;
   } else {
-    // 輸入模式：顯示輸入框 + 過濾後的商場（如果沒有匹配，顯示全部）
-    const displayMalls = filteredMalls.length > 0 ? filteredMalls : malls;
     html += `
       <div class="flex gap-2 mb-2">
         <input id="mall-custom-input" placeholder="請輸入商場名稱" 
@@ -2284,7 +2385,7 @@ function renderMallOptions(keepFocus = false) {
   
   container.innerHTML = html;
   
-  if (mallSelectionMode === 'input' && !keepFocus) {
+  if (mallSelectionMode === 'input') {
     setTimeout(() => {
       const input = document.getElementById('mall-custom-input');
       if (input) {
@@ -2294,7 +2395,6 @@ function renderMallOptions(keepFocus = false) {
     }, 50);
   }
 }
-
 // ===== 切換到輸入模式 =====
 function switchToMallInput() {
   mallSelectionMode = 'input';
@@ -2736,8 +2836,12 @@ function onStreetAddressInput(value) {
 // ===== 相機 =====
 function cameraBlock(key, quality) {
   return `
-    <div id="${key}-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
-      <button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+    <div id="${key}-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">
+      <button id="${key}-camera-btn" 
+        class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed"
+        disabled>
+        📸 開啟相機拍照
+      </button>
       <img id="${key}-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
     </div>
   `;
@@ -2874,7 +2978,14 @@ ${cameraBlock("nt", 80)}
   setTimeout(() => {
     grabGPS('nt-gps');
   }, 500);
-  
+  setTimeout(() => {
+    const camBtn = document.getElementById('nt-camera-btn');
+    if (camBtn) {
+      camBtn.disabled = true;
+      camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
+      camBtn.onclick = null;
+    }
+  }, 100);
   // 如果有預填商場（從商場 Modal 來的）
   if (prefillMall) {
     setTimeout(() => {
