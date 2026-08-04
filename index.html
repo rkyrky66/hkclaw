@@ -2325,12 +2325,11 @@ function selectType(type) {
   
   updateSubmitButton();
 }
-// ===== 渲染商場選項（只顯示所選地區的商場） =====
+// ===== 渲染商場選項（只顯示所選 DISTRICT 的商場） =====
 function renderMallOptions(forceRefresh = false) {
   const container = document.getElementById('mall-options');
   if (!container) return;
   
-  // ===== 如果沒有選擇地區，顯示提示且不可操作 =====
   if (!selectedRegion) {
     container.innerHTML = `<span class="text-[10px] text-white/40 py-1">⚠️ 請先選擇地區</span>`;
     return;
@@ -2339,20 +2338,21 @@ function renderMallOptions(forceRefresh = false) {
   let malls = [];
   let regionKey = '';
   
-  // ===== 從 REGIONS 找出所選地區屬於哪個區域 =====
   Object.keys(REGIONS).forEach(key => {
     const group = REGIONS[key];
     if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
-      regionKey = key;  // 'hk', 'kl', 'nt'
+      regionKey = key;
     }
   });
   
-  // 從 MALLS_CACHE 獲取該地區的商場
+  // ===== 從 MALLS_CACHE 獲取該三大區的商場，再過濾 DISTRICT =====
   if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
-    malls = MALLS_CACHE[regionKey].map(m => m.name);
+    malls = MALLS_CACHE[regionKey]
+      .filter(m => m.district === selectedRegion)  // ← 關鍵：只顯示該 DISTRICT
+      .map(m => m.name);
   }
   
-  // 如果 MALLS_CACHE 為空，從 STORES 提取作為備用
+  // 如果 MALLS_CACHE 為空或沒有該 district 的商場，從 STORES 提取
   if (malls.length === 0) {
     malls = [...new Set(
       STORES.filter(s => s.region === selectedRegion && s.mall).map(s => s.mall)
@@ -2366,7 +2366,6 @@ function renderMallOptions(forceRefresh = false) {
     filteredMalls = malls.filter(m => m.toLowerCase().includes(query));
   }
   
-  // 顯示模式：輸入模式有匹配時顯示匹配，否則顯示全部
   const displayMalls = (mallSelectionMode === 'input' && filteredMalls.length > 0) ? filteredMalls : malls;
   
   let html = '';
