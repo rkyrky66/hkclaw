@@ -585,7 +585,9 @@
     let _currentMallModal = null;
     let _currentMallFloor = null;
     let _storeContext = null;  // 儲存店鋪來源上下文
-
+let mallSelectionMode = 'button'; // 'button' 或 'input'
+let mallInputValue = '';
+let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     // 地區中心點
     const REGION_CENTERS = {
       '銅鑼灣': { lat: 22.2799, lng: 114.1838 },
@@ -2196,46 +2198,119 @@ function selectType(type) {
   updateSubmitButton();
 }
 
-// ===== 渲染商場選項（根據地區） =====
+// ===== 渲染商場選項 =====
 function renderMallOptions() {
   const container = document.getElementById('mall-options');
   if (!container) return;
   
+  // 從 STORES 提取該地區的商場，去重
   const malls = [...new Set(
     STORES
       .filter(s => s.region === selectedRegion && s.mall)
       .map(s => s.mall)
   )];
   
-  if (malls.length === 0) {
-    container.innerHTML = `
-      <div class="text-xs text-white/40 py-2">該地區暫無商場資料</div>
-      <div class="mt-2">
-        <input id="mall-custom-input" placeholder="請輸入商場名稱" 
-          class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
-          oninput="onMallCustomInput(this.value)" />
-      </div>
-    `;
-    return;
+  // 過濾：如果處於輸入模式且有輸入內容，過濾商場列表
+  let filteredMalls = malls;
+  if (mallSelectionMode === 'input' && mallInputValue.trim()) {
+    const query = mallInputValue.trim().toLowerCase();
+    filteredMalls = malls.filter(m => m.toLowerCase().includes(query));
   }
   
-  container.innerHTML = `
-    <div class="mb-2">
-      <input id="mall-custom-input" placeholder="自行輸入商場名稱" 
-        class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
-        oninput="onMallCustomInput(this.value)" />
-    </div>
-    <div class="flex flex-wrap gap-2">
-      ${malls.map(m => `
-        <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
-          class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
-          🏬 ${m}
+  let html = '';
+  
+  if (mallSelectionMode === 'button') {
+    // 按鈕模式：顯示「自行輸入」按鈕 + 商場按鈕
+    html += `
+      <div class="flex flex-wrap gap-2 mb-2">
+        <button onclick="switchToMallInput()" 
+          class="px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
+          ✏️ 自行輸入
         </button>
-      `).join('')}
-    </div>
-  `;
+        ${malls.map(m => `
+          <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
+            class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
+            🏬 ${m}
+          </button>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    // 輸入模式：顯示輸入框 + 確認按鈕 + 過濾後的商場按鈕
+    html += `
+      <div class="flex gap-2 mb-2">
+        <input id="mall-custom-input" placeholder="請輸入商場名稱" 
+          class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
+          value="${mallInputValue}"
+          oninput="onMallCustomInput(this.value)" />
+        <button onclick="confirmMallInput()" 
+          class="px-4 py-2 rounded-lg bg-gold/20 border border-gold/40 text-sm text-gold font-bold hover:bg-gold/30 transition-all">
+          ✅ 確認
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${filteredMalls.map(m => `
+          <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
+            class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
+            🏬 ${m}
+          </button>
+        `).join('')}
+        ${filteredMalls.length === 0 && mallInputValue.trim() ? `
+          <span class="text-[10px] text-white/40 py-1">找不到匹配的商場，將建立新商場</span>
+        ` : ''}
+      </div>
+    `;
+  }
+  
+  container.innerHTML = html;
 }
 
+// ===== 切換到輸入模式 =====
+function switchToMallInput() {
+  mallSelectionMode = 'input';
+  mallInputValue = '';
+  renderMallOptions();
+  // 聚焦到輸入框
+  setTimeout(() => {
+    const input = document.getElementById('mall-custom-input');
+    if (input) input.focus();
+  }, 100);
+}
+
+// ===== 商場自定義輸入 =====
+function onMallCustomInput(value) {
+  mallInputValue = value;
+  renderMallOptions();
+}
+
+// ===== 確認商場輸入 =====
+function confirmMallInput() {
+  const value = mallInputValue.trim();
+  if (!value) {
+    toast('請輸入商場名稱', 'pink');
+    return;
+  }
+  // 直接使用輸入的文字作為商場名稱
+  selectedMall = value;
+  const display = document.getElementById('mall-display');
+  if (display) display.textContent = value;
+  const selector = document.getElementById('mall-selector');
+  if (selector) selector.classList.add('hidden');
+  const confirmed = document.getElementById('mall-confirmed');
+  if (confirmed) confirmed.classList.remove('hidden');
+  const floorSection = document.getElementById('floor-section');
+  if (floorSection) floorSection.classList.remove('hidden');
+  // 重置樓層輸入
+  const floorInput = document.getElementById('nt-floor');
+  if (floorInput) floorInput.value = '';
+  selectedFloor = '';
+  const addressPreview = document.getElementById('address-preview');
+  if (addressPreview) addressPreview.classList.add('hidden');
+  // 重置模式
+  mallSelectionMode = 'button';
+  mallInputValue = '';
+  updateSubmitButton();
+}
 // ===== 選擇商場 =====
 function selectMall(mallName) {
   selectedMall = mallName;
@@ -2253,9 +2328,11 @@ function selectMall(mallName) {
   selectedFloor = '';
   const addressPreview = document.getElementById('address-preview');
   if (addressPreview) addressPreview.classList.add('hidden');
+  // 重置模式
+  mallSelectionMode = 'button';
+  mallInputValue = '';
   updateSubmitButton();
 }
-
 // ===== 重新選擇商場 =====
 function reselectMall() {
   const selector = document.getElementById('mall-selector');
@@ -2356,7 +2433,8 @@ function grabGPS(elementId) {
         gpsLng = pos.coords.longitude;
         gpsAccuracy = pos.coords.accuracy;
         isGpsReady = true;
-        el.textContent = `📍 定位成功：${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)}`;
+        // 顯示小數點後 2 位，儲存完整精度
+        el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
         el.className = 'text-neongreen text-xs';
         updateSubmitButton();
       },
@@ -2377,7 +2455,59 @@ function grabGPS(elementId) {
     updateSubmitButton();
   }
 }
+// ===== 店名下拉清單（開頭匹配） =====
+function updateNameSuggestions(value) {
+  const container = document.getElementById('name-suggestions');
+  const input = document.getElementById('nt-name');
+  if (!container || !input) return;
+  
+  const query = value.trim();
+  
+  if (query.length < 1) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  // 從 STORES 提取店名，去重，開頭匹配
+  const uniqueNames = [...new Set(STORES.map(s => s.name))];
+  const matched = uniqueNames
+    .filter(name => name.toLowerCase().startsWith(query.toLowerCase()))
+    .slice(0, 6);
+  
+  if (matched.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  container.classList.remove('hidden');
+  container.innerHTML = matched.map(name => `
+    <button onclick="selectNameSuggestion('${name.replace(/'/g, "\\'")}')" 
+      class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0 transition-colors">
+      📝 ${name}
+    </button>
+  `).join('');
+}
 
+// ===== 選擇店名下拉選項 =====
+function selectNameSuggestion(name) {
+  const input = document.getElementById('nt-name');
+  const container = document.getElementById('name-suggestions');
+  if (input) {
+    input.value = name;
+    input.dispatchEvent(new Event('input'));
+  }
+  if (container) container.classList.add('hidden');
+  updateSubmitButton();
+}
+
+// ===== 點擊外部關閉下拉清單 =====
+document.addEventListener('click', function(e) {
+  const container = document.getElementById('name-suggestions');
+  const input = document.getElementById('nt-name');
+  if (container && input && !container.contains(e.target) && e.target !== input) {
+    container.classList.add('hidden');
+  }
+});
 // ===== 重試 GPS =====
 function retryGPS() {
   const retryBtn = document.getElementById('gps-retry');
@@ -2431,6 +2561,41 @@ function submitIntel() {
   
   console.log('📝 提交數據:', data);
   
+  // ===== 如果是商場鋪且商場不在 MALLS_CACHE 中，存入 =====
+  if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
+    // 檢查商場是否已存在
+    const exists = MALLS_CACHE ? 
+      Object.values(MALLS_CACHE).flat().some(m => m.name === selectedMall) : 
+      false;
+    
+    // 也檢查 STORES 中是否有該商場
+    const storeExists = STORES.some(s => s.mall === selectedMall && s.region === selectedRegion);
+    
+    if (!storeExists) {
+      // 存入 MALLS_CACHE（反向添加）
+      const newMall = {
+        name: selectedMall,
+        region: selectedRegion === '港島區' ? '港島區' : 
+                selectedRegion === '九龍區' ? '九龍區' : '新界區',
+        district: selectedRegion,
+        address: addr || '',
+        lat: gpsLat,
+        lng: gpsLng,
+        created_at: new Date().toISOString()
+      };
+      
+      // 存入本地 MALLS_CACHE
+      if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
+      const regionKey = selectedRegion === '港島區' ? 'hk' : 
+                        selectedRegion === '九龍區' ? 'kl' : 'nt';
+      MALLS_CACHE[regionKey].push(newMall);
+      
+      // 上傳到 Supabase
+      cloudInsert('malls', newMall);
+      console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
+    }
+  }
+  
   // 儲存到 STORES
   const newStore = {
     id: 's' + Date.now(),
@@ -2460,7 +2625,6 @@ function submitIntel() {
   addPoints(10, '提交店鋪情報');
   closeModal();
 }
-
 // ===== 渲染地區選擇器（三大區） =====
 function renderRegionSelector() {
   const container = document.querySelector('.region-selector-container');
@@ -2555,6 +2719,8 @@ function openIntelForm(prefillMall, prefillRegion) {
   isGpsReady = false;
   gpsLat = null;
   gpsLng = null;
+  mallSelectionMode = 'button'; // 'button' 或 'input'
+  mallInputValue = '';
   
   openModal(`
     <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
@@ -2568,7 +2734,9 @@ function openIntelForm(prefillMall, prefillRegion) {
         <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>
         <input id="nt-name" placeholder="請輸入店名" 
           class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
-          oninput="updateSubmitButton()" />
+          autocomplete="off"
+          oninput="updateNameSuggestions(this.value)" />
+        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>
       </div>
       
       <!-- ===== 地區選擇 ===== -->
@@ -2659,8 +2827,8 @@ function openIntelForm(prefillMall, prefillRegion) {
     </div>
   `);
   
-  // 渲染地區選擇器
-  renderRegionSelector();
+  // 渲染地區選擇器（Tab 模式）
+  renderRegionSelectorTab();
   
   // 獲取 GPS
   setTimeout(() => {
@@ -2678,6 +2846,8 @@ function openIntelForm(prefillMall, prefillRegion) {
         if (selector) selector.classList.add('hidden');
         const confirmed = document.getElementById('region-confirmed');
         if (confirmed) confirmed.classList.remove('hidden');
+        // 更新 Tab 高亮
+        updateTabHighlight(prefillRegion);
       }
       selectType('mall');
       setTimeout(() => {
@@ -2695,8 +2865,93 @@ function openIntelForm(prefillMall, prefillRegion) {
     }
     if (selectedType) clearInterval(typeObserver);
   }, 100);
+} 
+// ===== 渲染地區選擇器（Tab 切頁模式） =====
+let currentTab = 'hk'; // 'hk' | 'kl' | 'nt'
+
+function renderRegionSelectorTab() {
+  const container = document.querySelector('.region-selector-container');
+  if (!container) return;
+  
+  // 如果還沒有選擇地區，預設選中港島區
+  if (!selectedRegion) {
+    currentTab = 'hk';
+  }
+  
+  const tabsHtml = `
+    <div class="flex gap-2 mb-3">
+      ${Object.keys(REGIONS).map(key => {
+        const group = REGIONS[key];
+        const isActive = currentTab === key;
+        return `
+          <button onclick="switchTab('${key}')" 
+            class="region-tab flex-1 rounded-xl border py-2 text-sm font-black transition-all
+            ${isActive 
+              ? 'border-gold bg-gold/20 text-gold glow-gold' 
+              : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold'}">
+            ${group.icon} ${group.label}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+  
+  const group = REGIONS[currentTab];
+  const isMoreOpen = intelMoreOpenMap && intelMoreOpenMap[currentTab] || false;
+  const allRegions = isMoreOpen ? [...group.hot, ...group.more] : group.hot;
+  
+  const regionsHtml = `
+    <div class="flex flex-wrap gap-1.5">
+      ${allRegions.map(r => `
+        <button onclick="selectRegion('${r}', '${currentTab}')" 
+          data-region="${r}"
+          class="region-btn rounded-full border border-gold/40 px-3 py-1 text-xs text-gold hover:bg-gold/10 transition-all
+          ${selectedRegion === r ? 'chip-active-gold border-gold/60' : ''}">
+          ${r}
+        </button>
+      `).join('')}
+      ${group.more.length > 0 ? `
+        <button onclick="toggleMoreRegionsTab()" 
+          class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold/50 hover:text-gold transition-all">
+          ${isMoreOpen ? '📍 收起' : '📍 更多'}
+        </button>
+      ` : ''}
+    </div>
+  `;
+  
+  container.innerHTML = tabsHtml + regionsHtml;
 }
-    function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已達上限", "pink");
+
+// ===== 切換 Tab =====
+function switchTab(tabKey) {
+  currentTab = tabKey;
+  renderRegionSelectorTab();
+}
+
+// ===== 切換更多地區（Tab 模式） =====
+function toggleMoreRegionsTab() {
+  if (!intelMoreOpenMap) {
+    intelMoreOpenMap = { hk: false, kl: false, nt: false };
+  }
+  intelMoreOpenMap[currentTab] = !intelMoreOpenMap[currentTab];
+  renderRegionSelectorTab();
+}
+
+// ===== 更新 Tab 高亮 =====
+function updateTabHighlight(region) {
+  // 根據地區找到對應的 Tab
+  let foundTab = 'hk';
+  Object.keys(REGIONS).forEach(key => {
+    const group = REGIONS[key];
+    if (group.hot.includes(region) || group.more.includes(region)) {
+      foundTab = key;
+    }
+  });
+  currentTab = foundTab;
+  renderRegionSelectorTab();
+}
+
+function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已達上限", "pink");
       d.checkin++;
       addPoints(5, "打卡");
       showView("task"); }
