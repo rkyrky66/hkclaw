@@ -2198,14 +2198,12 @@ function selectType(type) {
   updateSubmitButton();
 }
 
-// ===== 渲染商場選項（從 MALLS_CACHE 讀取，保留輸入框焦點） =====
+// ===== 渲染商場選項（從 MALLS_CACHE 讀取） =====
 function renderMallOptions(keepFocus = false) {
   const container = document.getElementById('mall-options');
   if (!container) return;
   
-  // 從 MALLS_CACHE 提取該地區的商場
   let malls = [];
-  
   let regionKey = '';
   if (selectedRegion === '港島區') regionKey = 'hk';
   else if (selectedRegion === '九龍區') regionKey = 'kl';
@@ -2219,21 +2217,16 @@ function renderMallOptions(keepFocus = false) {
     });
   }
   
-  // 從 MALLS_CACHE 獲取商場列表
   if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
     malls = MALLS_CACHE[regionKey].map(m => m.name);
   }
-  
-  // 如果 MALLS_CACHE 為空，從 STORES 提取商場作為備用
   if (malls.length === 0) {
     malls = [...new Set(
-      STORES
-        .filter(s => s.region === selectedRegion && s.mall)
-        .map(s => s.mall)
+      STORES.filter(s => s.region === selectedRegion && s.mall).map(s => s.mall)
     )];
   }
   
-  // 過濾：如果處於輸入模式且有輸入內容，過濾商場列表
+  // 過濾
   let filteredMalls = malls;
   if (mallSelectionMode === 'input' && mallInputValue.trim()) {
     const query = mallInputValue.trim().toLowerCase();
@@ -2241,8 +2234,8 @@ function renderMallOptions(keepFocus = false) {
   }
   
   let html = '';
-  
   if (mallSelectionMode === 'button') {
+    // 按鈕模式：顯示自行輸入 + 所有商場
     html += `
       <div class="flex flex-wrap gap-2 mb-2">
         <button onclick="switchToMallInput()" 
@@ -2258,29 +2251,28 @@ function renderMallOptions(keepFocus = false) {
       </div>
     `;
   } else {
-    // 輸入模式：保留輸入框實例，只更新按鈕列表
-    const inputValue = mallInputValue;
+    // 輸入模式：顯示輸入框 + 過濾後的商場（如果沒有匹配，顯示全部）
+    const displayMalls = filteredMalls.length > 0 ? filteredMalls : malls;
     html += `
       <div class="flex gap-2 mb-2">
         <input id="mall-custom-input" placeholder="請輸入商場名稱" 
           class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
-          value="${inputValue}"
-          oninput="onMallCustomInput(this.value)" 
-          onfocus="this.select()" />
+          value="${mallInputValue}"
+          oninput="onMallCustomInput(this.value)" />
         <button onclick="confirmMallInput()" 
           class="px-4 py-2 rounded-lg bg-gold/20 border border-gold/40 text-sm text-gold font-bold hover:bg-gold/30 transition-all">
           ✅ 確認
         </button>
       </div>
       <div class="flex flex-wrap gap-2" id="mall-button-list">
-        ${filteredMalls.map(m => `
+        ${displayMalls.map(m => `
           <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
             class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">
             🏬 ${m}
           </button>
         `).join('')}
-        ${filteredMalls.length === 0 && mallInputValue.trim() ? `
-          <span class="text-[10px] text-white/40 py-1">找不到匹配的商場，將建立新商場</span>
+        ${displayMalls.length === 0 ? `
+          <span class="text-[10px] text-white/40 py-1">該地區暫無商場</span>
         ` : ''}
       </div>
     `;
@@ -2288,7 +2280,6 @@ function renderMallOptions(keepFocus = false) {
   
   container.innerHTML = html;
   
-  // 如果是輸入模式，重新聚焦到輸入框
   if (mallSelectionMode === 'input' && !keepFocus) {
     setTimeout(() => {
       const input = document.getElementById('mall-custom-input');
@@ -2314,14 +2305,12 @@ function switchToMallInput() {
   }, 100);
 }
 
-// ===== 商場自定義輸入（只更新列表，不重建整個區塊） =====
+// ===== 商場自定義輸入（只更新列表，無匹配時顯示全部） =====
 function onMallCustomInput(value) {
   mallInputValue = value;
   
-  // 只更新按鈕列表，不重建整個容器
   const buttonList = document.getElementById('mall-button-list');
   if (buttonList) {
-    // 從 MALLS_CACHE 提取該地區的商場
     let malls = [];
     let regionKey = '';
     if (selectedRegion === '港島區') regionKey = 'hk';
@@ -2341,13 +2330,12 @@ function onMallCustomInput(value) {
     }
     if (malls.length === 0) {
       malls = [...new Set(
-        STORES
-          .filter(s => s.region === selectedRegion && s.mall)
-          .map(s => s.mall)
+        STORES.filter(s => s.region === selectedRegion && s.mall).map(s => s.mall)
       )];
     }
     
     const query = value.trim().toLowerCase();
+    // 有查詢時過濾，無查詢時顯示全部
     const filteredMalls = query ? malls.filter(m => m.toLowerCase().includes(query)) : malls;
     
     buttonList.innerHTML = `
@@ -2357,8 +2345,8 @@ function onMallCustomInput(value) {
           🏬 ${m}
         </button>
       `).join('')}
-      ${filteredMalls.length === 0 && value.trim() ? `
-        <span class="text-[10px] text-white/40 py-1">找不到匹配的商場，將建立新商場</span>
+      ${filteredMalls.length === 0 ? `
+        <span class="text-[10px] text-white/40 py-1">該地區暫無商場</span>
       ` : ''}
     `;
   }
