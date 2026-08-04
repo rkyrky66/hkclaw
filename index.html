@@ -2093,38 +2093,70 @@ let locationType = 'independent';
 let selectedMall = '';
 let intelMoreOpenMap = { hk: false, kl: false, nt: false };
 
-// ===== 輔助函數（簡單版本） =====
+// ===== 輔助函數（完整版） =====
 
-// 渲染地區選擇器
+// 渲染地區選擇器（港島/九龍/新界分組）
 function renderIntelForm() {
   const container = document.querySelector('.intel-selector-container');
   if (!container) return;
   
-  const group = intelGroup || "kl";
-  const currentGroup = REGIONS[group];
-  const isMoreOpen = intelMoreOpenMap[group] || false;
-  const allRegions = isMoreOpen ? [...currentGroup.hot, ...currentGroup.more] : currentGroup.hot;
+  let html = '';
   
-  container.innerHTML = allRegions.map(r => `
-    <button onclick="selectIntelRegion('${r}')" 
-      class="rounded-full border py-1.5 px-3 text-xs transition-all m-1
-      ${selectedIntelRegion === r ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">
-      ${r}
-    </button>
-  `).join('');
+  // 遍歷三個區域
+  Object.keys(REGIONS).forEach(groupKey => {
+    const group = REGIONS[groupKey];
+    const isOpen = intelMoreOpenMap[groupKey] || false;
+    const allRegions = isOpen ? [...group.hot, ...group.more] : group.hot;
+    
+    html += `
+      <div class="mb-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="text-xs font-bold text-white/40">${group.icon} ${group.label}</span>
+          ${group.more.length > 0 ? `
+            <button onclick="toggleIntelMore('${groupKey}')" 
+              class="text-[9px] text-gold/60 hover:text-gold transition-colors">
+              ${isOpen ? '📍 收起' : '📍 更多'}
+            </button>
+          ` : ''}
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          ${allRegions.map(r => `
+            <button onclick="selectIntelRegion('${r}')" 
+              class="rounded-full border py-1 px-3 text-xs transition-all
+              ${selectedIntelRegion === r ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60'}">
+              ${r}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
 }
 
+// ===== 切換顯示更多地區 =====
+function toggleIntelMore(groupKey) {
+  intelMoreOpenMap[groupKey] = !intelMoreOpenMap[groupKey];
+  renderIntelForm();
+}
+
+// ===== 選擇地區 =====
 function selectIntelRegion(region) {
   selectedIntelRegion = region;
   intelRegionSelected = true;
   renderIntelForm();
+  
+  // 如果當前是「商場」模式，更新商場列表
+  if (locationType === 'mall') {
+    setTimeout(updateMallSuggestions, 100);
+  }
 }
 
-// 位置類型切換
+// ===== 位置類型切換 =====
 function selectLocationType(type) {
   locationType = type;
   
-  // 更新按鈕樣式
   ['independent', 'mall'].forEach(t => {
     const btn = document.getElementById(`location-${t}`);
     if (btn) {
@@ -2136,14 +2168,80 @@ function selectLocationType(type) {
     }
   });
   
-  // 顯示/隱藏商場區
   const section = document.getElementById('nt-mall-section');
   if (section) {
     section.classList.toggle('hidden', type !== 'mall');
   }
+  
+  // 如果切換到商場模式且有選擇地區，更新商場列表
+  if (type === 'mall') {
+    setTimeout(updateMallSuggestions, 100);
+  }
 }
 
-// 相機
+// ===== 根據地區更新商場建議（核心功能） =====
+function updateMallSuggestions() {
+  const listContainer = document.getElementById('nt-mall-list');
+  const input = document.getElementById('nt-mall-input');
+  if (!listContainer) return;
+  
+  // 如果沒有選擇地區
+  if (!selectedIntelRegion) {
+    listContainer.innerHTML = `<div class="text-xs text-white/40 py-2">⚠️ 請先選擇地區</div>`;
+    return;
+  }
+  
+  // 從 STORES 中提取該地區的商場
+  const regionMalls = STORES
+    .filter(s => s.region === selectedIntelRegion && s.mall)
+    .map(s => s.mall);
+  
+  // 去重
+  const uniqueMalls = [...new Set(regionMalls)];
+  
+  if (uniqueMalls.length === 0) {
+    listContainer.innerHTML = `<div class="text-xs text-white/40 py-2">📍 該地區暫無商場，將自動建立</div>`;
+    return;
+  }
+  
+  // 如果有輸入關鍵字，過濾
+  const query = input ? input.value.trim().toLowerCase() : '';
+  const filtered = query ? uniqueMalls.filter(m => m.toLowerCase().includes(query)) : uniqueMalls;
+  
+  if (filtered.length === 0) {
+    listContainer.innerHTML = `<div class="text-xs text-white/40 py-2">找不到匹配的商場</div>`;
+    return;
+  }
+  
+  listContainer.innerHTML = filtered.map(m => `
+    <button onclick="selectMall('${m.replace(/'/g, "\\'")}')" 
+      class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0 transition-colors">
+      🏬 ${m}
+    </button>
+  `).join('');
+}
+
+// ===== 選擇商場 =====
+function selectMall(mallName) {
+  const input = document.getElementById('nt-mall-input');
+  const list = document.getElementById('nt-mall-list');
+  if (input) input.value = mallName;
+  if (list) list.innerHTML = '';
+  // 觸發樓層顯示（如果有）
+  const floorSection = document.getElementById('nt-floor-section');
+  if (floorSection) floorSection.classList.remove('hidden');
+}
+
+// ===== 商場輸入框事件 =====
+function handleMallInputChange(e) {
+  updateMallSuggestions();
+}
+
+function handleMallInputFocus(e) {
+  updateMallSuggestions();
+}
+
+// ===== 相機 =====
 function cameraBlock(key, quality) {
   return `
     <div id="${key}-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
@@ -2154,11 +2252,10 @@ function cameraBlock(key, quality) {
 }
 
 function bindCamera(key, quality) {
-  // 相機功能已在 openCamera 和 capturePhoto 中實現
   console.log('📷 相機已準備:', key);
 }
 
-// GPS
+// ===== GPS =====
 function grabGPS(elementId) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -2177,7 +2274,7 @@ function grabGPS(elementId) {
   }
 }
 
-// 提交
+// ===== 提交 =====
 function submitIntel() {
   const name = document.getElementById('nt-name')?.value.trim();
   if (!name) return toast('請輸入店名', 'pink');
@@ -2186,7 +2283,6 @@ function submitIntel() {
   const photoBlob = window._cam?.nt;
   if (!photoBlob) return toast('請先拍攝店鋪照片', 'pink');
   
-  // 收集數據
   const data = {
     name: name,
     region: selectedIntelRegion,
@@ -2202,7 +2298,7 @@ function submitIntel() {
   closeModal();
 }
 
-// 自動補全（簡化版）
+// ===== 自動補全（簡化版） =====
 function handleNameSuggestions(value) {
   // 可選功能，暫時不實作
 }
