@@ -2198,17 +2198,42 @@ function selectType(type) {
   updateSubmitButton();
 }
 
-// ===== 渲染商場選項 =====
+// ===== 渲染商場選項（從 MALLS_CACHE 讀取） =====
 function renderMallOptions() {
   const container = document.getElementById('mall-options');
   if (!container) return;
   
-  // 從 STORES 提取該地區的商場，去重
-  const malls = [...new Set(
-    STORES
-      .filter(s => s.region === selectedRegion && s.mall)
-      .map(s => s.mall)
-  )];
+  // 從 MALLS_CACHE 提取該地區的商場
+  let malls = [];
+  
+  // 根據 selectedRegion 對應到 MALLS_CACHE 的 key
+  let regionKey = '';
+  if (selectedRegion === '港島區') regionKey = 'hk';
+  else if (selectedRegion === '九龍區') regionKey = 'kl';
+  else if (selectedRegion === '新界區') regionKey = 'nt';
+  else {
+    // 如果是具體地區名（如旺角），找到對應的區域
+    Object.keys(REGIONS).forEach(key => {
+      const group = REGIONS[key];
+      if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+        regionKey = key;
+      }
+    });
+  }
+  
+  // 從 MALLS_CACHE 獲取商場列表
+  if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
+    malls = MALLS_CACHE[regionKey].map(m => m.name);
+  }
+  
+  // 如果 MALLS_CACHE 為空，從 STORES 提取商場作為備用
+  if (malls.length === 0) {
+    malls = [...new Set(
+      STORES
+        .filter(s => s.region === selectedRegion && s.mall)
+        .map(s => s.mall)
+    )];
+  }
   
   // 過濾：如果處於輸入模式且有輸入內容，過濾商場列表
   let filteredMalls = malls;
@@ -2220,7 +2245,6 @@ function renderMallOptions() {
   let html = '';
   
   if (mallSelectionMode === 'button') {
-    // 按鈕模式：顯示「自行輸入」按鈕 + 商場按鈕
     html += `
       <div class="flex flex-wrap gap-2 mb-2">
         <button onclick="switchToMallInput()" 
@@ -2236,7 +2260,6 @@ function renderMallOptions() {
       </div>
     `;
   } else {
-    // 輸入模式：顯示輸入框 + 確認按鈕 + 過濾後的商場按鈕
     html += `
       <div class="flex gap-2 mb-2">
         <input id="mall-custom-input" placeholder="請輸入商場名稱" 
@@ -2345,38 +2368,6 @@ function reselectMall() {
   const addressPreview = document.getElementById('address-preview');
   if (addressPreview) addressPreview.classList.add('hidden');
   updateSubmitButton();
-}
-
-// ===== 商場自定義輸入 =====
-function onMallCustomInput(value) {
-  if (value.trim()) {
-    selectedMall = value.trim();
-    document.querySelectorAll('.mall-option-btn').forEach(btn => {
-      btn.style.opacity = '0.3';
-    });
-    // 自動確認自定義商場
-    const display = document.getElementById('mall-display');
-    if (display) display.textContent = value.trim();
-    const selector = document.getElementById('mall-selector');
-    if (selector) selector.classList.add('hidden');
-    const confirmed = document.getElementById('mall-confirmed');
-    if (confirmed) confirmed.classList.remove('hidden');
-    const floorSection = document.getElementById('floor-section');
-    if (floorSection) floorSection.classList.remove('hidden');
-    updateSubmitButton();
-  } else {
-    selectedMall = '';
-    document.querySelectorAll('.mall-option-btn').forEach(btn => {
-      btn.style.opacity = '1';
-    });
-    const selector = document.getElementById('mall-selector');
-    if (selector) selector.classList.remove('hidden');
-    const confirmed = document.getElementById('mall-confirmed');
-    if (confirmed) confirmed.classList.add('hidden');
-    const floorSection = document.getElementById('floor-section');
-    if (floorSection) floorSection.classList.add('hidden');
-    updateSubmitButton();
-  }
 }
 
 // ===== 樓層輸入 =====
@@ -2817,7 +2808,8 @@ function openIntelForm(prefillMall, prefillRegion) {
         </div>
       </div>
     </div>
-    
+    <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>
+${cameraBlock("nt", 80)}
     <!-- ===== 提交按鈕（固定底部） ===== -->
     <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
       <button id="nt-submit-btn" onclick="submitIntel()" 
@@ -2869,11 +2861,12 @@ function openIntelForm(prefillMall, prefillRegion) {
 // ===== 渲染地區選擇器（Tab 切頁模式） =====
 let currentTab = 'hk'; // 'hk' | 'kl' | 'nt'
 
+// ===== 渲染地區選擇器（Tab 切頁模式） =====
 function renderRegionSelectorTab() {
   const container = document.querySelector('.region-selector-container');
   if (!container) return;
   
-  // 如果還沒有選擇地區，預設選中港島區
+  // 如果還沒有選擇地區，才重置 Tab 為港島區
   if (!selectedRegion) {
     currentTab = 'hk';
   }
