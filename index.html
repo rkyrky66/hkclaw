@@ -1527,6 +1527,16 @@ function onSubmitMissingStore(mallName) {
       toast(`📍 移動到 ${s.name}`, 'green');
     }
 
+    // ===== 從地圖 Popup 打開店鋪詳情 =====
+function openStoreFromMap(id) {
+  console.log('📍 openStoreFromMap 被調用，ID:', id); // 調試用
+  // 關閉地圖上的 Popup
+  if (map) {
+    map.closePopup();
+  }
+  // 打開店鋪詳情 Modal
+  openStore(id);
+}
    function openStore(id, isSwitch = false) {
   const s = STORES.find(x => x.id === id);
   if (!s) return;
