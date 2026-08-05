@@ -898,6 +898,7 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
   // ===== 地圖頁面切換：改為隱藏/顯示（不銷毀） =====
   const mapContainer = document.getElementById('map-container');
   const mapWrapper = document.getElementById('map-wrapper');
+  const main = document.getElementById("main");
   
   // 如果切換離開地圖頁面，只隱藏地圖容器（不銷毀）
   if (CURRENT === 'map' && name !== 'map') {
@@ -907,73 +908,14 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     }
   }
   
-  // 如果切換到地圖頁面
-  if (name === 'map') {
-    // ===== 顯示地圖容器 =====
-    if (mapContainer) {
-      mapContainer.style.display = 'block';
-      mapContainer.style.width = '100%';
-      mapContainer.style.height = '100%';
-    }
-    if (mapWrapper) {
-      mapWrapper.style.display = 'block';
-    }
-    
-    // 如果地圖已初始化，只需刷新大小
-    if (map && mapInitialized) {
-      console.log('🗺️ 地圖已存在，重新整理大小');
-      
-      // ===== 修復：延遲刷新，確保容器已完全顯示 =====
-      // 先強制隱藏再顯示，觸發瀏覽器重新計算布局
-      if (mapContainer) {
-        mapContainer.style.opacity = '0';
-        setTimeout(() => {
-          if (mapContainer) mapContainer.style.opacity = '1';
-        }, 50);
-      }
-      
-      setTimeout(() => {
-        if (map) {
-          // 強制刷新地圖大小
-          map.invalidateSize(true);
-          // 如果有用戶位置，保持定位
-          if (userLocation) {
-            map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
-          }
-        }
-        updateMapMarkers();
-        updateMapList();
-        console.log('🗺️ 地圖已刷新');
-      }, 400);
-      
-    } else {
-      // 地圖未初始化，需要初始化（首次進入）
-      mapInitialized = false;
-      console.log('🗺️ 首次進入地圖頁面，初始化地圖');
-      // 重置 map 和 markerCluster 變數
-      if (map) {
-        try { map.remove(); } catch (e) {}
-        map = null;
-        markerCluster = null;
-        userMarker = null;
-      }
-      // 延遲初始化，確保 DOM 已渲染
-      setTimeout(() => {
-        afterMapView();
-      }, 100);
-    }
-  }
-  
-  // 更新 CURRENT（在 map 初始化判斷之後）
+  // 更新 CURRENT
   CURRENT = name;
   
   // ===== 頁面內容渲染 =====
-  const main = document.getElementById("main");
   if (main) {
     main.scrollTop = 0;
     main.classList.remove("view-enter");
     
-    // 管理地圖頁面的特殊 class
     if (name === 'map') {
       main.classList.add('map-page');
     } else {
@@ -1049,40 +991,64 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
   // 確保地圖容器可見
   const mapContainer = document.getElementById('map-container');
   const mapWrapper = document.getElementById('map-wrapper');
+  
   if (mapContainer) {
     mapContainer.style.display = 'block';
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
   }
   if (mapWrapper) {
     mapWrapper.style.display = 'block';
+    mapWrapper.style.height = '40vh';
+    mapWrapper.style.minHeight = '200px';
   }
   
-  // 如果地圖已初始化，只刷新大小
+  // ===== 核心修復：如果地圖已初始化，強制刷新 =====
   if (map && mapInitialized) {
-    console.log('🗺️ afterMapView: 地圖已存在，刷新大小');
-    setTimeout(() => {
-      if (map) {
-        map.invalidateSize();
-        // 如果有用戶位置，保持定位
-        if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+    console.log('🗺️ afterMapView: 地圖已存在，強制刷新');
+    
+    // 先將地圖容器隱藏再顯示，強制瀏覽器重新計算布局
+    if (mapContainer) {
+      mapContainer.style.opacity = '0';
+      mapContainer.style.display = 'none';
+      // 強制回流
+      void mapContainer.offsetHeight;
+      mapContainer.style.display = 'block';
+      mapContainer.style.opacity = '1';
+    }
+    
+    // 使用 requestAnimationFrame 確保在下一幀執行
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (map) {
+          // 強制刷新地圖大小（true = 強制刷新）
+          map.invalidateSize(true);
+          // 如果有用戶位置，保持定位
+          if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+          }
         }
-      }
-      updateMapMarkers();
-      updateMapList();
-    }, 250);
+        updateMapMarkers();
+        updateMapList();
+        console.log('🗺️ 地圖已強制刷新');
+      }, 150);
+    });
     return;
   }
   
-  // 地圖未初始化，執行初始化
+  // ===== 地圖未初始化，執行初始化 =====
+  console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
   requestAnimationFrame(() => {
     setTimeout(() => {
       const container = document.getElementById('map-container');
       if (container) {
         container.style.width = '100%';
         container.style.display = 'block';
+        container.style.height = '100%';
         const wrapper = document.getElementById('map-wrapper');
         if (wrapper && wrapper.offsetHeight === 0) {
           wrapper.style.height = '40vh';
+          wrapper.style.minHeight = '200px';
         }
         initMap();
       } else {
@@ -1409,17 +1375,32 @@ function initMap() {
 
   // ===== 確保地圖容器可見 =====
   container.style.display = 'block';
+  container.style.width = '100%';
+  container.style.height = '100%';
 
   // ===== 如果地圖已初始化，直接刷新，不重複創建 =====
   if (mapInitialized && map && map.getContainer()) {
     console.log('🗺️ 地圖已初始化，跳過重複創建，執行刷新');
-    setTimeout(() => {
-      if (map) {
-        map.invalidateSize();
-        updateMapMarkers();
-        updateMapList();
-      }
-    }, 100);
+    // 強制刷新
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (map) {
+          // 先重置容器大小
+          const c = document.getElementById('map-container');
+          if (c) {
+            c.style.display = 'block';
+            c.style.width = '100%';
+            c.style.height = '100%';
+          }
+          map.invalidateSize(true);
+          if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+          }
+          updateMapMarkers();
+          updateMapList();
+        }
+      }, 100);
+    });
     return;
   }
 
