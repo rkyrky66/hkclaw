@@ -864,50 +864,93 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     const AFTER = { map: afterMapView };
 
     function showView(name) {
-      if (CURRENT === 'map' && name !== 'map') {
-        if (map) {
-          map.remove();
-          map = null;
-          mapInitialized = false;
-          markerCluster = null;
-          userMarker = null;
-          console.log('🗺️ 地圖已銷毀');
-        }
-      }
-      if (name === 'map') {
-        mapInitialized = false;
-        if (map) {
-          try { map.remove(); } catch (e) {}
-          map = null;
-          markerCluster = null;
-          userMarker = null;
-        }
-        console.log('🗺️ 進入地圖頁面，強制重置狀態');
-      }
-      CURRENT = name;
-        const main = document.getElementById("main");
-  main.scrollTop = 0;
-  main.classList.remove("view-enter");
+  // ===== 地圖頁面切換：改為隱藏/顯示（不銷毀） =====
+  const mapContainer = document.getElementById('map-container');
+  const mapWrapper = document.getElementById('map-wrapper');
   
-  // ===== 新增：管理地圖頁面的特殊 class =====
-  if (name === 'map') {
-    main.classList.add('map-page');
-  } else {
-    main.classList.remove('map-page');
+  // 如果切換離開地圖頁面，只隱藏地圖容器（不銷毀）
+  if (CURRENT === 'map' && name !== 'map') {
+    if (mapContainer) {
+      mapContainer.style.display = 'none';
+      console.log('🗺️ 地圖已隱藏（保留狀態）');
+    }
   }
   
-  void main.offsetWidth;
-  main.classList.add("view-enter");
-  main.innerHTML = VIEWS[name]();
-      document.querySelectorAll(".nav-btn").forEach(b => {
-        const on = b.getAttribute("data-nav") === name;
-        b.classList.toggle("active", on);
-        b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
-        b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
-      });
-      document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
-      if (AFTER[name]) AFTER[name]();
+  // 如果切換到地圖頁面
+  if (name === 'map') {
+    // 顯示地圖容器
+    if (mapContainer) {
+      mapContainer.style.display = 'block';
     }
+    if (mapWrapper) {
+      mapWrapper.style.display = 'block';
+    }
+    
+    // 如果地圖已初始化，只需刷新大小
+    if (map && mapInitialized) {
+      console.log('🗺️ 地圖已存在，重新整理大小');
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+          // 如果有用戶位置，保持定位
+          if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+          }
+        }
+        updateMapMarkers();
+        updateMapList();
+      }, 200);
+    } else {
+      // 地圖未初始化，需要初始化（首次進入）
+      mapInitialized = false;
+      console.log('🗺️ 首次進入地圖頁面，初始化地圖');
+      // 重置 map 和 markerCluster 變數
+      if (map) {
+        try { map.remove(); } catch (e) {}
+        map = null;
+        markerCluster = null;
+        userMarker = null;
+      }
+    }
+  }
+  
+  // 更新 CURRENT（在 map 初始化判斷之後）
+  CURRENT = name;
+  
+  // ===== 頁面內容渲染 =====
+  const main = document.getElementById("main");
+  if (main) {
+    main.scrollTop = 0;
+    main.classList.remove("view-enter");
+    
+    // 管理地圖頁面的特殊 class
+    if (name === 'map') {
+      main.classList.add('map-page');
+    } else {
+      main.classList.remove('map-page');
+    }
+    
+    void main.offsetWidth;
+    main.innerHTML = VIEWS[name]();
+    main.classList.add("view-enter");
+  }
+  
+  // ===== 導航高亮 =====
+  document.querySelectorAll(".nav-btn").forEach(b => {
+    const on = b.getAttribute("data-nav") === name;
+    b.classList.toggle("active", on);
+    b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
+    b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
+  });
+  
+  // ===== 更新標題 =====
+  document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
+  
+  // ===== 執行頁面進入後邏輯 =====
+  if (AFTER[name]) {
+    AFTER[name]();
+  }
+}
 
     /* ============================================================
        4. 【地圖頁面】核心功能
@@ -953,13 +996,40 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     main.classList.add('map-page');
   }
   
+  // 確保地圖容器可見
+  const mapContainer = document.getElementById('map-container');
+  const mapWrapper = document.getElementById('map-wrapper');
+  if (mapContainer) {
+    mapContainer.style.display = 'block';
+  }
+  if (mapWrapper) {
+    mapWrapper.style.display = 'block';
+  }
+  
+  // 如果地圖已初始化，只刷新大小
+  if (map && mapInitialized) {
+    console.log('🗺️ afterMapView: 地圖已存在，刷新大小');
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize();
+        // 如果有用戶位置，保持定位
+        if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+        }
+      }
+      updateMapMarkers();
+      updateMapList();
+    }, 250);
+    return;
+  }
+  
+  // 地圖未初始化，執行初始化
   requestAnimationFrame(() => {
     setTimeout(() => {
       const container = document.getElementById('map-container');
       if (container) {
-        // 高度由 CSS 控制，只需要確保寬度
         container.style.width = '100%';
-        // 確保地圖容器有高度
+        container.style.display = 'block';
         const wrapper = document.getElementById('map-wrapper');
         if (wrapper && wrapper.offsetHeight === 0) {
           wrapper.style.height = '40vh';
@@ -1278,19 +1348,39 @@ function onSubmitMissingStore(mallName) {
     }
 
     /* ============================================================
-       4b. 地圖核心邏輯
-    ============================================================ */
-    function initMap() {
+   4b. 地圖核心邏輯
+   ============================================================ */
+function initMap() {
   const container = document.getElementById('map-container');
-  if (!container) { console.error('❌ map-container 不存在'); return; }
-  if (mapInitialized) {
-    if (map && map.getContainer()) { console.log('🗺️ 地圖已初始化，跳過'); return; } else {
-      console.log('🗺️ 地圖狀態異常，強制重置');
-      mapInitialized = false;
-      map = null;
-      markerCluster = null;
-      userMarker = null;
-    }
+  if (!container) {
+    console.error('❌ map-container 不存在');
+    return;
+  }
+
+  // ===== 確保地圖容器可見 =====
+  container.style.display = 'block';
+
+  // ===== 如果地圖已初始化，直接刷新，不重複創建 =====
+  if (mapInitialized && map && map.getContainer()) {
+    console.log('🗺️ 地圖已初始化，跳過重複創建，執行刷新');
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize();
+        updateMapMarkers();
+        updateMapList();
+      }
+    }, 100);
+    return;
+  }
+
+  // 如果 map 物件存在但未初始化，清理舊的
+  if (map) {
+    try {
+      map.remove();
+    } catch (e) {}
+    map = null;
+    markerCluster = null;
+    userMarker = null;
   }
 
   let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
@@ -1316,15 +1406,17 @@ function onSubmitMissingStore(mallName) {
       maxZoom: 19,
     }).addTo(map);
 
-    map.on('moveend zoomend', function() { updateMapList(); });
+    map.on('moveend zoomend', function() {
+      updateMapList();
+    });
 
-    // ===== 修改：聚合圈顯示店鋪總數 =====
+    // ===== 聚合圈顯示店鋪總數 =====
     markerCluster = L.markerClusterGroup({
       iconCreateFunction: function(cluster) {
         // 計算所有子標記代表的店鋪總數
         let totalStores = 0;
         const childMarkers = cluster.getAllChildMarkers();
-        
+
         childMarkers.forEach(marker => {
           // 檢查 marker 是否有 totalStores 屬性（商場合併標記）
           if (marker.options && marker.options.totalStores) {
@@ -1335,16 +1427,16 @@ function onSubmitMissingStore(mallName) {
             totalStores += 1;
           }
         });
-        
+
         // 如果總數小於等於 1，不顯示聚合圈（直接顯示單獨標記）
         if (totalStores <= 1) {
-          return L.divIcon({ 
-            html: '', 
+          return L.divIcon({
+            html: '',
             className: '',
             iconSize: L.point(0, 0),
           });
         }
-        
+
         // 返回聚合圈，顯示店鋪總數
         return L.divIcon({
           html: `<div class="marker-cluster-custom">${totalStores}</div>`,
@@ -1359,13 +1451,17 @@ function onSubmitMissingStore(mallName) {
     });
     map.addLayer(markerCluster);
 
-    if (userLocation) { addUserMarker(userLocation.lat, userLocation.lng); }
+    if (userLocation) {
+      addUserMarker(userLocation.lat, userLocation.lng);
+    }
     updateMapMarkers();
     updateMapList();
 
     mapInitialized = true;
     console.log('🗺️ 地圖初始化完成');
-    setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 300);
   } catch (e) {
     console.error('地圖初始化失敗:', e);
     toast('地圖載入失敗，請重新整理', 'pink');
@@ -3304,10 +3400,90 @@ function openCamera(key) {
       videoEl.play();
       window._camStreams[key] = stream;
     })
-    .catch(() => { 
-      toast('無法開啟相機', 'pink');
-      closeCamera(key); 
+    .catch((err) => { 
+      // ===== 修復：詳細的錯誤引導 =====
+      handleCameraError(err, key);
     });
+}
+
+// ===== 新增：相機錯誤處理函數 =====
+function handleCameraError(err, key) {
+  const container = document.getElementById(`${key}-camera-container`);
+  if (!container) return;
+  
+  let errorTitle = '❌ 無法開啟相機';
+  let errorMsg = '';
+  let guideSteps = [];
+  
+  // 根據錯誤類型提供具體引導
+  if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+    errorTitle = '📱 相機權限被拒絕';
+    errorMsg = '為了確保店鋪情報的真實性，需要拍攝現場照片。';
+    guideSteps = [
+      '1️⃣ 開啟手機「設定」應用程式',
+      '2️⃣ 點選「隱私權」或「應用程式管理」',
+      '3️⃣ 點選「相機」',
+      '4️⃣ 找到「Chrome」或「Safari」等瀏覽器',
+      '5️⃣ 將相機權限改為「允許」',
+      '6️⃣ 返回此頁面，點擊下方「重新嘗試」'
+    ];
+  } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+    errorTitle = '📷 找不到相機裝置';
+    errorMsg = '請確認你的裝置有後置鏡頭，且未被其他應用程式佔用。';
+    guideSteps = [
+      '1️⃣ 確認手機有後置鏡頭',
+      '2️⃣ 關閉其他使用相機的 App（如 Instagram、WhatsApp）',
+      '3️⃣ 重新啟動手機後再試',
+      '4️⃣ 如果仍無法使用，可嘗試使用其他瀏覽器'
+    ];
+  } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+    errorTitle = '🔒 相機被其他 App 佔用';
+    errorMsg = '相機可能正在被其他應用程式使用。';
+    guideSteps = [
+      '1️⃣ 關閉所有使用相機的應用程式',
+      '2️⃣ 重新啟動瀏覽器',
+      '3️⃣ 再次點擊「開啟相機拍照」'
+    ];
+  } else {
+    errorTitle = '⚠️ 相機開啟失敗';
+    errorMsg = '發生未知錯誤，請嘗試以下步驟：';
+    guideSteps = [
+      '1️⃣ 重新整理頁面（按 F5 或下拉重整）',
+      '2️⃣ 重新啟動手機',
+      '3️⃣ 嘗試使用其他瀏覽器（Chrome 或 Safari）',
+      '4️⃣ 如果持續失敗，可先提交其他情報'
+    ];
+  }
+  
+  // 建構引導介面
+  container.innerHTML = `
+    <div class="rounded-xl border border-neonpink/50 bg-neonpink/5 p-4 text-left">
+      <div class="flex items-start gap-2">
+        <span class="text-2xl">${errorTitle.split(' ')[0]}</span>
+        <div class="flex-1">
+          <p class="font-bold text-neonpink">${errorTitle}</p>
+          <p class="text-xs text-white/60 mt-1">${errorMsg}</p>
+        </div>
+      </div>
+      
+      <div class="mt-3 rounded-lg bg-black/40 p-3">
+        <p class="text-[10px] font-bold text-gold/70 mb-1">📋 解決步驟：</p>
+        ${guideSteps.map(step => `<p class="text-[10px] text-white/50 leading-relaxed">${step}</p>`).join('')}
+      </div>
+      
+      <div class="mt-3 flex gap-2">
+        <button onclick="openCamera('${key}')" 
+          class="flex-1 rounded-lg bg-neongreen/80 py-2 text-sm font-black text-black">
+          🔄 重新嘗試
+        </button>
+        <button onclick="closeCamera('${key}')" 
+          class="flex-1 rounded-lg border border-white/20 py-2 text-xs text-white/50">
+          暫時跳過
+        </button>
+      </div>
+      <p class="text-[8px] text-white/30 mt-2 text-center">💡 提示：拍照是為了確保情報真實性，建立社群信任</p>
+    </div>
+  `;
 }
 
     function closeCamera(key) {
@@ -3484,28 +3660,81 @@ function clearPhoto(key) {
 
     renderPoints();
 
-    (async function initApp() {
-      await loadCloud();
-      await loadMalls();
-      showView("map");
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            gpsLat = userLocation.lat;
-            gpsLng = userLocation.lng;
-            console.log('✅ 自動定位成功:', userLocation);
-            if (map && mapInitialized) {
-              map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
-              addUserMarker(userLocation.lat, userLocation.lng);
-              updateMapMarkers();
-              updateMapList();
-            }
-          },
-          () => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); }, { enableHighAccuracy: true, timeout: 5000 }
-        );
+(async function initApp() {
+  console.log('🚀 爪爪情報站啟動中...');
+
+  // 載入店鋪資料
+  await loadCloud();
+
+  // 載入商場快取
+  await loadMalls();
+
+  // 顯示地圖頁面（首次進入）
+  showView('map');
+
+  // ===== 自動 GPS 定位 =====
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      // ----- 定位成功 -----
+      (pos) => {
+        userLocation = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        };
+        gpsLat = userLocation.lat;
+        gpsLng = userLocation.lng;
+        console.log('✅ 自動定位成功:', userLocation);
+
+        // ===== 不管地圖是否初始化，都更新位置 =====
+        if (map && mapInitialized) {
+          // 地圖已初始化：更新視圖和標記
+          map.flyTo([userLocation.lat, userLocation.lng], 15, {
+            duration: 1.2
+          });
+          addUserMarker(userLocation.lat, userLocation.lng);
+          updateMapMarkers();
+          updateMapList();
+        } else {
+          // 地圖未初始化：保存位置，等待地圖初始化時使用
+          console.log('📍 定位成功，等待地圖初始化');
+          // 如果當前在地圖頁面，觸發 afterMapView 重新整理
+          if (CURRENT === 'map') {
+            afterMapView();
+          }
+        }
+      },
+      // ----- 定位失敗 -----
+      (err) => {
+        console.log('⚠️ 自動定位失敗，使用預設香港中心點');
+        console.log('   └─ 錯誤原因:', err.message || err.code);
+        // 如果定位失敗但地圖已存在，保持預設位置
+        if (map && mapInitialized) {
+          // 保持現有位置，不做變更
+        }
+      }, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 60000 // 快取 60 秒內的位置
       }
-    })();
+    );
+  } else {
+    console.log('⚠️ 此裝置不支援 GPS 定位');
+  }
+
+  // ===== 註冊 Service Worker（PWA） =====
+  if ('serviceWorker' in navigator) {
+    try {
+      const swCode =
+        `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
+      navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" })));
+      console.log('✅ Service Worker 已註冊');
+    } catch (e) {
+      console.log('⚠️ Service Worker 註冊失敗:', e.message);
+    }
+  }
+
+  console.log('🚀 爪爪情報站啟動完成！');
+})();
 
     // PWA Manifest
     (function injectManifest() {
