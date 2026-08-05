@@ -1811,7 +1811,11 @@ function buildStoreContent(s, { fav, hasNav, currentIndex, mallStores, mallName,
       ${s.has_e_coin !== undefined ? `<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">${s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣'}</span>` : ''}
       ${s.address_detail ? `<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ${s.address_detail}</span>` : ''}
     </div>
-    
+        <!-- 認證記錄 -->
+    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">
+      ${s.verification_count > 0 ? `<span class="text-white/40">🔍 已獲 ${s.verification_count} 個認證</span>` : ''}
+      ${s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : ''}
+    </div>
     <!-- 機台列表 -->
     <div class="mt-4 flex-1 overflow-y-auto">
       <div class="flex items-center justify-between">
@@ -2178,26 +2182,45 @@ function backToMall() {
     }
 
     async function submitMachine(sid) {
-      const photoBlob = window._cam?.mf;
-      if (!photoBlob) return toast("請先拍照", "pink");
-      let photoUrl = window._camPreview?.mf || '';
-      if (CLOUD_ON) {
-        try {
-          const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
-          photoUrl = await uploadImage(file, 'machines');
-        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-      }
-      const feats = [...document.querySelectorAll('#mf-feats .chip-active-green')].map(b => b.dataset.tag);
-      if (!feats.length) return toast("請至少選一個台性標籤", "pink");
-      const s = STORES.find(x => x.id === sid);
-      s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats, plays: [...document
-          .querySelectorAll('#mf-plays .chip-active-green')
-        ].map(b => b.dataset.tag), prize: "台主自報", updated: now(), photo: photoUrl });
-      cloudInsert("claw_machines", { store_id: sid, feats, photo: photoUrl });
-      toast("機台已上架", "green");
-      closeModal();
-      openStore(sid);
-    }
+  const photoBlob = window._cam?.mf;
+  if (!photoBlob) return toast("請先拍照", "pink");
+  let photoUrl = window._camPreview?.mf || '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'machines');
+    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+  }
+  const feats = [...document.querySelectorAll('#mf-feats .chip-active-green')].map(b => b.dataset.tag);
+  if (!feats.length) return toast("請至少選一個台性標籤", "pink");
+  const s = STORES.find(x => x.id === sid);
+  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats, plays: [...document
+      .querySelectorAll('#mf-plays .chip-active-green')
+    ].map(b => b.dataset.tag), prize: "台主自報", updated: now(), photo: photoUrl });
+  cloudInsert("claw_machines", { store_id: sid, feats, photo: photoUrl });
+  toast("機台已上架", "green");
+  
+  // ===== 新增：檢查收藏此店的用戶並發送通知 =====
+  const followers = STATE.favStores.filter(storeId => storeId === sid);
+  if (followers.length > 0) {
+    // 儲存通知到 STATE
+    if (!STATE.notifications) STATE.notifications = [];
+    STATE.notifications.unshift({
+      id: 'n' + Date.now(),
+      type: 'machine_update',
+      store_id: sid,
+      store_name: s.name,
+      message: `📢 ${s.name} 有新的機台上架！`,
+      read: false,
+      created_at: now()
+    });
+    save();
+    toast(`📢 已通知 ${followers.length} 位收藏者`, 'gold');
+  }
+  
+  closeModal();
+  openStore(sid);
+}
 
     function toggleFav(type, id) {
       const key = type === "store" ? "favStores" : "favMachines";
@@ -2376,6 +2399,7 @@ function retryVerifyGPS() {
 }
 
 // ----- 提交認證 -----
+// ----- 提交認證 -----
 async function submitVerification(storeId) {
   const s = STORES.find(x => x.id === storeId);
   if (!s) {
@@ -2396,6 +2420,21 @@ async function submitVerification(storeId) {
     return;
   }
   
+  // ===== 新增：檢查認證人 GPS 是否在店鋪附近 =====
+  if (s.lat && s.lng) {
+    const distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
+    // 限制在 200 米內（香港市區店鋪密集，200 米合理）
+    const MAX_DISTANCE_KM = 0.2;
+    if (distance > MAX_DISTANCE_KM) {
+      toast(`⚠️ 你距離該店鋪 ${(distance * 1000).toFixed(0)} 米，請在 200 米內認證`, 'pink');
+      return;
+    }
+    console.log(`📍 認證距離：${(distance * 1000).toFixed(0)} 米（限制 200 米）`);
+  } else {
+    // 如果店鋪沒有 GPS 座標（舊資料），允許認證但記錄警告
+    console.log('⚠️ 店鋪無 GPS 座標，跳過距離檢查');
+  }
+  
   // 上傳照片
   let photoUrl = window._camPreview?.vf || '';
   if (CLOUD_ON) {
@@ -2407,6 +2446,7 @@ async function submitVerification(storeId) {
       return;
     }
   }
+  
   
   // 保存認證記錄
   const verification = {
@@ -2473,7 +2513,7 @@ async function submitVerification(storeId) {
 //   補充資料功能
 // ============================================================
 
-// ----- 打開補充資料表單 -----
+// ===== 打開補充資料表單 =====
 function openSupplementForm(storeId) {
   const s = STORES.find(x => x.id === storeId);
   if (!s) {
@@ -2482,12 +2522,22 @@ function openSupplementForm(storeId) {
   }
   
   // 檢查哪些欄位已經被補充
+  const isStreetStore = s.type !== 'mall' && s.mall === ''; // 地鋪
   const existing = {
     address: s.address_detail && s.address_detail !== '',
     size: s.size && s.size !== '中',
     staff: s.has_staff !== undefined && s.has_staff !== null,
     coin: s.has_e_coin !== undefined && s.has_e_coin !== null
   };
+  
+  // 計算已完成數量
+  const completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
+  const allCompleted = completedCount === 4;
+  
+  // 如果是商場鋪，地址自動視為已完成
+  const isMallStore = s.type === 'mall' || s.mall !== '';
+  const addressRequired = isStreetStore;
+  const addressCompleted = isMallStore ? true : existing.address;
   
   openModal(`
     <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
@@ -2499,39 +2549,47 @@ function openSupplementForm(storeId) {
       <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
         <p class="text-sm font-bold text-gold">${s.name}</p>
         <p class="text-xs text-white/40">${s.region} · ${s.addr}</p>
-        <p class="text-xs text-white/30 mt-1">每補充一項可獲得 <span class="text-neongreen font-bold">+5 積分</span></p>
+        <div class="mt-2 flex items-center gap-3 text-xs">
+          <span class="text-white/40">📊 完成進度：</span>
+          <span class="text-neongreen font-bold">${allCompleted ? '✅ 已完成' : `${completedCount}/4`}</span>
+        </div>
+        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>
       </div>
       
-      <!-- 1. 詳細地址（地鋪限定） -->
+      <!-- 1. 詳細地址（僅地鋪顯示） -->
+      ${addressRequired ? `
       <div>
         <label class="text-xs font-bold text-gold flex items-center gap-2">
-          📍 詳細地址
-          ${s.region === '商場鋪' ? '<span class="text-[9px] text-white/30">（商場鋪自動使用商場地址）</span>' : '<span class="text-[9px] text-white/30">（地鋪專用）</span>'}
-          ${existing.address ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : ''}
+          📍 詳細地址 <span class="text-neonpink">（必填）</span>
+          ${addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : ''}
         </label>
         <input id="sf-address" placeholder="例如：西洋菜南街 2A 好望角大廈" 
           class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold"
           value="${s.address_detail || ''}"
-          ${existing.address ? 'disabled' : ''} />
-        ${!existing.address ? `<button onclick="submitSupplement('${s.id}', 'address')" class="mt-1 text-xs text-neongreen hover:text-neongreen/70 transition-colors">+ 提交（+5 分）</button>` : ''}
+          ${addressCompleted ? 'disabled style="opacity:0.5;"' : ''} />
       </div>
+      ` : `
+      <div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">
+        🏬 商場鋪自動使用商場地址，無需補充
+      </div>
+      `}
       
       <!-- 2. 規模 -->
       <div>
         <label class="text-xs font-bold text-gold flex items-center gap-2">
-          📏 規模
+          📏 規模 <span class="text-neonpink">（必填）</span>
           ${existing.size ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : ''}
         </label>
         <div class="mt-1 flex gap-2">
-          <button onclick="selectSupplementSize('${s.id}', 'small')" 
+          <button onclick="selectSizeUI('small')" 
             class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             小型 (6台以下)
           </button>
-          <button onclick="selectSupplementSize('${s.id}', 'medium')" 
+          <button onclick="selectSizeUI('medium')" 
             class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             中型 (7-12台)
           </button>
-          <button onclick="selectSupplementSize('${s.id}', 'large')" 
+          <button onclick="selectSizeUI('large')" 
             class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             大型 (12台以上)
           </button>
@@ -2541,16 +2599,16 @@ function openSupplementForm(storeId) {
       <!-- 3. 有沒有場務 -->
       <div>
         <label class="text-xs font-bold text-gold flex items-center gap-2">
-          👤 場務
+          👤 場務 <span class="text-neonpink">（必填）</span>
           ${existing.staff ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : ''}
         </label>
         <div class="mt-1 flex gap-2">
-          <button onclick="submitSupplement('${s.id}', 'staff_true')" 
-            class="flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
+          <button onclick="selectStaffUI(true)" 
+            class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             👤 有場務
           </button>
-          <button onclick="submitSupplement('${s.id}', 'staff_false')" 
-            class="flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
+          <button onclick="selectStaffUI(false)" 
+            class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             👤 無場務
           </button>
         </div>
@@ -2559,51 +2617,77 @@ function openSupplementForm(storeId) {
       <!-- 4. 有沒有電子兌幣 -->
       <div>
         <label class="text-xs font-bold text-gold flex items-center gap-2">
-          🪙 電子兌幣
+          🪙 電子兌幣 <span class="text-neonpink">（必填）</span>
           ${existing.coin ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : ''}
         </label>
         <div class="mt-1 flex gap-2">
-          <button onclick="submitSupplement('${s.id}', 'coin_true')" 
-            class="flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
+          <button onclick="selectCoinUI(true)" 
+            class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             🪙 有電子兌幣
           </button>
-          <button onclick="submitSupplement('${s.id}', 'coin_false')" 
-            class="flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
+          <button onclick="selectCoinUI(false)" 
+            class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ${s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40'}">
             🪙 無電子兌幣
           </button>
         </div>
       </div>
-    </div>
-    
-    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10 text-center text-[10px] text-white/30">
-      💡 補充資料越多，店鋪資訊越完整，幫助其他夾客找到好店！
+      
+      <!-- 提交按鈕（一次性提交全部） -->
+      <button onclick="submitAllSupplement('${s.id}')" 
+        id="sf-submit-btn"
+        class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
+        請完成所有必填欄位
+      </button>
     </div>
   `);
   
-  // 如果規模已存在，高亮對應按鈕
-  if (s.size) {
-    document.querySelectorAll('.sf-size-btn').forEach(btn => {
-      btn.classList.remove('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
-      btn.classList.add('border-white/20', 'text-white/45');
-      if (btn.textContent.includes(s.size === 'small' ? '小型' : s.size === 'large' ? '大型' : '中型')) {
-        btn.classList.remove('border-white/20', 'text-white/45');
-        btn.classList.add('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
+  // 初始化 UI 狀態
+  window._sfSelections = {
+    size: s.size || null,
+    staff: s.has_staff !== undefined && s.has_staff !== null ? s.has_staff : null,
+    coin: s.has_e_coin !== undefined && s.has_e_coin !== null ? s.has_e_coin : null
+  };
+  
+  // 監聽表單完成狀態
+  const checkInterval = setInterval(() => {
+    const isStreet = s.type !== 'mall' && s.mall === '';
+    const addrInput = document.getElementById('sf-address');
+    const hasAddress = isStreet ? (addrInput && addrInput.value.trim() !== '') : true;
+    const hasSize = window._sfSelections.size !== null;
+    const hasStaff = window._sfSelections.staff !== null;
+    const hasCoin = window._sfSelections.coin !== null;
+    
+    // 檢查是否已補充（如果是已補充的欄位，視為已完成）
+    const addressDone = isStreet ? (s.address_detail && s.address_detail !== '') || hasAddress : true;
+    const sizeDone = (s.size && s.size !== '中') || hasSize;
+    const staffDone = (s.has_staff !== undefined && s.has_staff !== null) || hasStaff;
+    const coinDone = (s.has_e_coin !== undefined && s.has_e_coin !== null) || hasCoin;
+    
+    const allDone = addressDone && sizeDone && staffDone && coinDone;
+    const btn = document.getElementById('sf-submit-btn');
+    if (btn) {
+      if (allDone) {
+        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+        btn.disabled = false;
+        btn.innerHTML = '✅ 提交全部資料（+15 積分）';
+      } else {
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.disabled = true;
+        btn.innerHTML = `請完成所有必填欄位 (${[addressDone, sizeDone, staffDone, coinDone].filter(Boolean).length}/4)`;
       }
-    });
-  }
+    }
+  }, 300);
+  
+  setTimeout(() => clearInterval(checkInterval), 60000);
 }
 
-// ----- 選擇規模（先 UI 高亮，再提交） -----
-function selectSupplementSize(storeId, size) {
-  const s = STORES.find(x => x.id === storeId);
-  if (!s) return;
-  
-  // UI 高亮
+// ----- UI 選擇輔助函數 -----
+function selectSizeUI(size) {
+  window._sfSelections.size = size;
   document.querySelectorAll('.sf-size-btn').forEach(btn => {
     btn.classList.remove('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
     btn.classList.add('border-white/20', 'text-white/45');
   });
-  
   const label = size === 'small' ? '小型' : size === 'large' ? '大型' : '中型';
   document.querySelectorAll('.sf-size-btn').forEach(btn => {
     if (btn.textContent.includes(label)) {
@@ -2611,129 +2695,150 @@ function selectSupplementSize(storeId, size) {
       btn.classList.add('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
     }
   });
-  
-  // 提交
-  submitSupplement(storeId, `size_${size}`);
 }
 
-// ----- 提交補充 -----
-function submitSupplement(storeId, type) {
+function selectStaffUI(value) {
+  window._sfSelections.staff = value;
+  document.querySelectorAll('.sf-staff-btn').forEach(btn => {
+    btn.classList.remove('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
+    btn.classList.add('border-white/20', 'text-white/45');
+  });
+  const label = value ? '有場務' : '無場務';
+  document.querySelectorAll('.sf-staff-btn').forEach(btn => {
+    if (btn.textContent.includes(label)) {
+      btn.classList.remove('border-white/20', 'text-white/45');
+      btn.classList.add('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
+    }
+  });
+}
+
+function selectCoinUI(value) {
+  window._sfSelections.coin = value;
+  document.querySelectorAll('.sf-coin-btn').forEach(btn => {
+    btn.classList.remove('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
+    btn.classList.add('border-white/20', 'text-white/45');
+  });
+  const label = value ? '有電子兌幣' : '無電子兌幣';
+  document.querySelectorAll('.sf-coin-btn').forEach(btn => {
+    if (btn.textContent.includes(label)) {
+      btn.classList.remove('border-white/20', 'text-white/45');
+      btn.classList.add('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
+    }
+  });
+}
+
+// ----- 一次性提交全部補充資料 -----
+function submitAllSupplement(storeId) {
   const s = STORES.find(x => x.id === storeId);
   if (!s) {
     toast('找不到該店鋪', 'pink');
     return;
   }
   
-  let field = '';
-  let value = '';
-  let displayValue = '';
-  
-  switch(type) {
-    case 'address':
-      const addrInput = document.getElementById('sf-address');
-      if (!addrInput) return;
-      value = addrInput.value.trim();
-      if (!value) {
-        toast('請輸入地址', 'pink');
-        return;
-      }
-      if (s.address_detail && s.address_detail !== '') {
-        toast('此店鋪已有地址資料', 'gold');
-        return;
-      }
-      field = 'address_detail';
-      displayValue = value;
-      s.address_detail = value;
-      break;
-      
-    case 'size_small':
-    case 'size_medium':
-    case 'size_large':
-      if (s.size && s.size !== '中') {
-        toast('此店鋪已有規模資料', 'gold');
-        return;
-      }
-      field = 'size';
-      value = type === 'size_small' ? 'small' : type === 'size_large' ? 'large' : 'medium';
-      displayValue = value === 'small' ? '小型 (6台以下)' : value === 'large' ? '大型 (12台以上)' : '中型 (7-12台)';
-      s.size = value;
-      break;
-      
-    case 'staff_true':
-      if (s.has_staff !== undefined && s.has_staff !== null) {
-        toast('此店鋪已有場務資料', 'gold');
-        return;
-      }
-      field = 'has_staff';
-      value = true;
-      displayValue = '有場務';
-      s.has_staff = true;
-      break;
-      
-    case 'staff_false':
-      if (s.has_staff !== undefined && s.has_staff !== null) {
-        toast('此店鋪已有場務資料', 'gold');
-        return;
-      }
-      field = 'has_staff';
-      value = false;
-      displayValue = '無場務';
-      s.has_staff = false;
-      break;
-      
-    case 'coin_true':
-      if (s.has_e_coin !== undefined && s.has_e_coin !== null) {
-        toast('此店鋪已有電子兌幣資料', 'gold');
-        return;
-      }
-      field = 'has_e_coin';
-      value = true;
-      displayValue = '有電子兌幣';
-      s.has_e_coin = true;
-      break;
-      
-    case 'coin_false':
-      if (s.has_e_coin !== undefined && s.has_e_coin !== null) {
-        toast('此店鋪已有電子兌幣資料', 'gold');
-        return;
-      }
-      field = 'has_e_coin';
-      value = false;
-      displayValue = '無電子兌幣';
-      s.has_e_coin = false;
-      break;
-      
-    default:
-      return;
+  // 收集所有資料
+  const isStreet = s.type !== 'mall' && s.mall === '';
+  let address = '';
+  if (isStreet) {
+    const addrInput = document.getElementById('sf-address');
+    if (addrInput) address = addrInput.value.trim();
   }
   
-  // 更新店鋪補充計數
+  const size = window._sfSelections.size;
+  const staff = window._sfSelections.staff;
+  const coin = window._sfSelections.coin;
+  
+  // 驗證（地鋪需要地址）
+  if (isStreet && !address) {
+    toast('請輸入詳細地址', 'pink');
+    return;
+  }
+  if (!size) {
+    toast('請選擇規模', 'pink');
+    return;
+  }
+  if (staff === null || staff === undefined) {
+    toast('請選擇是否有場務', 'pink');
+    return;
+  }
+  if (coin === null || coin === undefined) {
+    toast('請選擇是否有電子兌幣', 'pink');
+    return;
+  }
+  
+  // 檢查是否已補充（避免重複提交）
+  const hasAddress = s.address_detail && s.address_detail !== '';
+  const hasSize = s.size && s.size !== '中';
+  const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+  const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+  
+  if ((!isStreet || hasAddress) && hasSize && hasStaff && hasCoin) {
+    toast('此店鋪資料已完整，無需重複補充', 'gold');
+    return;
+  }
+  
+  // 更新店鋪資料
+  if (isStreet && address) {
+    s.address_detail = address;
+  }
+  s.size = size;
+  s.has_staff = staff;
+  s.has_e_coin = coin;
   s.supplement_count = (s.supplement_count || 0) + 1;
   
   // 儲存到雲端
   if (CLOUD_ON) {
+  const updates = {};
+  if (isStreet && address) updates.address_detail = address;
+  updates.size = size;
+  updates.has_staff = staff;
+  updates.has_e_coin = coin;
+  cloudInsert('claw_stores', { id: storeId, ...updates });
+  
+  // 記錄每項補充（全部加入 user_name）
+  if (isStreet && address) {
     cloudInsert('store_supplements', {
       store_id: storeId,
       user_id: STATE.user.device,
-      supplement_type: field,
-      old_value: '',
-      new_value: typeof value === 'string' ? value : String(value)
+      user_name: STATE.user.name,  // ← 新增
+      supplement_type: 'address_detail',
+      new_value: address
     });
-    // 更新店鋪
-    cloudInsert('claw_stores', { id: storeId, [field]: value });
   }
+  cloudInsert('store_supplements', {
+    store_id: storeId,
+    user_id: STATE.user.device,
+    user_name: STATE.user.name,  // ← 新增
+    supplement_type: 'size',
+    new_value: size
+  });
+  cloudInsert('store_supplements', {
+    store_id: storeId,
+    user_id: STATE.user.device,
+    user_name: STATE.user.name,  // ← 新增
+    supplement_type: 'has_staff',
+    new_value: String(staff)
+  });
+  cloudInsert('store_supplements', {
+    store_id: storeId,
+    user_id: STATE.user.device,
+    user_name: STATE.user.name,  // ← 新增
+    supplement_type: 'has_e_coin',
+    new_value: String(coin)
+  });
+}
   
-  // 獎勵積分 + 成就統計
-  addPoints(5, `補充資料：${displayValue}`);
+  // 獎勵積分 + 成就統計（一次過 +15 分）
+  addPoints(15, '補充資料完成');
   updateAchievementStat('supplement');
   
-  // 檢查完美檔案成就（所有 4 項是否都已填寫）
+  // 檢查完美檔案
   checkPerfectFile(storeId);
   
   // 更新連續天數
   updateStreak();
   
-  toast(`✅ 已補充「${displayValue}」+5 分`, 'green');
+  toast('✅ 全部資料補充完成！獲得 15 積分', 'green');
+  closeModal();
   
   // 刷新店鋪詳情
   setTimeout(() => {
@@ -2819,43 +2924,116 @@ function getRegionStat(region) {
   return regionMap[region] || null;
 }
     function viewTask() {
-      const d = daily();
-      return `
-        <div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">
-          <p class="text-xs text-white/50">目前積分</p>
-          <p class="text-3xl font-black text-gold neon-gold">💎 ${STATE.points}</p>
-          <p class="mt-1 text-[11px] text-neongreen">完成現場任務賺積分</p>
-        </div>
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">🧭 遊歷</h3>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div><p class="text-sm font-bold text-white/90">提交新店鋪情報</p><p class="text-[11px] text-white/50">現拍店鋪 + GPS</p></div>
-              <button onclick="openIntelForm()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+10</button>
-            </div>
+  const d = daily();
+  const levelInfo = getUserLevel();
+  
+  return `
+    <div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">
+      <p class="text-xs text-white/50">目前積分</p>
+      <p class="text-3xl font-black text-gold neon-gold">💎 ${STATE.points}</p>
+      <div class="mt-1 flex items-center gap-2 text-[11px]">
+        <span class="text-white/40">🏅 ${levelInfo.title}</span>
+        <span class="text-white/30">|</span>
+        <span class="text-neongreen">Lv.${levelInfo.level}</span>
+      </div>
+    </div>
+    
+    <!-- ===== 任務 1：提交新店鋪 ===== -->
+    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">🧭 遊歷</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+          <div>
+            <p class="text-sm font-bold text-white/90">提交新店鋪情報</p>
+            <p class="text-[11px] text-white/50">現拍店鋪 + GPS</p>
           </div>
+          <button onclick="openIntelForm()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+10</button>
         </div>
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neonpink neon-pink">🔍 審核</h3>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div><p class="text-sm font-bold text-white/90">現拍審核任務</p><p class="text-[11px] text-white/50">今日 ${d.review}/3</p></div>
-              <button onclick="doReview()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+10</button>
-            </div>
-            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div><p class="text-sm font-bold text-white/90">日常打卡</p><p class="text-[11px] text-white/50">今日 ${d.checkin}/6</p></div>
-              <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
-            </div>
+      </div>
+    </div>
+    
+    <!-- ===== 任務 2：認證店鋪 ===== -->
+    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neonpink neon-pink">🔍 審核</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+          <div>
+            <p class="text-sm font-bold text-white/90">認證店鋪</p>
+            <p class="text-[11px] text-white/50">現場拍照 + GPS 認證</p>
+            <p class="text-[10px] text-white/30">今日 ${d.review}/3 次</p>
           </div>
+          <button onclick="openVerifyTask()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+15</button>
         </div>
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">⚡ 實時</h3>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div><p class="text-sm font-bold text-white/90">發布出貨照</p><p class="text-[11px] text-white/50">今日 ${d.live}/5</p></div>
-              <button onclick="showView('live')" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
-            </div>
+      </div>
+    </div>
+    
+    <!-- ===== 任務 3：日常打卡 ===== -->
+    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+          <div>
+            <p class="text-sm font-bold text-white/90">日常打卡</p>
+            <p class="text-[11px] text-white/50">每日簽到</p>
+            <p class="text-[10px] text-white/30">今日 ${d.checkin}/1 次</p>
           </div>
+          <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
         </div>
-      `;
-    }
+      </div>
+    </div>
+    
+    <!-- ===== 任務 4：補充資料 ===== -->
+    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📝 完善</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+          <div>
+            <p class="text-sm font-bold text-white/90">完善店鋪資料</p>
+            <p class="text-[11px] text-white/50">補充店鋪詳細資訊</p>
+          </div>
+          <button onclick="openSupplementTask()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+15</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ----- 任務輔助函數：打開認證任務 -----
+function openVerifyTask() {
+  // 找一間未認證的店鋪讓用戶認證
+  const pendingStores = STORES.filter(s => s.verified !== 'verified' && s.submitted_by !== STATE.user.device);
+  if (pendingStores.length === 0) {
+    toast('🎉 所有店鋪都已認證！', 'gold');
+    return;
+  }
+  // 隨機選一間
+  const target = pendingStores[Math.floor(Math.random() * pendingStores.length)];
+  toast(`📍 請認證「${target.name}」`, 'green');
+  openStore(target.id);
+  // 延遲打開認證表單
+  setTimeout(() => {
+    openVerifyForm(target.id);
+  }, 800);
+}
+
+// ----- 任務輔助函數：打開補充任務 -----
+function openSupplementTask() {
+  // 找一間資料不完整的店鋪
+  const incompleteStores = STORES.filter(s => {
+    const hasAddress = s.address_detail && s.address_detail !== '';
+    const hasSize = s.size && s.size !== '中';
+    const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+    const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+    return !(hasAddress && hasSize && hasStaff && hasCoin);
+  });
+  if (incompleteStores.length === 0) {
+    toast('🎉 所有店鋪資料都已完整！', 'gold');
+    return;
+  }
+  // 隨機選一間
+  const target = incompleteStores[Math.floor(Math.random() * incompleteStores.length)];
+  toast(`📝 請補充「${target.name}」的資料`, 'green');
+  openStore(target.id);
+  setTimeout(() => {
+    openSupplementForm(target.id);
+  }, 800);
+}
 // ===== 表單狀態變量 =====
 let intelStep = 1;
 let selectedRegion = '';
@@ -3667,7 +3845,8 @@ function submitIntel() {
       setTimeout(() => updateAchievementStat(regionStat), 200);
     }
   }
-  
+    // ===== 新增：提交店鋪時觸發連續貢獻 =====
+  updateStreak();
   toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
   addPoints(10, '提交店鋪情報');
   closeModal();
@@ -4021,36 +4200,371 @@ function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已�
 
 
     function viewLive() {
-      return `
-        <div class="flex gap-2">
-          <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客</button>
-          <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主</button>
-        </div>
-        <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
-          ${liveTrack === "player" ? "🎯 現拍鎖死＋GPS · +5分" : "🏬 可上傳海報 · 連結店鋪引流"}
-        </div>
-        <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
-          ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
-        </button>
-        <div class="mt-4 columns-2 gap-3 [&>*]:mb-3">
-          ${LIVE.filter(x => x.track === liveTrack && x.expire > now()).map(p => `
-            <div class="break-inside-avoid rounded-2xl border border-${p.track === "player" ? 'neongreen' : 'neonpink'}/40 bg-zinc-950 p-3">
-              ${p.photo ? `<img src="${p.photo}" class="h-28 w-full rounded-lg object-cover" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${p.track === "player" ? "🎉" : "🖼️"}</div>`}
-              <p class="mt-2 text-xs text-white/80">${p.prize}</p>
-              <p class="mt-1 text-[9px] text-white/40">${timeAgo(p.ts)}</p>
+  // 獲取有效貼文
+  const allPosts = STATE.livePosts || [];
+  const validPosts = allPosts.filter(p => p.expire > now());
+  
+  return `
+    <div class="flex gap-2">
+      <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客</button>
+      <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主</button>
+    </div>
+    
+    <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
+      ${liveTrack === "player" 
+        ? "🎯 分享你的夾娃娃戰果！拍照上傳，讓大家羨慕一下！+5 分" 
+        : "🏬 台主專屬宣傳區！上傳海報/活動照，吸引更多夾客！+5 分"}
+    </div>
+    
+    <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" 
+      class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
+      ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
+    </button>
+    
+    <div class="mt-4 space-y-3">
+      ${validPosts.filter(x => x.track === liveTrack).length > 0 
+        ? validPosts.filter(x => x.track === liveTrack).map(p => `
+          <div class="rounded-2xl border border-${p.track === "player" ? 'neongreen' : 'neonpink'}/30 bg-zinc-950 p-3">
+            ${p.photo ? `<img src="${p.photo}" class="h-48 w-full rounded-lg object-cover" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${p.track === "player" ? "🎉" : "🖼️"}</div>`}
+            <div class="mt-2 flex items-start justify-between">
+              <div>
+                <p class="text-sm text-white/80">${p.content || p.prize || '無內容'}</p>
+                ${p.store_name ? `<p class="text-xs text-gold/60 mt-1">📍 ${p.store_name}</p>` : ''}
+              </div>
+              <span class="text-[10px] text-white/30 whitespace-nowrap ml-2">${timeAgo(p.ts)}</span>
             </div>
-          `).join("") || `<p class="text-center text-sm text-white/40">暫無戰報</p>`}
+            <div class="mt-1 flex items-center gap-3 text-[10px] text-white/30">
+              <span>👤 ${p.author || '匿名'}</span>
+              <span>❤️ ${p.likes || 0}</span>
+              <span>💬 ${p.comments || 0}</span>
+            </div>
+          </div>
+        `).join('') 
+        : `<p class="text-center text-sm text-white/40 py-6">暫無戰報，快來發布第一個！</p>`}
+    </div>
+  `;
+}
+
+// ----- 發布出貨戰報（夾客） -----
+function openPlayerPost() {
+  // 找用戶收藏的店鋪或最近瀏覽的店鋪
+  const favStores = STORES.filter(s => STATE.favStores.includes(s.id));
+  const storeOptions = favStores.length > 0 ? favStores : STORES.slice(0, 5);
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
+      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+    </div>
+    
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
+        <p class="text-xs text-white/40">分享你的夾娃娃戰果，讓大家羨慕一下！</p>
+        <p class="text-xs text-neongreen mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
+      </div>
+      
+      <!-- 選擇店鋪 -->
+      <div>
+        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
+        <select id="lp-store-select" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gold">
+          ${storeOptions.map(s => `<option value="${s.id}">${s.name} (${s.region})</option>`).join('')}
+        </select>
+      </div>
+      
+      <!-- 內容 -->
+      <div>
+        <label class="text-xs font-bold text-gold">📝 內容 <span class="text-white/40">（選填）</span></label>
+        <textarea id="lp-content" placeholder="例如：10 抽爆機山崩！" 
+          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none"
+          rows="2"></textarea>
+      </div>
+      
+      <!-- 強制拍照 -->
+      <div>
+        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>
+        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+          <button onclick="openCamera('lp')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+          <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
         </div>
-      `;
+      </div>
+    </div>
+    
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="submitPlayerPost()" 
+        id="lp-submit-btn"
+        class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
+        請拍照並選擇店鋪
+      </button>
+    </div>
+  `);
+  
+  // 監聽表單狀態
+  const checkInterval = setInterval(() => {
+    const photoReady = window._camPreview && window._camPreview.lp;
+    const storeSelected = document.getElementById('lp-store-select')?.value;
+    const btn = document.getElementById('lp-submit-btn');
+    if (btn) {
+      if (photoReady && storeSelected) {
+        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+        btn.disabled = false;
+        btn.innerHTML = '✅ 發布戰報（+5 分）';
+      } else {
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.disabled = true;
+        btn.innerHTML = photoReady ? (storeSelected ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+      }
     }
+  }, 300);
+  setTimeout(() => clearInterval(checkInterval), 30000);
+}
 
-    function setLiveTrack(t) { liveTrack = t;
-      showView("live"); }
+// ----- 提交出貨戰報 -----
+async function submitPlayerPost() {
+  const storeId = document.getElementById('lp-store-select')?.value;
+  if (!storeId) {
+    toast('請選擇店鋪', 'pink');
+    return;
+  }
+  
+  const photoBlob = window._cam?.lp;
+  if (!photoBlob) {
+    toast('請先拍照', 'pink');
+    return;
+  }
+  
+  const content = document.getElementById('lp-content')?.value.trim() || '🎉 出貨成功！';
+  const store = STORES.find(s => s.id === storeId);
+  
+  // 上傳照片
+  let photoUrl = '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'posts');
+    } catch (e) {
+      toast('圖片上傳失敗', 'pink');
+      return;
+    }
+  }
+  
+  // 儲存貼文
+  const post = {
+    id: 'p' + Date.now(),
+    track: 'player',
+    store_id: storeId,
+    store_name: store ? store.name : '',
+    content: content,
+    photo: photoUrl,
+    author: STATE.user.name,
+    ts: now(),
+    expire: now() + DAY,
+    likes: 0,
+    comments: 0
+  };
+  
+  if (!STATE.livePosts) STATE.livePosts = [];
+  STATE.livePosts.unshift(post);
+  save();
+  
+  // 獎勵
+  addPoints(5, '發布出貨戰報');
+  updateStreak();
+  
+  toast('✅ 戰報發布成功！+5 分', 'green');
+  closeModal();
+  showView('live');
+}
 
-    function openPlayerPost() { toast('功能開發中', 'gold'); }
+// ----- 發布台主宣傳 -----
+function openOwnerPost() {
+  // 找用戶提交的店鋪（台主模式）
+  const myStores = STORES.filter(s => s.submitted_by === STATE.user.device);
+  
+  if (myStores.length === 0) {
+    toast('你還沒有提交過店鋪，無法使用台主宣傳功能', 'gold');
+    return;
+  }
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">
+      <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+    </div>
+    
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+      <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">
+        <p class="text-xs text-white/40">宣傳你的店鋪和機台，吸引更多夾客！</p>
+        <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
+      </div>
+      
+      <!-- 選擇店鋪 -->
+      <div>
+        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
+        <select id="lo-store-select" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gold">
+          ${myStores.map(s => `<option value="${s.id}">${s.name} (${s.region})</option>`).join('')}
+        </select>
+      </div>
+      
+      <!-- 內容 -->
+      <div>
+        <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>
+        <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" 
+          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none"
+          rows="2"></textarea>
+      </div>
+      
+      <!-- 強制拍照 -->
+      <div>
+        <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>
+        <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">
+          <button onclick="openCamera('lo')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+          <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+        </div>
+      </div>
+      
+      <!-- 付費選項 -->
+      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+        <label class="text-xs font-bold text-gold flex items-center gap-2">
+          🔗 連結機台資料
+          <span class="text-[9px] text-white/30">（扣 20 積分，貼文永久顯示在機台頁）</span>
+        </label>
+        <div class="mt-2 flex gap-2">
+          <button onclick="toggleLinkMode(true)" id="lo-link-on" 
+            class="flex-1 rounded-lg border border-neongreen/50 bg-neongreen/20 py-1.5 text-xs text-neongreen">
+            ✅ 啟用
+          </button>
+          <button onclick="toggleLinkMode(false)" id="lo-link-off" 
+            class="flex-1 rounded-lg border border-white/20 py-1.5 text-xs text-white/40">
+            ❌ 不啟用
+          </button>
+        </div>
+        <p class="text-[10px] text-white/30 mt-1">💡 啟用後你的宣傳貼文會出現在機台頁面，吸引更多客人</p>
+      </div>
+    </div>
+    
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="submitOwnerPost()" 
+        id="lo-submit-btn"
+        class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
+        請拍照並選擇店鋪
+      </button>
+    </div>
+  `);
+  
+  window._loLinkMode = false;
+  
+  // 監聽表單狀態
+  const checkInterval = setInterval(() => {
+    const photoReady = window._camPreview && window._camPreview.lo;
+    const storeSelected = document.getElementById('lo-store-select')?.value;
+    const btn = document.getElementById('lo-submit-btn');
+    if (btn) {
+      if (photoReady && storeSelected) {
+        btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
+        btn.disabled = false;
+        btn.innerHTML = window._loLinkMode ? '✅ 發布宣傳（-20 分連結）' : '✅ 發布宣傳（+5 分）';
+      } else {
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.disabled = true;
+        btn.innerHTML = photoReady ? (storeSelected ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+      }
+    }
+  }, 300);
+  setTimeout(() => clearInterval(checkInterval), 30000);
+}
 
-    function openOwnerPost() { toast('功能開發中', 'gold'); }
+// ----- 切換連結模式 -----
+function toggleLinkMode(enabled) {
+  window._loLinkMode = enabled;
+  document.getElementById('lo-link-on').className = enabled 
+    ? 'flex-1 rounded-lg border border-neongreen/50 bg-neongreen/20 py-1.5 text-xs text-neongreen'
+    : 'flex-1 rounded-lg border border-white/20 py-1.5 text-xs text-white/40';
+  document.getElementById('lo-link-off').className = !enabled 
+    ? 'flex-1 rounded-lg border border-neongreen/50 bg-neongreen/20 py-1.5 text-xs text-neongreen'
+    : 'flex-1 rounded-lg border border-white/20 py-1.5 text-xs text-white/40';
+  
+  // 更新按鈕文字
+  const btn = document.getElementById('lo-submit-btn');
+  if (btn && !btn.disabled) {
+    btn.innerHTML = enabled ? '✅ 發布宣傳（-20 分連結）' : '✅ 發布宣傳（+5 分）';
+  }
+}
 
+// ----- 提交台主宣傳 -----
+async function submitOwnerPost() {
+  const storeId = document.getElementById('lo-store-select')?.value;
+  if (!storeId) {
+    toast('請選擇店鋪', 'pink');
+    return;
+  }
+  
+  const photoBlob = window._cam?.lo;
+  if (!photoBlob) {
+    toast('請先拍照', 'pink');
+    return;
+  }
+  
+  const content = document.getElementById('lo-content')?.value.trim() || '🏬 新機台上架！';
+  const store = STORES.find(s => s.id === storeId);
+  const isLinked = window._loLinkMode || false;
+  
+  // 檢查積分（連結模式需要 20 分）
+  if (isLinked && STATE.points < 20) {
+    toast('積分不足 20，無法使用連結功能', 'pink');
+    return;
+  }
+  
+  // 上傳照片
+  let photoUrl = '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'posts');
+    } catch (e) {
+      toast('圖片上傳失敗', 'pink');
+      return;
+    }
+  }
+  
+  // 扣積分（連結模式）
+  if (isLinked) {
+    addPoints(-20, '連結機台宣傳');
+  }
+  
+  // 儲存貼文
+  const post = {
+    id: 'p' + Date.now(),
+    track: 'owner',
+    store_id: storeId,
+    store_name: store ? store.name : '',
+    content: content,
+    photo: photoUrl,
+    author: STATE.user.name,
+    ts: now(),
+    expire: isLinked ? now() + DAY * 30 : now() + DAY, // 連結模式 30 天，免費 24 小時
+    is_linked: isLinked,
+    likes: 0,
+    comments: 0
+  };
+  
+  if (!STATE.livePosts) STATE.livePosts = [];
+  STATE.livePosts.unshift(post);
+  save();
+  
+  // 獎勵（免費模式 +5 分，連結模式不加分因為已扣分）
+  if (!isLinked) {
+    addPoints(5, '發布台主宣傳');
+  } else {
+    toast('✅ 宣傳發布成功！連結已啟用（-20 分）', 'green');
+  }
+  updateStreak();
+  
+  toast(isLinked ? '✅ 宣傳發布成功！連結已啟用' : '✅ 宣傳發布成功！+5 分', 'green');
+  closeModal();
+  showView('live');
+}
+
+   
     function viewMe() {
   const favS = STORES.filter(s => STATE.favStores.includes(s.id));
   
@@ -4059,7 +4573,8 @@ function doCheckin() { const d = daily(); if (d.checkin >= 6) return toast("已�
   const achState = getAchievementState();
   const unlockedCount = (achState.unlocked || []).length;
   const totalAchievements = Object.keys(ACHIEVEMENT_DEFS).length;
-  
+  // ===== 新增：獲取未讀通知數量 =====
+  const unreadCount = (STATE.notifications || []).filter(n => !n.read).length;
   // 生成等級 HTML
   let levelHtml = `
     <div class="mt-5">
