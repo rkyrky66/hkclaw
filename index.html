@@ -2726,6 +2726,161 @@ function submitIntel() {
   
   console.log('📝 提交數據:', data);
   
+  // ===== 【修復】商場防重複寫入邏輯 =====
+  if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
+    // 1️⃣ 檢查 MALLS_CACHE 中是否已存在（同名 + 同地區）
+    let existsInCache = false;
+    if (MALLS_CACHE) {
+      // 找出該地區對應的 regionKey
+      let regionKey = '';
+      if (selectedRegion === '港島區') regionKey = 'hk';
+      else if (selectedRegion === '九龍區') regionKey = 'kl';
+      else if (selectedRegion === '新界區') regionKey = 'nt';
+      else {
+        // 如果 selectedRegion 是具體地區名（如「銅鑼灣」），找出對應的三大區
+        Object.keys(REGIONS).forEach(key => {
+          const group = REGIONS[key];
+          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+            regionKey = key;
+          }
+        });
+      }
+      
+      // 在對應的三大區中檢查同名商場
+      if (regionKey && MALLS_CACHE[regionKey]) {
+        existsInCache = MALLS_CACHE[regionKey].some(m => 
+          m.name === selectedMall && m.district === selectedRegion
+        );
+      }
+      
+      // 如果 regionKey 沒找到，遍歷所有區域檢查
+      if (!regionKey) {
+        existsInCache = Object.values(MALLS_CACHE).flat().some(m => 
+          m.name === selectedMall && m.district === selectedRegion
+        );
+      }
+    }
+    
+    // 2️⃣ 檢查 STORES 中是否已有該商場的店鋪（同名 + 同地區）
+    const existsInStores = STORES.some(s => 
+      s.mall === selectedMall && s.region === selectedRegion
+    );
+    
+    // 3️⃣ 只有兩個都不存在時，才寫入新商場
+    if (!existsInCache && !existsInStores) {
+      // 找出正確的 regionKey 存入
+      let regionKey = '';
+      if (selectedRegion === '港島區') regionKey = 'hk';
+      else if (selectedRegion === '九龍區') regionKey = 'kl';
+      else if (selectedRegion === '新界區') regionKey = 'nt';
+      else {
+        Object.keys(REGIONS).forEach(key => {
+          const group = REGIONS[key];
+          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+            regionKey = key;
+          }
+        });
+      }
+      
+      // 如果還是找不到，預設為 'kl'（九龍區）
+      if (!regionKey) regionKey = 'kl';
+      
+      const newMall = {
+        name: selectedMall,
+        region: selectedRegion === '港島區' ? '港島區' : 
+                selectedRegion === '九龍區' ? '九龍區' : '新界區',
+        district: selectedRegion,
+        address: addr || '',
+        lat: gpsLat || 0,
+        lng: gpsLng || 0,
+        created_at: new Date().toISOString()
+      };
+      
+      // 存入本地 MALLS_CACHE
+      if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
+      MALLS_CACHE[regionKey].push(newMall);
+      
+      // 上傳到 Supabase
+      cloudInsert('malls', newMall);
+      console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
+    } else {
+      console.log('🏬 商場已存在，跳過寫入:', selectedMall);
+    }
+  }
+  
+  // 儲存到 STORES
+  const newStore = {
+    id: 's' + Date.now(),
+    name: name,
+    region: selectedRegion,
+    addr: addr,
+    verified: 'pending',
+    size: '中',
+    token: false,
+    hour24: false,
+    staff: false,
+    machines: [],
+    photo: data.photo,
+    lat: gpsLat,
+    lng: gpsLng,
+    mall: selectedType === 'mall' ? selectedMall : '',
+    floor: selectedType === 'mall' ? selectedFloor : '',
+  };
+  STORES.push(newStore);
+  
+  // 上傳到雲端
+  if (CLOUD_ON) {
+    cloudInsert('claw_stores', newStore);
+  }
+  
+  toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
+  addPoints(10, '提交店鋪情報');
+  closeModal();
+}
+  if (!isFormComplete()) {
+    toast('請完成所有必填欄位', 'pink');
+    return;
+  }
+  
+  const name = document.getElementById('nt-name')?.value.trim();
+  if (!name) {
+    toast('請輸入店名', 'pink');
+    return;
+  }
+  
+  const photoBlob = window._cam?.nt;
+  if (!photoBlob) {
+    toast('請先拍攝店鋪照片', 'pink');
+    return;
+  }
+  
+  // 構建地址
+  let addr = '';
+  if (selectedType === 'mall' && selectedMall && selectedFloor) {
+    const mallStore = STORES.find(s => s.mall === selectedMall && s.region === selectedRegion);
+    if (mallStore && mallStore.addr) {
+      addr = mallStore.addr;
+    }
+    addr = `${selectedRegion}${addr}${selectedMall}${selectedFloor}樓`;
+  } else if (selectedType === 'street') {
+    addr = document.getElementById('nt-addr')?.value.trim() || '';
+  }
+  
+  const data = {
+    name: name,
+    region: selectedRegion,
+    type: selectedType,
+    mall: selectedType === 'mall' ? selectedMall : '',
+    floor: selectedType === 'mall' ? selectedFloor : '',
+    addr: addr,
+    lat: gpsLat,
+    lng: gpsLng,
+    accuracy: gpsAccuracy,
+    photo: window._camPreview?.nt || '',
+  };
+  
+  console.log('📝 提交數據:', data);
+  
   // ===== 如果是商場鋪且商場不在 MALLS_CACHE 中，存入 =====
   if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
     // 檢查商場是否已存在
