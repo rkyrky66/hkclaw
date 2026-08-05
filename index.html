@@ -909,9 +909,11 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
   
   // 如果切換到地圖頁面
   if (name === 'map') {
-    // 顯示地圖容器
+    // ===== 顯示地圖容器 =====
     if (mapContainer) {
       mapContainer.style.display = 'block';
+      mapContainer.style.width = '100%';
+      mapContainer.style.height = '100%';
     }
     if (mapWrapper) {
       mapWrapper.style.display = 'block';
@@ -920,9 +922,20 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     // 如果地圖已初始化，只需刷新大小
     if (map && mapInitialized) {
       console.log('🗺️ 地圖已存在，重新整理大小');
+      
+      // ===== 修復：延遲刷新，確保容器已完全顯示 =====
+      // 先強制隱藏再顯示，觸發瀏覽器重新計算布局
+      if (mapContainer) {
+        mapContainer.style.opacity = '0';
+        setTimeout(() => {
+          if (mapContainer) mapContainer.style.opacity = '1';
+        }, 50);
+      }
+      
       setTimeout(() => {
         if (map) {
-          map.invalidateSize();
+          // 強制刷新地圖大小
+          map.invalidateSize(true);
           // 如果有用戶位置，保持定位
           if (userLocation) {
             map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
@@ -930,7 +943,9 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
         }
         updateMapMarkers();
         updateMapList();
-      }, 200);
+        console.log('🗺️ 地圖已刷新');
+      }, 400);
+      
     } else {
       // 地圖未初始化，需要初始化（首次進入）
       mapInitialized = false;
@@ -942,6 +957,10 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
         markerCluster = null;
         userMarker = null;
       }
+      // 延遲初始化，確保 DOM 已渲染
+      setTimeout(() => {
+        afterMapView();
+      }, 100);
     }
   }
   
