@@ -168,12 +168,28 @@
     </header>
 
     <div class="relative flex-1 overflow-hidden">
-      <main id="main" class="no-scrollbar h-full overflow-y-auto px-4 py-3 pb-28">
-        <div id="pull-indicator" class="pull-indicator">
-          <span class="spinner"></span>
-          <span class="text">下拉同步最新資料</span>
-        </div>
-      </main>
+      <main id="main" class="no-scrollbar h-full overflow-hidden px-4 py-3 pb-28">
+  <!-- ===== 地圖始終存在（不銷毀） ===== -->
+  <div id="map-page-container" style="display:flex; flex-direction:column; height:100%; position:relative; z-index:1;">
+    <div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
+      <div id="map-container" style="height:100%; width:100%;"></div>
+    </div>
+    <div class="map-divider" style="flex-shrink:0;"></div>
+    <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
+      <div id="map-store-list" class="space-y-2 pb-2"></div>
+    </div>
+  </div>
+  
+  <!-- ===== 其他頁面內容蓋在上面 ===== -->
+  <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:none;">
+    <!-- 動態內容會渲染在這裡 -->
+  </div>
+  
+  <div id="pull-indicator" class="pull-indicator" style="z-index:20;">
+    <span class="spinner"></span>
+    <span class="text">下拉同步最新資料</span>
+  </div>
+</main>
     </div>
 
     <nav id="bottom-nav" class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
@@ -274,12 +290,7 @@
     };
 
     const HK_CENTER = { lat: 22.3193, lng: 114.1694 };
-// ===== 地圖狀態保存 =====
-let savedMapState = {
-  center: { lat: HK_CENTER.lat, lng: HK_CENTER.lng },
-  zoom: 13,
-  hasState: false
-};
+
     async function sbFetch(path, opts = {}) {
       if (!CLOUD_ON) return null;
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -576,43 +587,47 @@ let savedMapState = {
     };
     const NAV_COLOR = { map: "text-neongreen", find: "text-neongreen", task: "text-neonpink", live: "text-neongreen", me: "text-gold" };
     const VIEWS = { map: viewMap, find: viewFind, task: viewTask, live: viewLive, me: viewMe };
-    const AFTER = { map: afterMapView };
+    const AFTER = { map: null };
 
     function showView(name) {
-  const mapContainer = document.getElementById('map-container');
   const main = document.getElementById("main");
+  const overlay = document.getElementById('page-overlay');
+  const mapPage = document.getElementById('map-page-container');
   
-  // ===== 切換離開地圖頁面時，保存地圖狀態 =====
-  if (CURRENT === 'map' && name !== 'map') {
-    if (map && mapInitialized) {
-      // 保存地圖中心點和縮放層級
-      const center = map.getCenter();
-      savedMapState = {
-        center: { lat: center.lat, lng: center.lng },
-        zoom: map.getZoom(),
-        hasState: true
-      };
-      console.log('💾 地圖狀態已保存:', savedMapState);
-    }
-    
-    // 隱藏地圖容器（保留 DOM，不銷毀）
-    if (mapContainer) {
-      mapContainer.style.display = 'none';
-    }
-    console.log('🗺️ 地圖已隱藏（保留狀態）');
-  }
-  
+  // 更新 CURRENT
   CURRENT = name;
   
-  if (main) {
-    main.scrollTop = 0;
-    main.classList.remove("view-enter");
-    main.classList.toggle('map-page', name === 'map');
-    void main.offsetWidth;
-    main.innerHTML = VIEWS[name]();
-    main.classList.add("view-enter");
+  // 切換顯示
+  if (name === 'map') {
+    // 顯示地圖，隱藏覆蓋層
+    if (mapPage) mapPage.style.display = 'flex';
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.innerHTML = '';
+    }
+    // 刷新地圖
+    setTimeout(() => {
+      if (map && mapInitialized) {
+        map.invalidateSize(true);
+        updateMapMarkers();
+        updateMapList();
+      } else if (!mapInitialized) {
+        initMap();
+      }
+    }, 200);
+  } else {
+    // 隱藏地圖，顯示覆蓋層
+    if (mapPage) mapPage.style.display = 'none';
+    if (overlay) {
+      overlay.style.display = 'block';
+      overlay.style.pointerEvents = 'auto';
+      overlay.innerHTML = VIEWS[name]();
+      overlay.scrollTop = 0;
+      overlay.classList.add("view-enter");
+    }
   }
   
+  // 更新導航高亮
   document.querySelectorAll(".nav-btn").forEach(b => {
     const on = b.getAttribute("data-nav") === name;
     b.classList.toggle("active", on);
@@ -622,8 +637,9 @@ let savedMapState = {
   
   document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
   
-  if (AFTER[name]) {
-    setTimeout(() => { AFTER[name](); }, name === 'map' ? 350 : 100);
+  // 執行頁面進入後邏輯（非地圖頁面）
+  if (AFTER[name] && name !== 'map') {
+    setTimeout(() => { AFTER[name](); }, 100);
   }
 }
 
@@ -631,43 +647,36 @@ let savedMapState = {
        4. 【地圖頁面】核心功能
     ============================================================ */
     function viewMap() {
-      const filterCount = getFilteredStoresCount();
-      return `
-        <div style="display:flex; flex-direction:column; height:100%;">
-          <div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
-            <div id="map-container" style="height:100%; width:100%;"></div>
-          </div>
-          
-          <div class="map-divider" style="flex-shrink:0;"></div>
-          
-          <!-- ===== Filter 區域 ===== -->
-          <div style="flex-shrink:0; padding:8px 4px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid rgba(212,175,55,0.1);">
-            <button id="filter-all" onclick="setMapFilter('all')" 
-              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border ${mapFilter === 'all' ? 'border-gold bg-gold/20 text-gold active' : 'border-white/20 text-white/40'}">
-              📋 全部
-            </button>
-            <button id="filter-pending" onclick="setMapFilter('pending')" 
-              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border ${mapFilter === 'pending' ? 'border-gold bg-gold/20 text-gold active' : 'border-white/20 text-white/40'}">
-              ⏳ 待認證
-            </button>
-            <button id="filter-incomplete" onclick="setMapFilter('incomplete')" 
-              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border ${mapFilter === 'incomplete' ? 'border-gold bg-gold/20 text-gold active' : 'border-white/20 text-white/40'}">
-              📝 待完善
-            </button>
-            <span id="filter-count" class="text-[10px] text-white/30 ml-auto self-center">
-              共 ${filterCount} 間
-            </span>
-          </div>
-          
-          <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
-            <div id="map-store-list" class="space-y-2 pb-2">
-              ${renderMapStoreList()}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
+  // 確保地圖容器可見
+  const mapPage = document.getElementById('map-page-container');
+  const overlay = document.getElementById('page-overlay');
+  if (mapPage) mapPage.style.display = 'flex';
+  if (overlay) overlay.style.display = 'none';
+  
+  // 更新 Filter 計數
+  const filterCount = getFilteredStoresCount();
+  const countEl = document.getElementById('filter-count');
+  if (countEl) countEl.textContent = `共 ${filterCount} 間`;
+  
+  // 更新列表
+  updateMapList();
+  
+  // 如果地圖還沒初始化，初始化
+  if (!mapInitialized) {
+    setTimeout(() => initMap(), 300);
+  } else {
+    // 地圖已存在，刷新尺寸和標記
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize(true);
+        updateMapMarkers();
+        updateMapList();
+      }
+    }, 200);
+  }
+  
+  return ''; // 返回空，因為地圖已存在
+}
     // ===== Filter 相關函數 =====
     function getFilteredStores() {
       let stores = STORES;
@@ -736,117 +745,7 @@ function getStoresInBounds() {
   return result;
 }
 
-   function afterMapView() {
-  if (isRefreshingMap) return;
-  isRefreshingMap = true;
-  
-  if (!STORES || STORES.length === 0) {
-    console.log('⏳ 等待店鋪資料載入...');
-    setTimeout(() => { isRefreshingMap = false; afterMapView(); }, 500);
-    return;
-  }
-  
-  window._mallGroups = {};
-  
-  const main = document.getElementById('main');
-  if (main) main.classList.add('map-page');
-  
-  const mapContainer = document.getElementById('map-container');
-  const mapWrapper = document.getElementById('map-wrapper');
-  
-  // 確保容器可見
-  if (mapContainer) {
-    mapContainer.style.display = 'block';
-    mapContainer.style.width = '100%';
-    mapContainer.style.height = '100%';
-    // 強制回流
-    void mapContainer.offsetHeight;
-  }
-  if (mapWrapper) {
-    mapWrapper.style.display = 'block';
-    mapWrapper.style.height = '40vh';
-    mapWrapper.style.minHeight = '200px';
-  }
-  
-  // ===== 核心修復：如果地圖已存在，強制刷新 =====
-  if (map && mapInitialized) {
-    console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
-    
-    // 步驟 1：先強制更新容器尺寸
-    const container = document.getElementById('map-container');
-    if (container) {
-      container.style.display = 'block';
-      container.style.width = '100%';
-      container.style.height = '100%';
-      void container.offsetHeight; // 強制回流
-    }
-    
-    // 步驟 2：使用多層延遲確保渲染完成
-    setTimeout(function() {
-      if (!map) { isRefreshingMap = false; return; }
-      
-      // 強制刷新地圖尺寸（關鍵！）
-      map.invalidateSize(true);
-      
-      // 步驟 3：再延遲一下確保尺寸更新完成
-      setTimeout(function() {
-        if (!map) { isRefreshingMap = false; return; }
-        
-        // 再次刷新尺寸
-        map.invalidateSize(true);
-        
-        // 恢復視圖位置
-        if (savedMapState.hasState) {
-          console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
-          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom);
-        } else if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], 15);
-        } else {
-          map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
-        }
-        
-        // 步驟 4：最後再次刷新並更新標記
-        setTimeout(function() {
-          if (map) {
-            map.invalidateSize(true);
-            updateMapMarkers();
-            updateMapList();
-            // 不要自動縮放，讓用戶保持原有視圖
-            console.log('🗺️ 地圖已完全恢復');
-          }
-          isRefreshingMap = false;
-        }, 200);
-      }, 150);
-    }, 100);
-    return;
-  }
-  
-  // ===== 地圖不存在，需要初始化 =====
-  console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
-  
-  setTimeout(function() {
-    requestAnimationFrame(function() {
-      setTimeout(function() {
-        const container = document.getElementById('map-container');
-        if (container) {
-          container.style.width = '100%';
-          container.style.display = 'block';
-          container.style.height = '100%';
-          void container.offsetHeight;
-          
-          const initCenter = savedMapState.hasState ? savedMapState.center : HK_CENTER;
-          const initZoom = savedMapState.hasState ? savedMapState.zoom : 13;
-          initMap(initCenter, initZoom);
-        } else {
-          console.error('❌ map-container 不存在');
-          toast('地圖載入失敗，請重新整理', 'pink');
-        }
-        isRefreshingMap = false;
-      }, 200);
-    });
-  }, 100);
-}
-// ===== 修復 ensureStoresVisible - 更穩健的版本 =====
+  // ===== 修復 ensureStoresVisible - 更穩健的版本 =====
 let lastEnsureZoom = 0;
 
 function ensureStoresVisible() {
@@ -1193,10 +1092,9 @@ function renderMapStoreList() {
     setTimeout(function() {
       if (map) {
         map.invalidateSize(true);
-        if (savedMapState.hasState) {
-          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom);
-        } else if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+        // 如果有 GPS 位置，移動到 GPS 位置
+        if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], map.getZoom() || 15);
         }
         updateMapMarkers();
         updateMapList();
@@ -1216,13 +1114,11 @@ function renderMapStoreList() {
   let center = initialCenter || { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
   let zoom = initialZoom || 13;
   
-  // 如果有 GPS 且沒有保存的狀態，使用 GPS 位置
-  if (userLocation && !savedMapState.hasState) {
+  // 如果有 GPS，使用 GPS 位置
+  if (userLocation) {
     center = { lat: userLocation.lat, lng: userLocation.lng };
     zoom = 15;
     console.log(`🗺️ 定位到 GPS 位置`);
-  } else if (savedMapState.hasState) {
-    console.log(`🗺️ 使用保存的位置: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
   } else {
     // 沒有 GPS 時，計算店鋪平均位置
     const storesWithCoords = STORES.filter(s => s.lat && s.lng);
@@ -1278,12 +1174,6 @@ function renderMapStoreList() {
     ensureStoresVisible();
 
     mapInitialized = true;
-    // 保存初始化後的狀態
-    savedMapState = {
-      center: center,
-      zoom: zoom,
-      hasState: true
-    };
     console.log('🗺️ 地圖初始化完成');
     setTimeout(() => { if (map) map.invalidateSize(); }, 500);
   } catch (e) {
@@ -4209,52 +4099,91 @@ function renderMapStoreList() {
     }
 
     async function refreshAllData() {
-      toast('🔄 正在同步最新資料...', 'green');
-      await loadCloud();
-      await loadMalls();
-      if (CURRENT === 'map') {
-        if (mapInitialized) { updateMapMarkers(); updateMapList(); ensureStoresVisible(); }
-        else { afterMapView(); }
-      } else { showView(CURRENT); }
-      toast('✅ 已更新至最新資料', 'green');
+  toast('🔄 正在同步最新資料...', 'green');
+  await loadCloud();
+  await loadMalls();
+  if (CURRENT === 'map') {
+    if (mapInitialized) { 
+      updateMapMarkers(); 
+      updateMapList(); 
+      ensureStoresVisible(); 
+    } else { 
+      initMap();  // ← 改為直接初始化
     }
+  } else { 
+    showView(CURRENT); 
+  }
+  toast('✅ 已更新至最新資料', 'green');
+}
 
     (async function initApp() {
-      console.log('🚀 爪爪情報站啟動中...');
-      await loadCloud();
-      await loadMalls();
-      showView('map');
-      setTimeout(initPullToRefresh, 500);
+  console.log('🚀 爪爪情報站啟動中...');
+  await loadCloud();
+  await loadMalls();
+  
+  // ===== 修改這裡：直接初始化地圖，不通過 showView =====
+  // showView('map');  // ← 註解掉或刪除這行
+  
+  // 1. 設置地圖頁面為顯示狀態
+  const mapPage = document.getElementById('map-page-container');
+  const overlay = document.getElementById('page-overlay');
+  if (mapPage) mapPage.style.display = 'flex';
+  if (overlay) overlay.style.display = 'none';
+  
+  // 2. 初始化地圖
+  setTimeout(() => {
+    initMap();
+  }, 300);
+  
+  // 3. 更新列表
+  setTimeout(() => {
+    updateMapList();
+  }, 500);
+  
+  // 4. 初始化下拉重新整理
+  setTimeout(initPullToRefresh, 500);
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            gpsLat = userLocation.lat; gpsLng = userLocation.lng;
-            console.log('✅ 自動定位成功:', userLocation);
-            if (map && mapInitialized) {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        gpsLat = userLocation.lat; gpsLng = userLocation.lng;
+        console.log('✅ 自動定位成功:', userLocation);
+        if (map && mapInitialized) {
+          map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
+          addUserMarker(userLocation.lat, userLocation.lng);
+          updateMapMarkers(); 
+          updateMapList(); 
+          // ensureStoresVisible();  // 可以註解掉，避免干擾
+        } else {
+          console.log('📍 定位成功，等待地圖初始化');
+          // 如果地圖還沒初始化，等待一會再試
+          setTimeout(() => {
+            if (map && mapInitialized && userLocation) {
               map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
               addUserMarker(userLocation.lat, userLocation.lng);
-              updateMapMarkers(); updateMapList(); ensureStoresVisible();
-            } else {
-              console.log('📍 定位成功，等待地圖初始化');
-              if (CURRENT === 'map') afterMapView();
+              updateMapMarkers();
+              updateMapList();
             }
-          },
-          (err) => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
-        );
-      } else { console.log('⚠️ 此裝置不支援 GPS 定位'); }
+          }, 1000);
+        }
+      },
+      (err) => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+    );
+  } else { 
+    console.log('⚠️ 此裝置不支援 GPS 定位'); 
+  }
 
-      if ('serviceWorker' in navigator) {
-        try {
-          const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
-          navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" })));
-          console.log('✅ Service Worker 已註冊');
-        } catch (e) { console.log('⚠️ Service Worker 註冊失敗:', e.message); }
-      }
-      console.log('🚀 爪爪情報站啟動完成！');
-    })();
+  if ('serviceWorker' in navigator) {
+    try {
+      const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
+      navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" })));
+      console.log('✅ Service Worker 已註冊');
+    } catch (e) { console.log('⚠️ Service Worker 註冊失敗:', e.message); }
+  }
+  console.log('🚀 爪爪情報站啟動完成！');
+})();
 
     (function injectManifest() {
       const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
