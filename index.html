@@ -736,8 +736,7 @@ function getStoresInBounds() {
   return result;
 }
 
-    // ===== 優化後的 afterMapView =====
-    function afterMapView() {
+   function afterMapView() {
   if (isRefreshingMap) return;
   isRefreshingMap = true;
   
@@ -755,10 +754,12 @@ function getStoresInBounds() {
   const mapContainer = document.getElementById('map-container');
   const mapWrapper = document.getElementById('map-wrapper');
   
+  // 確保容器可見
   if (mapContainer) {
     mapContainer.style.display = 'block';
     mapContainer.style.width = '100%';
     mapContainer.style.height = '100%';
+    // 強制回流
     void mapContainer.offsetHeight;
   }
   if (mapWrapper) {
@@ -767,55 +768,59 @@ function getStoresInBounds() {
     mapWrapper.style.minHeight = '200px';
   }
   
+  // ===== 核心修復：如果地圖已存在，強制刷新 =====
   if (map && mapInitialized) {
-  console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
-  
-  // 先確保容器可見
-  const container = document.getElementById('map-container');
-  if (container) {
-    container.style.display = 'block';
-    container.style.width = '100%';
-    container.style.height = '100%';
-  }
-  
-  // 使用多個 setTimeout 確保渲染完成
-  setTimeout(function() {
-    if (map) {
-      // 先強制刷新地圖大小
+    console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
+    
+    // 步驟 1：先強制更新容器尺寸
+    const container = document.getElementById('map-container');
+    if (container) {
+      container.style.display = 'block';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      void container.offsetHeight; // 強制回流
+    }
+    
+    // 步驟 2：使用多層延遲確保渲染完成
+    setTimeout(function() {
+      if (!map) { isRefreshingMap = false; return; }
+      
+      // 強制刷新地圖尺寸（關鍵！）
       map.invalidateSize(true);
       
-      // 再設置視圖
+      // 步驟 3：再延遲一下確保尺寸更新完成
       setTimeout(function() {
-        if (map) {
-          // 如果有保存的狀態，恢復到保存的位置
-          if (savedMapState.hasState) {
-            console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
-            map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom, { animate: false });
-          } else if (userLocation) {
-            map.setView([userLocation.lat, userLocation.lng], 15, { animate: false });
-          } else {
-            map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
-          }
-          
-          // 再次刷新確保邊界正確
-          setTimeout(function() {
-            if (map) {
-              map.invalidateSize(true);
-              updateMapMarkers();
-              updateMapList();
-              ensureStoresVisible();
-              console.log('🗺️ 地圖已恢復');
-            }
-          }, 100);
+        if (!map) { isRefreshingMap = false; return; }
+        
+        // 再次刷新尺寸
+        map.invalidateSize(true);
+        
+        // 恢復視圖位置
+        if (savedMapState.hasState) {
+          console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
+          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom);
+        } else if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], 15);
+        } else {
+          map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
         }
-        isRefreshingMap = false;
-      }, 100);
-    } else {
-      isRefreshingMap = false;
-    }
-  }, 300);
-  return;
-}
+        
+        // 步驟 4：最後再次刷新並更新標記
+        setTimeout(function() {
+          if (map) {
+            map.invalidateSize(true);
+            updateMapMarkers();
+            updateMapList();
+            // 不要自動縮放，讓用戶保持原有視圖
+            console.log('🗺️ 地圖已完全恢復');
+          }
+          isRefreshingMap = false;
+        }, 200);
+      }, 150);
+    }, 100);
+    return;
+  }
+  
   // ===== 地圖不存在，需要初始化 =====
   console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
   
@@ -829,7 +834,6 @@ function getStoresInBounds() {
           container.style.height = '100%';
           void container.offsetHeight;
           
-          // 初始化時使用保存的狀態或預設值
           const initCenter = savedMapState.hasState ? savedMapState.center : HK_CENTER;
           const initZoom = savedMapState.hasState ? savedMapState.zoom : 13;
           initMap(initCenter, initZoom);
@@ -855,14 +859,12 @@ function ensureStoresVisible() {
     return;
   }
   
-  // 使用所有有座標的店鋪來判斷（不套用 Filter）
   const allStores = STORES.filter(s => s.lat && s.lng);
   if (allStores.length === 0) {
     console.log('📭 沒有店鋪座標資料，跳過');
     return;
   }
   
-  // 獲取當前地圖邊界
   const bounds = map.getBounds();
   if (!bounds) {
     console.log('📍 無法獲取地圖邊界，跳過');
@@ -872,7 +874,16 @@ function ensureStoresVisible() {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
   
-  // 檢查當前視圖內是否有店鋪
+  // 檢查範圍是否有效（不是一個點）
+  const latRange = ne.lat - sw.lat;
+  const lngRange = ne.lng - sw.lng;
+  if (latRange < 0.0001 || lngRange < 0.0001) {
+    console.log('📍 地圖邊界無效（範圍太小），強制刷新');
+    map.invalidateSize(true);
+    setTimeout(() => ensureStoresVisible(), 300);
+    return;
+  }
+  
   const visibleStores = allStores.filter(s => {
     return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
   });
@@ -880,24 +891,24 @@ function ensureStoresVisible() {
   const currentZoom = Math.round(map.getZoom());
   console.log(`📍 當前縮放: ${currentZoom}, 可見店鋪: ${visibleStores.length}/${allStores.length}`);
   
-  if (visibleStores.length === 0 && allStores.length > 0) {
+  // 只有當完全沒有店鋪可見且不是用戶縮放太小時才介入
+  if (visibleStores.length === 0 && allStores.length > 0 && currentZoom <= 11) {
     ensureStoresVisibleCount++;
-    console.log(`📍 當前區域無店鋪，嘗試縮放 (${ensureStoresVisibleCount}/5)...`);
-    
-    // 如果已經在最小縮放或縮放沒有變化，跳到店鋪位置
-    if (currentZoom <= 11) {
-      console.log('🗺️ 已到最小縮放，跳到店鋪位置');
-      const avgLat = allStores.reduce((sum, s) => sum + parseFloat(s.lat), 0) / allStores.length;
-      const avgLng = allStores.reduce((sum, s) => sum + parseFloat(s.lng), 0) / allStores.length;
-      map.setView([avgLat, avgLng], 12);
-      setTimeout(() => {
-        updateMapMarkers();
-        updateMapList();
-      }, 300);
-      ensureStoresVisibleCount = 0;
-    } else {
+    console.log(`📍 縮放到最小仍無店鋪，跳到店鋪位置 (${ensureStoresVisibleCount}/5)`);
+    const avgLat = allStores.reduce((sum, s) => sum + parseFloat(s.lat), 0) / allStores.length;
+    const avgLng = allStores.reduce((sum, s) => sum + parseFloat(s.lng), 0) / allStores.length;
+    map.setView([avgLat, avgLng], 12);
+    setTimeout(() => {
+      updateMapMarkers();
+      updateMapList();
+    }, 300);
+    ensureStoresVisibleCount = 0;
+  } else if (visibleStores.length === 0 && allStores.length > 0) {
+    // 有店鋪但不在視圖內，縮小一級
+    ensureStoresVisibleCount++;
+    if (currentZoom > 11) {
       map.setZoom(currentZoom - 1);
-      setTimeout(() => ensureStoresVisible(), 400);
+      setTimeout(() => ensureStoresVisible(), 500);
     }
   } else {
     ensureStoresVisibleCount = 0;
