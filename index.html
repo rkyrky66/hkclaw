@@ -181,7 +181,7 @@
   </div>
   
   <!-- ===== 其他頁面內容蓋在上面 ===== -->
-  <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:none;">
+  <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:5; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:auto;">
     <!-- 動態內容會渲染在這裡 -->
   </div>
   
@@ -192,7 +192,7 @@
 </main>
     </div>
 
-    <nav id="bottom-nav" class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2">
+    <nav id="bottom-nav" class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2" style="z-index:20;">
       <button data-nav="map" onclick="showView('map')" class="nav-btn flex flex-col items-center gap-0.5 text-neongreen">
         <span class="nav-ico text-2xl relative">🗺️<span class="absolute -top-1 -right-1 text-[8px]">🌍</span></span>
         <span class="text-[9px] font-bold">地圖</span>
@@ -618,13 +618,13 @@
   } else {
     // 隱藏地圖，顯示覆蓋層
     if (mapPage) mapPage.style.display = 'none';
-    if (overlay) {
-      overlay.style.display = 'block';
-      overlay.style.pointerEvents = 'auto';
-      overlay.innerHTML = VIEWS[name]();
-      overlay.scrollTop = 0;
-      overlay.classList.add("view-enter");
-    }
+if (overlay) {
+  overlay.style.display = 'block';
+  overlay.style.pointerEvents = 'auto';  // ← 保持 auto
+  overlay.innerHTML = VIEWS[name]();
+  overlay.scrollTop = 0;
+  overlay.classList.add("view-enter");
+}
   }
   
   // 更新導航高亮
