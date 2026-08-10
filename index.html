@@ -3120,34 +3120,112 @@ function selectStoreFromMap(prefix) {
     /* ============================================================
        Google OAuth 綁定功能
     ============================================================ */
-
-     async function bindGoogleAccount() {
-      if (!isSupabaseReady()) {
-        toast('⚠️ 認證服務暫時不可用，請稍後再試', 'pink');
-        return;
+// ===== 診斷 Supabase Auth 狀態 =====
+async function diagnoseSupabaseAuth() {
+  console.log('🔍 開始診斷 Supabase Auth...');
+  
+  // 1. 檢查客戶端
+  console.log('1. supabaseClientInstance:', supabaseClientInstance ? '✅ 存在' : '❌ 不存在');
+  
+  // 2. 檢查 Auth
+  console.log('2. supabaseClientInstance.auth:', supabaseClientInstance?.auth ? '✅ 存在' : '❌ 不存在');
+  
+  // 3. 檢查 Session
+  try {
+    const { data, error } = await supabaseClientInstance.auth.getSession();
+    if (error) {
+      console.error('❌ 獲取 Session 失敗:', error);
+    } else {
+      console.log('✅ 當前 Session:', data?.session ? '已登入' : '未登入');
+    }
+  } catch (e) {
+    console.error('❌ 獲取 Session 異常:', e);
+  }
+  
+  // 4. 檢查 Provider 配置（通過嘗試獲取配置）
+  try {
+    // 這個請求可以檢查 provider 是否啟用
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
       }
-      
-      try {
-        toast('🔐 正在連線到 Google...', 'gold');
-        const { data, error } = await supabaseClientInstance.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin + window.location.pathname,
-            queryParams: { access_type: 'offline', prompt: 'consent' }
-          }
-        });
-        if (error) {
-          if (error.message && error.message.includes('provider is not enabled')) {
-            toast('⚠️ Google 登入尚未啟用，請聯繫管理員', 'pink');
-          } else {
-            toast('❌ 登入失敗：' + error.message, 'pink');
-          }
-          throw error;
-        }
-      } catch (error) {
-        console.error('Google 登入錯誤:', error);
+    });
+    console.log('📡 Auth 設置 API 狀態:', response.status);
+    if (response.ok) {
+      const settings = await response.json();
+      console.log('📋 Auth 設置:', settings);
+      // 檢查 Google 是否在 providers 列表中
+      if (settings && settings.providers) {
+        console.log('🔑 已啟用的 Providers:', settings.providers);
       }
     }
+  } catch (e) {
+    console.error('❌ 獲取 Auth 設置失敗:', e);
+  }
+  
+  console.log('🔍 診斷完成');
+}
+
+// 在控制台執行: diagnoseSupabaseAuth()
+     // ===== 修改 bindGoogleAccount 增加更詳細的錯誤提示 =====
+async function bindGoogleAccount() {
+  // 檢查是否為 HTTPS
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    toast('⚠️ Google 登入需要 HTTPS 環境，請使用 HTTPS 訪問', 'pink');
+    console.warn('⚠️ 當前協議:', window.location.protocol);
+    return;
+  }
+  
+  if (!isSupabaseReady()) {
+    toast('⚠️ 認證服務暫時不可用，請稍後再試', 'pink');
+    return;
+  }
+  
+  try {
+    toast('🔐 正在連線到 Google...', 'gold');
+    
+    // 獲取當前完整的 URL（去掉 hash 和 query）
+    const currentUrl = window.location.href.split('?')[0].split('#')[0];
+    console.log('📍 重定向 URL:', currentUrl);
+    
+    const { data, error } = await supabaseClientInstance.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: currentUrl,
+        queryParams: { 
+          access_type: 'offline', 
+          prompt: 'consent' 
+        }
+      }
+    });
+    
+    if (error) {
+      console.error('❌ OAuth 錯誤詳情:', error);
+      
+      // 更具體的錯誤訊息
+      if (error.message && error.message.includes('provider is not enabled')) {
+        toast('⚠️ Google 登入尚未啟用，請在 Supabase 後台 → Authentication → Providers → Google 啟用', 'pink');
+      } else if (error.message && error.message.includes('invalid request')) {
+        toast('⚠️ 請確認 Supabase 後台的 Client ID 和 Secret 是否正確', 'pink');
+      } else if (error.message && error.message.includes('redirect_uri')) {
+        toast('⚠️ 回調 URL 不匹配，請檢查 Supabase 和 Google Cloud 的配置', 'pink');
+      } else if (error.message && error.message.includes('origin')) {
+        toast('⚠️ 請確保在 Google Cloud Console 中添加了正確的 JavaScript 來源', 'pink');
+      } else {
+        toast('❌ 登入失敗：' + error.message, 'pink');
+      }
+      return;
+    }
+    
+    console.log('✅ OAuth 請求成功，正在跳轉到 Google...', data);
+    // 注意：signInWithOAuth 會自動跳轉到 Google，不需要手動操作
+    
+  } catch (error) {
+    console.error('Google 登入錯誤:', error);
+    toast('❌ 登入過程發生錯誤：' + (error.message || '未知錯誤'), 'pink');
+  }
+}
 
         async function checkOAuthCallback() {
       const params = new URLSearchParams(window.location.hash.substring(1));
