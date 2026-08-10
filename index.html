@@ -255,12 +255,7 @@
     let mapFilter = 'all'; // 'all' | 'pending' | 'incomplete'
     let isRefreshingMap = false;
     let ensureStoresVisibleCount = 0;
-// ===== 地圖狀態保存 =====
-let savedMapState = {
-  center: { lat: HK_CENTER.lat, lng: HK_CENTER.lng },
-  zoom: 13,
-  hasState: false
-};
+
     const REGION_CENTERS = {
       '銅鑼灣': { lat: 22.2799, lng: 114.1838 },
       '天后': { lat: 22.2810, lng: 114.1900 },
@@ -279,7 +274,12 @@ let savedMapState = {
     };
 
     const HK_CENTER = { lat: 22.3193, lng: 114.1694 };
-
+// ===== 地圖狀態保存 =====
+let savedMapState = {
+  center: { lat: HK_CENTER.lat, lng: HK_CENTER.lng },
+  zoom: 13,
+  hasState: false
+};
     async function sbFetch(path, opts = {}) {
       if (!CLOUD_ON) return null;
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
