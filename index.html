@@ -247,19 +247,68 @@
     const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-    // ===== Supabase 客戶端初始化 =====
-    if (typeof supabase === 'undefined') {
-      console.warn('⚠️ Supabase CDN 加載失敗，手動創建客戶端');
-      var supabase = supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else {
+        // ===== Supabase 客戶端初始化 =====
+    let supabaseClientInstance = null;
+
+    // 嘗試從 CDN 獲取
+    if (typeof supabase !== 'undefined') {
       console.log('✅ Supabase 已由 CDN 載入');
+      supabaseClientInstance = supabase;
+    } else {
+      console.warn('⚠️ Supabase CDN 加載失敗，嘗試從 window 獲取...');
+      
+      if (typeof window.supabase !== 'undefined') {
+        supabaseClientInstance = window.supabase;
+        console.log('✅ 從 window.supabase 獲取成功');
+      } else {
+        console.warn('⚠️ 使用離線模式（Supabase 功能受限）');
+        // 創建後備客戶端
+        supabaseClientInstance = {
+          auth: {
+            signInWithOAuth: async ({ provider, options }) => {
+              console.warn('⚠️ Auth 不可用：請檢查 Supabase CDN');
+              toast('⚠️ 認證服務不可用，請檢查網絡連接', 'pink');
+              return { data: null, error: new Error('Auth 服務不可用') };
+            },
+            signOut: async () => {
+              console.warn('⚠️ Auth 不可用');
+              return { error: null };
+            },
+            getUser: async () => {
+              return { data: { user: null }, error: new Error('Auth 不可用') };
+            },
+            setSession: async () => {
+              return { data: null, error: new Error('Auth 不可用') };
+            }
+          },
+          from: (table) => ({
+            select: (columns) => ({ 
+              eq: (col, val) => ({ maybeSingle: async () => ({ data: null, error: new Error('DB 不可用') }) }),
+              order: (col, opts) => ({ then: (cb) => cb([]) })
+            }),
+            insert: (data) => ({ then: (cb) => cb({ error: null }) }),
+            update: (data) => ({ eq: (col, val) => ({ then: (cb) => cb({ error: null }) }) }),
+            upsert: (data, opts) => ({ then: (cb) => cb({ error: null }) })
+          })
+        };
+      }
     }
 
+    // ===== 檢查 Supabase 是否就緒 =====
     function isSupabaseReady() {
-      if (typeof supabase === 'undefined') { console.error('❌ Supabase 未定義'); return false; }
-      if (typeof supabase.auth === 'undefined') { console.error('❌ Supabase Auth 不可用'); return false; }
+      if (!supabaseClientInstance) { 
+        console.error('❌ Supabase 客戶端未初始化'); 
+        return false; 
+      }
+      if (typeof supabaseClientInstance.auth === 'undefined') { 
+        console.error('❌ Supabase Auth 不可用'); 
+        return false; 
+      }
       return true;
     }
+
+// ===== 修改 CLoud 操作使用新的客戶端 =====
+// 所有使用 supabase 的地方改為 supabaseClientInstance
 
     const CLOUD_ON = SUPABASE_URL.startsWith("http") && SUPABASE_KEY && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
 
@@ -939,13 +988,29 @@
       }
     }
 
-    function onMallStoreClick(storeId, mallName, currentFloor) {
-      const s = STORES.find(x => x.id === storeId);
-      if (!s) { toast('找不到該店鋪', 'pink'); return; }
-      _storeContext = { from: 'mall', mallName: mallName, floor: currentFloor, highlightId: storeId };
-      closeModal();
-      openStore(storeId);
-    }
+function onMallStoreClick(storeId, mallName, currentFloor) {
+  const s = STORES.find(x => x.id === storeId);
+  if (!s) { 
+    toast('找不到該店鋪', 'pink'); 
+    return; 
+  }
+  
+  // 保存商場上下文
+  _storeContext = { 
+    from: 'mall', 
+    mallName: mallName, 
+    floor: currentFloor, 
+    highlightId: storeId 
+  };
+  
+  // 關閉商場 Modal
+  closeModal();
+  
+  // 打開店鋪詳情
+  setTimeout(() => {
+    openStore(storeId);
+  }, 200);
+}
 
     function renderMapStoreListWithData(inBounds) {
       if (!inBounds.length) {
@@ -977,7 +1042,7 @@
         const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
         const statusLabel = isVerified ? '已認證' : '審核中';
         const distText = formatDist(s);
-        return `<button onclick="flyToStore('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
+        return `<button onclick="openStoreFromMap('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
           <div class="flex items-center justify-between gap-2">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
@@ -1649,24 +1714,51 @@
     /* ============================================================
        6. 店鋪詳細 Modal + 任務 + 實時 + 我的
     ============================================================ */
-    
-    function closeStoreModal() {
-      closeModal();
-      if (_storeContext && _storeContext.from === 'mall') {
-        const ctx = _storeContext;
-        setTimeout(() => { openMallModal(ctx.mallName, ctx.highlightId, ctx.floor); _storeContext = null; }, 300);
-      } else {
-        _storeContext = null;
+function closeStoreModal() {
+  // 檢查是否從商場進入
+  const isFromMall = _storeContext && _storeContext.from === 'mall';
+  
+  // 關閉 Modal
+  closeModal();
+  
+  if (isFromMall) {
+    // 從商場進入，返回商場列表
+    const ctx = _storeContext;
+    setTimeout(() => {
+      if (ctx && ctx.mallName) {
+        openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
       }
-    }
+      _storeContext = null;
+    }, 300);
+  } else {
+    _storeContext = null;
+  }
+}
 
-    function backToMall() {
-      closeModal();
-      if (_storeContext && _storeContext.from === 'mall') {
-        const ctx = _storeContext;
-        setTimeout(() => { openMallModal(ctx.mallName, ctx.highlightId, ctx.floor); _storeContext = null; }, 300);
-      }
+function backToMall() {
+  // 保存當前上下文
+  const ctx = _storeContext;
+  if (!ctx || ctx.from !== 'mall') {
+    closeModal();
+    _storeContext = null;
+    return;
+  }
+  
+  // 先關閉當前 Modal（店鋪詳情）
+  closeModal();
+  
+  // 延遲後打開商場 Modal
+  setTimeout(() => {
+    // 確保上下文仍然存在
+    if (_storeContext && _storeContext.from === 'mall') {
+      openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
+      _storeContext = null;
+    } else {
+      // 如果上下文已被清除，使用保存的 ctx
+      openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
     }
+  }, 350);
+}
 
     function openMachineForm(sid) {
       openModal(`
@@ -2393,72 +2485,262 @@ function renderWeeklyCheckin() {
       }, 500);
     }
 
-    function openPlayerPost() {
-      openModal(`
-        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
-          <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>
-          <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
-        </div>
-        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
-          <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
-            <p class="text-xs text-white/40">分享你的夾娃娃戰果，讓大家羨慕一下！</p>
-            <p class="text-xs text-neongreen mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
-            <div style="display:flex; gap:6px;">
-              <input id="lp-store-search" placeholder="輸入店名搜尋..." 
-                class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" 
-                autocomplete="off" oninput="filterStoreSuggestions('lp')" onfocus="filterStoreSuggestions('lp')" />
-              <button onclick="selectStoreFromMap('lp')" 
-                class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">
-                🗺️ 地圖選
-              </button>
-            </div>
-            <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
-            <input type="hidden" id="lp-store-id" value="" />
-            <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📝 內容 <span class="text-white/40">（選填）</span></label>
-            <textarea id="lp-content" placeholder="例如：10 抽爆機山崩！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>
-            <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
-              <button onclick="openCamera('lp')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
-              <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
-            </div>
-          </div>
-        </div>
-        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-          <button onclick="submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋或選擇店鋪</button>
-        </div>
-      `);
+    // ===== 發布出貨戰報（夾客）- 完整版 =====
+function openPlayerPost() {
+  // 標籤分類
+  const tagCategories = [
+    { name: '出貨方式', tags: ['出貨', '夾送', '刮中', '推幣'] },
+    { name: '結果評價', tags: ['大LAM', 'LAM', '小LAM', '平手', '小損', '損', '大損'] },
+    { name: '獎品類型', tags: ['一番賞', '景品', '盒玩', '布偶', '吊飾', '扭蛋'] },
+    { name: '難度評價', tags: ['佛心台', '標準台', '技術台', '山崩台'] }
+  ];
+  
+  // 生成標籤 HTML
+  const tagsHtml = tagCategories.map(cat => `
+    <div class="mt-3">
+      <p class="text-[10px] text-white/40 mb-1">${cat.name}</p>
+      <div class="flex flex-wrap gap-1.5">
+        ${cat.tags.map(t => `
+          <button onclick="this.classList.toggle('chip-active-gold'); updateSelectedTagsDisplay('lp');" 
+            data-tag="${t}" 
+            class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] text-gold hover:border-gold/60 transition-all">
+            ${t}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
+      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+    </div>
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
+        <p class="text-xs text-white/40">分享你的夾娃娃戰果！</p>
+        <p class="text-xs text-neongreen mt-1">📸 拍照 + 🏷️ 選擇標籤 = +5 分</p>
+      </div>
       
-      setTimeout(() => {
-        const input = document.getElementById('lp-store-search');
-        if (input) { input.focus(); filterStoreSuggestions('lp'); }
-      }, 100);
+      <!-- 選擇店鋪 -->
+      <div>
+        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
+        <div style="display:flex; gap:6px;">
+          <input id="lp-store-search" placeholder="輸入店名搜尋..." 
+            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" 
+            autocomplete="off" oninput="filterStoreSuggestions('lp')" onfocus="filterStoreSuggestions('lp')" />
+          <button onclick="selectStoreFromMap('lp')" 
+            class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">
+            🗺️ 地圖選
+          </button>
+        </div>
+        <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
+        <input type="hidden" id="lp-store-id" value="" />
+        <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>
+      </div>
       
-      const checkInterval = setInterval(() => {
-        const storeId = document.getElementById('lp-store-id')?.value;
-        const photoReady = window._camPreview && window._camPreview.lp;
-        const btn = document.getElementById('lp-submit-btn');
-        if (btn) {
-          if (storeId && photoReady) {
-            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-            btn.disabled = false;
-            btn.innerHTML = '✅ 發布戰報（+5 分）';
-          } else {
-            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-            btn.disabled = true;
-            btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
-          }
-        }
-      }, 300);
-      setTimeout(() => clearInterval(checkInterval), 30000);
+      <!-- 標籤選擇 -->
+      <div>
+        <label class="text-xs font-bold text-gold">🏷️ 戰報標籤 <span class="text-white/40">（選填，可多選）</span></label>
+        ${tagsHtml}
+        <div id="lp-selected-tags" class="mt-2 flex flex-wrap gap-1.5">
+          <span class="text-[10px] text-white/30">尚未選擇標籤</span>
+        </div>
+      </div>
+      
+      <!-- 拍照 -->
+      <div>
+        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>
+        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+          <button onclick="openCamera('lp')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+          <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+        </div>
+      </div>
+    </div>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請選擇店鋪並拍照</button>
+    </div>
+  `);
+  
+  // 初始化標籤顯示
+  setTimeout(() => {
+    updateSelectedTagsDisplay('lp');
+  }, 100);
+  
+  // 監聽表單狀態
+  const checkInterval = setInterval(() => {
+    const storeId = document.getElementById('lp-store-id')?.value;
+    const photoReady = window._camPreview && window._camPreview.lp;
+    const btn = document.getElementById('lp-submit-btn');
+    if (btn) {
+      if (storeId && photoReady) {
+        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+        btn.disabled = false;
+        btn.innerHTML = '✅ 發布戰報（+5 分）';
+      } else {
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.disabled = true;
+        btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+      }
     }
+  }, 300);
+  setTimeout(() => clearInterval(checkInterval), 30000);
+}
+
+// ===== 更新已選標籤顯示 =====
+function updateSelectedTagsDisplay(prefix) {
+  const container = document.getElementById(`${prefix}-selected-tags`);
+  if (!container) return;
+  
+  const selected = document.querySelectorAll(`[data-tag].chip-active-gold`);
+  if (selected.length === 0) {
+    container.innerHTML = `<span class="text-[10px] text-white/30">尚未選擇標籤</span>`;
+    return;
+  }
+  
+  container.innerHTML = Array.from(selected).map(btn => 
+    `<span class="rounded-full bg-gold/20 text-gold px-2 py-0.5 text-[10px] border border-gold/30">${btn.dataset.tag}</span>`
+  ).join('');
+}
+
+// ===== 提交出貨戰報 =====
+async function submitPlayerPost() {
+  const storeId = document.getElementById('lp-store-id')?.value;
+  if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
+  
+  const photoBlob = window._cam?.lp;
+  if (!photoBlob) { toast('請先拍照', 'pink'); return; }
+  
+  // 獲取選中的標籤
+  const selectedTags = Array.from(document.querySelectorAll('[data-tag].chip-active-gold'))
+    .map(btn => btn.dataset.tag);
+  
+  const store = STORES.find(s => s.id === storeId);
+  
+  // 上傳照片
+  let photoUrl = '';
+  if (CLOUD_ON) {
+    try {
+      const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'posts');
+    } catch (e) { toast('圖片上傳失敗: ' + e.message, 'pink'); return; }
+  } else {
+    // 離線模式
+    photoUrl = window._camPreview?.lp || '';
+  }
+  
+  // 內容 = 標籤組合（如果沒有選標籤，使用預設）
+  const content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
+  
+  const post = {
+    id: 'p' + Date.now(),
+    track: 'player',
+    store_id: storeId,
+    store_name: store ? store.name : '',
+    content: content,
+    tags: selectedTags,
+    photo: photoUrl,
+    author: STATE.user.name,
+    ts: now(),
+    expire: now() + DAY,
+    likes: [],
+    likeCount: 0,
+    is_linked: false
+  };
+  
+  if (!STATE.livePosts) STATE.livePosts = [];
+  STATE.livePosts.unshift(post);
+  save();
+  
+  addPoints(5, '發布出貨戰報');
+  updateStreak();
+  
+  toast('✅ 戰報發布成功！+5 分', 'green');
+  closeModal();
+  showView('live');
+}
+
+// ===== 帶預選店鋪打開發布 Modal =====
+function openPlayerPostWithStore(prefix, store) {
+  // 先打開 Modal
+  openPlayerPost();
+  
+  // 設定店鋪
+  setTimeout(() => {
+    const input = document.getElementById(`${prefix}-store-search`);
+    const hidden = document.getElementById(`${prefix}-store-id`);
+    const display = document.getElementById(`${prefix}-selected-store`);
+    const nameDisplay = document.getElementById(`${prefix}-selected-store-name`);
+    
+    if (input) input.value = store.name;
+    if (hidden) hidden.value = store.id;
+    if (display) display.classList.remove('hidden');
+    if (nameDisplay) nameDisplay.textContent = store.name;
+    
+    // 關閉建議清單
+    const container = document.getElementById(`${prefix}-store-suggestions`);
+    if (container) container.classList.add('hidden');
+    
+    // 更新按鈕狀態
+    checkPostForm(prefix);
+    
+    toast(`✅ 已選擇「${store.name}」`, 'green');
+  }, 500);
+}
+
+// ===== 從地圖選擇店鋪 =====
+function selectStoreFromMap(prefix) {
+  // 關閉 Modal
+  closeModal();
+  
+  // 確保在地圖頁面
+  if (CURRENT !== 'map') {
+    showView('map');
+  }
+  
+  toast('🗺️ 請點擊地圖上的圖釘選擇店鋪', 'gold');
+  
+  // 設置選擇模式，監聽點擊事件
+  if (markerCluster) {
+    // 先移除之前的監聽（避免重複綁定）
+    markerCluster.off('click');
+    
+    markerCluster.on('click', function(e) {
+      const layer = e.layer;
+      if (layer.options && layer.options.storeId) {
+        // 找到店鋪
+        const store = STORES.find(s => s.id === layer.options.storeId);
+        if (store) {
+          markerCluster.off('click');
+          // 重新打開發布 Modal 並帶入店鋪
+          setTimeout(() => {
+            openPlayerPostWithStore(prefix, store);
+          }, 300);
+        }
+      } else if (layer.options && layer.options.mallName) {
+        // 點到商場聚合，打開商場 Modal 讓用戶選擇具體店鋪
+        toast('🏬 請選擇商場內的具體店鋪', 'gold');
+        openMallModal(layer.options.mallName);
+        // 監聽商場 Modal 中的店鋪點擊
+        setTimeout(() => {
+          // 修改 onMallStoreClick 的行為，選擇後回到發布 Modal
+          const originalOnMallStoreClick = window.onMallStoreClick;
+          window.onMallStoreClick = function(storeId, mallName, currentFloor) {
+            const store = STORES.find(s => s.id === storeId);
+            if (store) {
+              closeModal();
+              setTimeout(() => {
+                openPlayerPostWithStore(prefix, store);
+              }, 300);
+            }
+            // 恢復原函數
+            window.onMallStoreClick = originalOnMallStoreClick;
+          };
+        }, 100);
+      }
+    });
+  }
+}
 
     function filterStoreSuggestions(prefix) {
       const input = document.getElementById(`${prefix}-store-search`);
@@ -2839,7 +3121,7 @@ function renderWeeklyCheckin() {
        Google OAuth 綁定功能
     ============================================================ */
 
-    async function bindGoogleAccount() {
+     async function bindGoogleAccount() {
       if (!isSupabaseReady()) {
         toast('⚠️ 認證服務暫時不可用，請稍後再試', 'pink');
         return;
@@ -2847,7 +3129,7 @@ function renderWeeklyCheckin() {
       
       try {
         toast('🔐 正在連線到 Google...', 'gold');
-        const { data, error } = await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabaseClientInstance.auth.signInWithOAuth({
           provider: 'google',
           options: {
             redirectTo: window.location.origin + window.location.pathname,
@@ -2867,7 +3149,7 @@ function renderWeeklyCheckin() {
       }
     }
 
-    async function checkOAuthCallback() {
+        async function checkOAuthCallback() {
       const params = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
@@ -2875,12 +3157,12 @@ function renderWeeklyCheckin() {
       if (accessToken) {
         console.log('🔐 檢測到 OAuth 回調，正在處理...');
         try {
-          const { data, error } = await supabase.auth.setSession({
+          const { data, error } = await supabaseClientInstance.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || ''
           });
           if (error) throw error;
-          const { data: userData, error: userError } = await supabase.auth.getUser();
+          const { data: userData, error: userError } = await supabaseClientInstance.auth.getUser();
           if (userError) throw userError;
           await syncUserDataAfterBind(userData.user);
           window.history.replaceState({}, '', window.location.pathname);
@@ -2891,7 +3173,7 @@ function renderWeeklyCheckin() {
       }
     }
 
-    async function syncUserDataAfterBind(user) {
+        async function syncUserDataAfterBind(user) {
       try {
         const deviceId = STATE.user.device;
         const email = user.email || '';
@@ -2899,7 +3181,7 @@ function renderWeeklyCheckin() {
         const avatarUrl = user.user_metadata?.avatar_url || '';
         const googleId = user.id;
         
-        const { data: existingUser, error: fetchError } = await supabase
+        const { data: existingUser, error: fetchError } = await supabaseClientInstance
           .from('user_profiles')
           .select('*')
           .eq('google_id', googleId)
@@ -2917,12 +3199,12 @@ function renderWeeklyCheckin() {
             last_active_at: new Date().toISOString(),
             is_anonymous: false
           };
-          const { error: updateError } = await supabase.from('user_profiles').update(updates).eq('id', userId);
+          const { error: updateError } = await supabaseClientInstance.from('user_profiles').update(updates).eq('id', userId);
           if (updateError) throw updateError;
           if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
           if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
         } else {
-          const { data: newUser, error: insertError } = await supabase.from('user_profiles').insert({
+          const { data: newUser, error: insertError } = await supabaseClientInstance.from('user_profiles').insert({
             device_id: deviceId, google_id: googleId, email: email,
             display_name: displayName, avatar_url: avatarUrl,
             total_points: STATE.points, total_xp: STATE.total_xp || 0,
@@ -2955,33 +3237,33 @@ function renderWeeklyCheckin() {
       }
     }
 
-    async function syncFavorites(userId) {
+        async function syncFavorites(userId) {
       try {
         for (const storeId of STATE.favStores) {
-          await supabase.from('user_favorites').upsert({ user_id: userId, store_id: storeId, created_at: new Date().toISOString() }, { onConflict: 'user_id, store_id' });
+          await supabaseClientInstance.from('user_favorites').upsert({ user_id: userId, store_id: storeId, created_at: new Date().toISOString() }, { onConflict: 'user_id, store_id' });
         }
         for (const machineId of STATE.favMachines) {
-          await supabase.from('user_favorites').upsert({ user_id: userId, machine_id: machineId, created_at: new Date().toISOString() }, { onConflict: 'user_id, machine_id' });
+          await supabaseClientInstance.from('user_favorites').upsert({ user_id: userId, machine_id: machineId, created_at: new Date().toISOString() }, { onConflict: 'user_id, machine_id' });
         }
         console.log('✅ 收藏已同步');
       } catch (e) { console.warn('收藏同步失敗:', e); }
     }
 
-    async function syncAchievements(userId) {
+        async function syncAchievements(userId) {
       try {
         for (const key of (STATE.achievements?.unlocked || [])) {
           const def = ACHIEVEMENT_DEFS[key];
           if (!def) continue;
-          await supabase.from('user_achievements').upsert({ user_id: userId, achievement_key: key, achievement_name: def.name, unlocked_at: new Date().toISOString() }, { onConflict: 'user_id, achievement_key' });
+          await supabaseClientInstance.from('user_achievements').upsert({ user_id: userId, achievement_key: key, achievement_name: def.name, unlocked_at: new Date().toISOString() }, { onConflict: 'user_id, achievement_key' });
         }
         console.log('✅ 成就已同步');
       } catch (e) { console.warn('成就同步失敗:', e); }
     }
 
-    async function logoutGoogle() {
+        async function logoutGoogle() {
       if (!confirm('確定要登出嗎？本地數據仍會保留。')) return;
       try {
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabaseClientInstance.auth.signOut();
         if (error) throw error;
         STATE.user.is_bound = false;
         STATE.user.google_id = null;
