@@ -3349,9 +3349,9 @@ async function syncUserDataAfterBind(user) {
         let userId;
         if (existingUser) {
             userId = existingUser.id;
-            // 更新現有用戶
+            
+            // ✅ 更新時添加 device_id 匹配
             const updates = {
-                device_id: deviceId,
                 display_name: displayName,
                 avatar_url: avatarUrl,
                 total_points: Math.max(existingUser.total_points || 0, STATE.points),
@@ -3360,16 +3360,18 @@ async function syncUserDataAfterBind(user) {
                 is_anonymous: false
             };
             
+            // ✅ 使用 eq 匹配 device_id
             const { error: updateError } = await supabaseClientInstance
                 .from('user_profiles')
                 .update(updates)
-                .eq('id', userId);
+                .eq('device_id', deviceId);  // 關鍵：用 device_id 匹配
+                
             if (updateError) throw updateError;
             
             if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
             if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
         } else {
-            // 創建新用戶
+            // 插入新用戶（不需要 device_id 匹配）
             const { data: newUser, error: insertError } = await supabaseClientInstance
                 .from('user_profiles')
                 .insert({
@@ -3399,12 +3401,11 @@ async function syncUserDataAfterBind(user) {
         STATE.user.display_name = displayName;
         STATE.user.avatar_url = avatarUrl;
         
-        // 同步收藏
+        // 同步收藏和成就
         if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) {
             await syncFavorites(userId);
         }
         
-        // 同步成就
         if (STATE.achievements && STATE.achievements.unlocked) {
             await syncAchievements(userId);
         }
