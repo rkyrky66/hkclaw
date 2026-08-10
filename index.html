@@ -686,16 +686,17 @@
       if (count) count.textContent = `共 ${getFilteredStoresCount()} 間`;
     }
 
-    function getStoresInBounds() {
-      if (!map) return getFilteredStores().filter(s => s.lat && s.lng);
-      const bounds = map.getBounds();
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-      return getFilteredStores().filter(s => {
-        if (!s.lat || !s.lng) return false;
-        return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
-      });
-    }
+function getStoresInBounds() {
+  if (!map) return STORES.filter(s => s.lat && s.lng);
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  // 使用所有店鋪，不套用 Filter
+  return STORES.filter(s => {
+    if (!s.lat || !s.lng) return false;
+    return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+  });
+}
 
     // ===== 優化後的 afterMapView =====
     function afterMapView() {
@@ -769,32 +770,60 @@
         });
       }, 100);
     }
+// ===== 修復 ensureStoresVisible - 防止無限循環 =====
 
-    // ===== 優化後的 ensureStoresVisible =====
-    function ensureStoresVisible() {
-      if (!map) return;
-      if (ensureStoresVisibleCount > 3) {
-        ensureStoresVisibleCount = 0;
-        return;
-      }
-      
-      const visibleStores = getStoresInBounds();
-      if (visibleStores.length === 0 && getFilteredStores().length > 0) {
-        ensureStoresVisibleCount++;
-        console.log(`📍 當前區域無店鋪，嘗試縮放 (${ensureStoresVisibleCount}/3)...`);
-        const currentZoom = map.getZoom();
-        if (currentZoom > 11) {
-          map.setZoom(currentZoom - 1);
-          setTimeout(() => ensureStoresVisible(), 500);
-        } else {
-          map.setView([HK_CENTER.lat, HK_CENTER.lng], 11);
-          toast('📍 已自動縮放至顯示全港店鋪', 'gold');
-          ensureStoresVisibleCount = 0;
-        }
-      } else {
-        ensureStoresVisibleCount = 0;
-      }
+let lastEnsureZoom = 0;
+
+function ensureStoresVisible() {
+  if (!map) return;
+  
+  // 防止無限循環
+  if (ensureStoresVisibleCount > 5) {
+    console.log('🛑 達到最大嘗試次數，停止自動縮放');
+    ensureStoresVisibleCount = 0;
+    return;
+  }
+  
+  // 使用所有店鋪來判斷（不套用 Filter）
+  const allStores = STORES.filter(s => s.lat && s.lng);
+  if (allStores.length === 0) {
+    console.log('📭 沒有店鋪資料，跳過');
+    return;
+  }
+  
+  // 檢查當前視圖內是否有店鋪
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  const visibleStores = allStores.filter(s => {
+    return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+  });
+  
+  const currentZoom = Math.round(map.getZoom());
+  
+  if (visibleStores.length === 0) {
+    ensureStoresVisibleCount++;
+    console.log(`📍 當前區域無店鋪，嘗試縮放 (${ensureStoresVisibleCount}/5)...`);
+    
+    // 如果已經在最小縮放或縮放沒有變化，直接跳到全港視圖
+    if (currentZoom <= 11 || currentZoom === lastEnsureZoom) {
+      console.log('🗺️ 已到最小縮放，跳轉到全港視圖');
+      map.setView([HK_CENTER.lat, HK_CENTER.lng], 11);
+      setTimeout(() => {
+        updateMapMarkers();
+        updateMapList();
+      }, 300);
+      ensureStoresVisibleCount = 0;
+    } else {
+      lastEnsureZoom = currentZoom;
+      map.setZoom(currentZoom - 1);
+      setTimeout(() => ensureStoresVisible(), 400);
     }
+  } else {
+    ensureStoresVisibleCount = 0;
+    lastEnsureZoom = 0;
+  }
+}
 
     function getFloorsInMall(mallName) {
       const group = window._mallGroups && window._mallGroups[mallName];
@@ -939,98 +968,122 @@
       openStore(storeId);
     }
 
-    function renderMapStoreList() {
-      const inBounds = getStoresInBounds();
-      if (!inBounds.length) {
-        return `<p class="py-6 text-center text-sm text-white/40">${getFilteredStores().length > 0 ? '此區域暫無符合條件的店鋪' : '暫無店鋪資料'}</p>`;
-      }
-      
-      const mallGroups = {};
-      const standaloneStores = [];
-      inBounds.forEach(s => {
-        if (s.mall && s.mall.trim() !== '') {
-          const key = s.mall;
-          if (!mallGroups[key]) mallGroups[key] = { mallName: key, stores: [], totalStores: 0 };
-          mallGroups[key].stores.push(s);
-          mallGroups[key].totalStores++;
-        } else {
-          standaloneStores.push(s);
-        }
-      });
-
-      const formatDist = (s) => {
-        const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
-        if (dist === 9999) return '📍 位置未知';
-        if (dist < 1) return `${Math.round(dist * 1000)}m`;
-        return `${dist.toFixed(1)}km`;
-      };
-
-      const renderStoreItem = (s, index) => {
-        const isVerified = s.verified === "verified";
-        const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
-        const statusLabel = isVerified ? '已認證' : '審核中';
-        const distText = formatDist(s);
-        return `<button onclick="flyToStore('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="text-gold font-bold text-sm min-w-[20px]">#${index + 1}</span>
-                <span class="${dotColor}">●</span>
-                <span class="font-bold text-gold text-sm truncate">${s.name}</span>
-                <span class="text-[9px] text-white/30">${statusLabel}</span>
-              </div>
-              <p class="text-[11px] text-white/40 truncate pl-[20px]">${s.region} · ${s.addr}</p>
-            </div>
-            <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
-          </div>
-        </button>`;
-      };
-
-      const renderMallGroup = (group) => {
-        const isAllVerified = group.stores.every(s => s.verified === "verified");
-        const dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
-        const statusLabel = isAllVerified ? '全部已認證' : '部分審核中';
-        const distText = formatDist(group.stores[0]);
-        return `<button onclick="openMallModal('${group.mallName.replace(/'/g, "\\'")}')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="text-gold font-bold text-sm">🏬</span>
-                <span class="font-bold text-gold text-sm truncate">${group.mallName}</span>
-                <span class="text-[9px] text-white/30">${group.totalStores} 間</span>
-                <span class="text-[9px] ${dotColor}">${statusLabel}</span>
-              </div>
-              <p class="text-[11px] text-white/40 truncate">${group.stores[0]?.region || ''} · 點擊查看全部店鋪</p>
-            </div>
-            <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
-          </div>
-        </button>`;
-      };
-
-      const mallList = Object.keys(mallGroups).map(key => mallGroups[key]);
-      mallList.sort((a, b) => {
-        const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
-        const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.stores[0].lat, b.stores[0].lng) : 9999;
-        return distA - distB;
-      });
-
-      standaloneStores.sort((a, b) => {
-        const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng) : 9999;
-        const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.lat, b.lng) : 9999;
-        return distA - distB;
-      });
-
-      let itemIndex = 0;
-      const htmlParts = [];
-      mallList.forEach(group => { htmlParts.push(renderMallGroup(group)); });
-      standaloneStores.forEach(s => { htmlParts.push(renderStoreItem(s, itemIndex)); itemIndex++; });
-
-      const totalStores = inBounds.length;
-      const totalMalls = Object.keys(mallGroups).length;
-      const totalStandalone = standaloneStores.length;
-      const headerHtml = `<div class="text-[10px] text-white/30 text-center py-1">${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪</div>`;
-      return headerHtml + htmlParts.join('');
+    // ===== 內部渲染函數（接收數據） =====
+function renderMapStoreListWithData(inBounds) {
+  if (!inBounds.length) {
+    return `<p class="py-6 text-center text-sm text-white/40">${getFilteredStoresCount() > 0 ? '此區域暫無符合條件的店鋪' : '暫無店鋪資料'}</p>`;
+  }
+  
+  const mallGroups = {};
+  const standaloneStores = [];
+  inBounds.forEach(s => {
+    if (s.mall && s.mall.trim() !== '') {
+      const key = s.mall;
+      if (!mallGroups[key]) mallGroups[key] = { mallName: key, stores: [], totalStores: 0 };
+      mallGroups[key].stores.push(s);
+      mallGroups[key].totalStores++;
+    } else {
+      standaloneStores.push(s);
     }
+  });
+
+  const formatDist = (s) => {
+    const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
+    if (dist === 9999) return '📍 位置未知';
+    if (dist < 1) return `${Math.round(dist * 1000)}m`;
+    return `${dist.toFixed(1)}km`;
+  };
+
+  const renderStoreItem = (s, index) => {
+    const isVerified = s.verified === "verified";
+    const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
+    const statusLabel = isVerified ? '已認證' : '審核中';
+    const distText = formatDist(s);
+    return `<button onclick="flyToStore('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-gold font-bold text-sm min-w-[20px]">#${index + 1}</span>
+            <span class="${dotColor}">●</span>
+            <span class="font-bold text-gold text-sm truncate">${s.name}</span>
+            <span class="text-[9px] text-white/30">${statusLabel}</span>
+          </div>
+          <p class="text-[11px] text-white/40 truncate pl-[20px]">${s.region} · ${s.addr}</p>
+        </div>
+        <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
+      </div>
+    </button>`;
+  };
+
+  const renderMallGroup = (group) => {
+    const isAllVerified = group.stores.every(s => s.verified === "verified");
+    const dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
+    const statusLabel = isAllVerified ? '全部已認證' : '部分審核中';
+    const distText = formatDist(group.stores[0]);
+    return `<button onclick="openMallModal('${group.mallName.replace(/'/g, "\\'")}')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-gold font-bold text-sm">🏬</span>
+            <span class="font-bold text-gold text-sm truncate">${group.mallName}</span>
+            <span class="text-[9px] text-white/30">${group.totalStores} 間</span>
+            <span class="text-[9px] ${dotColor}">${statusLabel}</span>
+          </div>
+          <p class="text-[11px] text-white/40 truncate">${group.stores[0]?.region || ''} · 點擊查看全部店鋪</p>
+        </div>
+        <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
+      </div>
+    </button>`;
+  };
+
+  const mallList = Object.keys(mallGroups).map(key => mallGroups[key]);
+  mallList.sort((a, b) => {
+    const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
+    const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.stores[0].lat, b.stores[0].lng) : 9999;
+    return distA - distB;
+  });
+
+  standaloneStores.sort((a, b) => {
+    const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng) : 9999;
+    const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.lat, b.lng) : 9999;
+    return distA - distB;
+  });
+
+  let itemIndex = 0;
+  const htmlParts = [];
+  mallList.forEach(group => { htmlParts.push(renderMallGroup(group)); });
+  standaloneStores.forEach(s => {
+    htmlParts.push(renderStoreItem(s, itemIndex));
+    itemIndex++;
+  });
+
+  const totalStores = inBounds.length;
+  const totalMalls = Object.keys(mallGroups).length;
+  const totalStandalone = standaloneStores.length;
+  const headerHtml = `<div class="text-[10px] text-white/30 text-center py-1">${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪</div>`;
+  return headerHtml + htmlParts.join('');
+}
+
+// ===== 原來的 renderMapStoreList 改為調用內部函數 =====
+function renderMapStoreList() {
+  const inBounds = getStoresInBounds();
+  
+  // 套用 Filter
+  let filtered = inBounds;
+  if (mapFilter === 'pending') {
+    filtered = filtered.filter(s => s.verified !== 'verified');
+  } else if (mapFilter === 'incomplete') {
+    filtered = filtered.filter(s => {
+      const hasAddress = s.address_detail && s.address_detail !== '';
+      const hasSize = s.size && s.size !== '中';
+      const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+      const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+      return !(hasAddress && hasSize && hasStaff && hasCoin);
+    });
+  }
+  
+  return renderMapStoreListWithData(filtered);
+}
 
     /* ============================================================
        4b. 地圖核心邏輯
@@ -1128,10 +1181,28 @@
     }
 
     function updateMapList() {
-      const listContainer = document.getElementById('map-store-list');
-      if (!listContainer) return;
-      listContainer.innerHTML = renderMapStoreList();
-    }
+  const listContainer = document.getElementById('map-store-list');
+  if (!listContainer) return;
+  
+  // 獲取當前視圖內的所有店鋪
+  const inBounds = getStoresInBounds();
+  
+  // 套用 Filter
+  let filtered = inBounds;
+  if (mapFilter === 'pending') {
+    filtered = filtered.filter(s => s.verified !== 'verified');
+  } else if (mapFilter === 'incomplete') {
+    filtered = filtered.filter(s => {
+      const hasAddress = s.address_detail && s.address_detail !== '';
+      const hasSize = s.size && s.size !== '中';
+      const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+      const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+      return !(hasAddress && hasSize && hasStaff && hasCoin);
+    });
+  }
+  
+  listContainer.innerHTML = renderMapStoreListWithData(filtered);
+}
 
     function addUserMarker(lat, lng) {
       if (!map) return;
