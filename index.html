@@ -487,7 +487,6 @@
           setTimeout(() => updateAchievementStat('supplement'), 100);
         } else if (why.includes('打卡')) {
           xpAmount = 5;
-          setTimeout(() => updateDailyActivity('checkin'), 100);
           setTimeout(() => updateCheckinStreak(), 100);
         } else if (why.includes('解鎖成就')) {
           xpAmount = 0;
@@ -2111,51 +2110,9 @@
     ============================================================ */
 
     // ===== 打卡月曆 =====
-    function getCheckinMonthData() {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const firstDay = new Date(year, month, 1).getDay();
-      
-      const monthData = [];
-      for (let d = 1; d <= daysInMonth; d++) {
-        const date = new Date(year, month, d);
-        const key = date.toISOString().slice(0, 10);
-        const checked = STATE.daily[key] && STATE.daily[key].checkin > 0;
-        monthData.push({ day: d, checked, key });
-      }
-      return { monthData, firstDay, year, month, daysInMonth };
-    }
+    
 
-    function renderCheckinCalendar() {
-      const { monthData, firstDay, year, month, daysInMonth } = getCheckinMonthData();
-      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
-      
-      let html = `<div class="text-center text-xs text-white/40 mb-2">${monthNames[month]} ${year}</div>`;
-      html += `<div class="grid grid-cols-7 gap-1 text-center">`;
-      html += dayNames.map(d => `<div class="text-[10px] text-white/30 py-1">${d}</div>`).join('');
-      
-      for (let i = 0; i < firstDay; i++) {
-        html += `<div class="py-1"></div>`;
-      }
-      
-      monthData.forEach(({ day, checked }) => {
-        const isToday = day === new Date().getDate();
-        const bg = checked ? 'bg-neongreen/30 border-neongreen' : 'bg-white/5 border-white/10';
-        const text = checked ? 'text-neongreen' : 'text-white/30';
-        const todayClass = isToday ? 'border-gold' : '';
-        html += `<div class="py-1 rounded-lg border ${bg} ${todayClass} text-xs ${text}">${day}</div>`;
-      });
-      
-      html += `</div>`;
-      
-      const checkedCount = monthData.filter(d => d.checked).length;
-      html += `<div class="text-center text-[10px] text-white/30 mt-2">本月打卡 ${checkedCount}/${daysInMonth} 天</div>`;
-      
-      return html;
-    }
+    
 
     // ===== 成就進度 =====
     function renderAchievementProgress() {
@@ -2195,7 +2152,38 @@
       html += `</div>`;
       return html;
     }
-
+// ===== 渲染每週簽到進度條 =====
+function renderWeeklyCheckin() {
+  const progress = getWeeklyCheckinProgress();
+  const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
+  
+  let html = `<div class="mt-2">`;
+  html += `<div class="flex gap-1 justify-center">`;
+  for (let i = 1; i <= 7; i++) {
+    const isSigned = progress.days.includes(i);
+    const bg = isSigned ? 'bg-neongreen' : 'bg-white/10';
+    const text = isSigned ? 'text-black' : 'text-white/30';
+    html += `<div class="w-8 h-8 rounded-full ${bg} flex items-center justify-center text-xs font-bold ${text}">${dayNames[i-1]}</div>`;
+  }
+  html += `</div>`;
+  html += `<div class="text-center text-[10px] text-white/40 mt-1">本週簽到 ${progress.count}/7 天</div>`;
+  
+  // 顯示獎勵資訊
+  let bonusInfo = '';
+  if (progress.count >= 7) {
+    bonusInfo = '🎊 已達全勤！';
+  } else if (progress.count >= 5) {
+    bonusInfo = '再 2 天達全勤 (+15分)';
+  } else if (progress.count >= 3) {
+    bonusInfo = '再 2 天達 5 天 (+5分)';
+  } else {
+    bonusInfo = `${7 - progress.count} 天後全勤 (+15分)`;
+  }
+  html += `<div class="text-center text-[9px] text-gold/60 mt-0.5">${bonusInfo}</div>`;
+  html += `</div>`;
+  
+  return html;
+}
     function viewTask() {
       const d = daily();
       const levelInfo = getUserLevel();
@@ -2236,25 +2224,25 @@
           </div>
         </div>
         
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常</h3>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div class="flex-1">
-                <p class="text-sm font-bold text-white/90">日常打卡</p>
-                <p class="text-[11px] text-white/50">每日簽到</p>
-                <p class="text-[10px] text-white/30">今日 ${d.checkin}/1 次</p>
-                <div class="mt-2">${renderCheckinCalendar()}</div>
-              </div>
-              <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black flex-shrink-0 ml-2">+5</button>
-            </div>
-          </div>
-        </div>
+
+<div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 打卡</h3>
+  <div class="space-y-2">
+    <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
+      <div class="flex-1">
+        <p class="text-sm font-bold text-white/90">每週簽到</p>
+        <p class="text-[11px] text-white/50">每日簽到累積獎勵</p>
+        ${renderWeeklyCheckin()}  <!-- ← 確保函數存在且已定義 -->
+      </div>
+      <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black flex-shrink-0 ml-2">簽到</button>
+    </div>
+  </div>
+</div>
         
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📝 完善</h3>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📝 補充</h3>
           <div class="space-y-2">
             <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
               <div>
-                <p class="text-sm font-bold text-white/90">完善店鋪資料</p>
+                <p class="text-sm font-bold text-white/90">補上缺少的資料</p>
                 <p class="text-[11px] text-white/50">補充店鋪詳細資訊</p>
               </div>
               <button onclick="openSupplementTask()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+15</button>
@@ -3465,15 +3453,172 @@
       }
       save();
     }
+// ===== 獲取本週簽到進度 =====
+function getWeeklyCheckinProgress() {
+  const today = new Date();
+  const weekStart = getWeekStartDate(today);
+  const weekKey = weekStart.toISOString().slice(0, 10);
+  
+  if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+  if (!STATE.weeklyCheckin[weekKey]) {
+    STATE.weeklyCheckin[weekKey] = {
+      days: [],
+      claimed: false
+    };
+  }
+  
+  const weekData = STATE.weeklyCheckin[weekKey];
+  const dayOfWeek = today.getDay();
+  const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+  const isTodaySigned = weekData.days.includes(todayNum);
+  
+  return {
+    days: weekData.days,
+    count: weekData.days.length,
+    isTodaySigned: isTodaySigned,
+    weekKey: weekKey,
+    isComplete: weekData.days.length >= 7
+  };
+}
 
     function updateCheckinStreak() {
-      const streak = getCheckinStreak();
-      if (!STATE.achievements) STATE.achievements = {};
-      if (!STATE.achievements.stats) STATE.achievements.stats = {};
-      STATE.achievements.stats.checkin_streak = streak;
-      save();
-    }
+  const progress = getWeeklyCheckinProgress();
+  if (!STATE.achievements) STATE.achievements = {};
+  if (!STATE.achievements.stats) STATE.achievements.stats = {};
+  STATE.achievements.stats.checkin_streak = progress.count;
+  save();
+}
+// ===== 每週簽到任務 =====
+function doCheckin() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const weekStart = getWeekStartDate(today);
+  const weekKey = weekStart.toISOString().slice(0, 10);
+  
+  // 初始化本週簽到資料
+  if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+  if (!STATE.weeklyCheckin[weekKey]) {
+    STATE.weeklyCheckin[weekKey] = {
+      days: [], // 已簽到的星期幾 (1-7)
+      claimed: false
+    };
+  }
+  
+  const weekData = STATE.weeklyCheckin[weekKey];
+  
+  // 檢查今天是否已簽到
+  const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+  if (weekData.days.includes(todayNum)) {
+    toast('今日已簽到，明天再來吧！', 'gold');
+    return;
+  }
+  
+  // 簽到
+  weekData.days.push(todayNum);
+  
+  // 計算獎勵
+  const daysSigned = weekData.days.length;
+  let bonus = 5; // 基礎 +5 分
+  let bonusMsg = '基礎簽到 +5 分';
+  
+  if (daysSigned === 3) {
+    bonus += 5;
+    bonusMsg = '連續 3 天！額外 +5 分 🎉';
+  } else if (daysSigned === 5) {
+    bonus += 5;
+    bonusMsg = '連續 5 天！額外 +5 分 🎉🎉';
+  } else if (daysSigned === 7) {
+    bonus += 15;
+    bonusMsg = '🎊 本週全勤！額外 +15 分 🎊';
+  }
+  
+  // 儲存
+  STATE.weeklyCheckin[weekKey] = weekData;
+  save();
+  
+  // 發放獎勵
+  addPoints(bonus, `簽到 (第 ${daysSigned} 天)`);
+  updateAchievementStat('checkin', 1);
+  updateStreak();
+  
+  toast(`✅ 簽到成功！獲得 ${bonus} 分（${bonusMsg}）`, 'green');
+  showView('task');
+}
 
+// ===== 獲取本週開始日期（週一） =====
+function getWeekStartDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+
+
+
+// ===== 每日簽到提醒 =====
+function checkDailyCheckinReminder() {
+  const progress = getWeeklyCheckinProgress();
+  if (!progress.isTodaySigned) {
+    setTimeout(() => {
+      showCheckinReminder();
+    }, 1500);
+  }
+}
+
+// ===== 顯示簽到提醒視窗 =====
+function showCheckinReminder() {
+  const progress = getWeeklyCheckinProgress();
+  const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
+  
+  let daysHtml = progress.days.map(d => 
+    `<span class="inline-block w-8 h-8 rounded-full bg-neongreen text-black text-xs font-bold leading-8 text-center mx-0.5">${dayNames[d-1]}</span>`
+  ).join('');
+  
+  const emptyDays = 7 - progress.days.length;
+  for (let i = 0; i < emptyDays; i++) {
+    daysHtml += `<span class="inline-block w-8 h-8 rounded-full bg-white/10 text-white/30 text-xs leading-8 text-center mx-0.5">${i+1}</span>`;
+  }
+  
+  openModal(`
+    <div class="flex flex-col items-center py-4">
+      <div class="text-6xl mb-3">📅</div>
+      <h2 class="text-xl font-black text-gold">今日簽到</h2>
+      <p class="text-xs text-white/40 mt-1">每天簽到累積獎勵</p>
+      
+      <div class="mt-4 flex gap-1">
+        ${daysHtml}
+      </div>
+      <p class="text-xs text-white/30 mt-2">本週簽到 ${progress.days.length}/7 天</p>
+      
+      <div class="mt-4 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">
+        <p class="text-xs text-white/40">📌 獎勵規則</p>
+        <div class="mt-1 text-[10px] text-white/30 space-y-0.5">
+          <p>✅ 每日簽到：<span class="text-neongreen">+5 分</span></p>
+          <p>🔥 連續 3 天：<span class="text-gold">+5 分</span></p>
+          <p>🔥 連續 5 天：<span class="text-gold">+5 分</span></p>
+          <p>🎊 全勤 7 天：<span class="text-gold">+15 分</span></p>
+        </div>
+      </div>
+      
+      <button onclick="doCheckinFromReminder()" 
+        class="mt-4 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold">
+        📝 立即簽到
+      </button>
+      <button onclick="closeModal()" 
+        class="mt-2 text-xs text-white/30 hover:text-white/60 transition-colors">
+        稍後再說
+      </button>
+    </div>
+  `);
+}
+
+function doCheckinFromReminder() {
+  closeModal();
+  doCheckin();
+}
     renderPoints();
 
     /* ============================================================
@@ -4314,7 +4459,8 @@
       setTimeout(() => { initMap(); }, 300);
       setTimeout(() => { updateMapList(); }, 500);
       setTimeout(initPullToRefresh, 500);
-
+ // ===== 新增：每日簽到提醒 =====
+  setTimeout(checkDailyCheckinReminder, 2000);
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
