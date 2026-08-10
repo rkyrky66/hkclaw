@@ -23,7 +23,7 @@
 <!-- ===== Leaflet JS ===== -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ===== Tailwind CDN ===== -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -574,7 +574,10 @@
     ============================================================ */
     const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
-
+// ===== Supabase 客戶端初始化 =====
+const supabase = window.supabase 
+  ? window.supabase 
+  : supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
     const CLOUD_ON = SUPABASE_URL.startsWith("http") && SUPABASE_KEY && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
 
     let map = null;
@@ -707,7 +710,16 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     const todayKey = () => new Date().toISOString().slice(0, 10);
 
     const DEFAULT_STATE = {
-      user: { name: "夾娃娃獵人 #" + Math.floor(Math.random() * 9000 + 1000), device: uid() },
+      user: { 
+    name: "夾娃娃獵人 #" + Math.floor(Math.random() * 9000 + 1000), 
+    device: uid(),
+    is_bound: false,
+    email: '',
+    google_id: '',
+    user_id: '',
+    display_name: '',
+    avatar_url: ''
+  },
       points: 120,
       filterPassUntil: 0,
       adFree: false,
@@ -940,7 +952,14 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
   
   // ===== 執行頁面進入後邏輯 =====
   if (AFTER[name]) {
-    AFTER[name]();
+    // 如果是地圖頁面，增加延遲確保 DOM 渲染完成
+    if (name === 'map') {
+      setTimeout(function() {
+        AFTER[name]();
+      }, 350);
+    } else {
+      AFTER[name]();
+    }
   }
 }
 
@@ -979,7 +998,7 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
       });
     }
 
-    function afterMapView() {
+   function afterMapView() {
   window._mallGroups = {};
   
   // 確保主容器是 flex 布局
@@ -996,6 +1015,8 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     mapContainer.style.display = 'block';
     mapContainer.style.width = '100%';
     mapContainer.style.height = '100%';
+    // 強制回流
+    void mapContainer.offsetHeight;
   }
   if (mapWrapper) {
     mapWrapper.style.display = 'block';
@@ -1007,56 +1028,76 @@ let intelMoreOpenMap = { hk: false, kl: false, nt: false };
   if (map && mapInitialized) {
     console.log('🗺️ afterMapView: 地圖已存在，強制刷新');
     
-    // 先將地圖容器隱藏再顯示，強制瀏覽器重新計算布局
-    if (mapContainer) {
-      mapContainer.style.opacity = '0';
-      mapContainer.style.display = 'none';
-      // 強制回流
-      void mapContainer.offsetHeight;
-      mapContainer.style.display = 'block';
-      mapContainer.style.opacity = '1';
-    }
-    
-    // 使用 requestAnimationFrame 確保在下一幀執行
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        if (map) {
-          // 強制刷新地圖大小（true = 強制刷新）
+    // 方法1：直接刷新地圖大小
+    setTimeout(function() {
+      if (map) {
+        // 先檢查地圖容器是否還在 DOM 中
+        var container = document.getElementById('map-container');
+        if (container && container.offsetParent !== null) {
           map.invalidateSize(true);
-          // 如果有用戶位置，保持定位
           if (userLocation) {
             map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
           }
+          updateMapMarkers();
+          updateMapList();
+          console.log('🗺️ 地圖已刷新 (方法1)');
+        } else {
+          // 容器不可見，重新初始化
+          console.log('🗺️ 地圖容器不可見，重新初始化');
+          mapInitialized = false;
+          map = null;
+          markerCluster = null;
+          userMarker = null;
+          initMap();
         }
-        updateMapMarkers();
-        updateMapList();
-        console.log('🗺️ 地圖已強制刷新');
-      }, 150);
+      }
+    }, 300);
+    
+    // 方法2：備用方案 - 使用 requestAnimationFrame 確保渲染完成
+    requestAnimationFrame(function() {
+      setTimeout(function() {
+        if (map && map.getContainer()) {
+          map.invalidateSize(true);
+          if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+          }
+          updateMapMarkers();
+          updateMapList();
+          console.log('🗺️ 地圖已刷新 (方法2)');
+        }
+      }, 100);
     });
+    
     return;
   }
   
   // ===== 地圖未初始化，執行初始化 =====
   console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      const container = document.getElementById('map-container');
-      if (container) {
-        container.style.width = '100%';
-        container.style.display = 'block';
-        container.style.height = '100%';
-        const wrapper = document.getElementById('map-wrapper');
-        if (wrapper && wrapper.offsetHeight === 0) {
-          wrapper.style.height = '40vh';
-          wrapper.style.minHeight = '200px';
+  
+  // 使用多層 setTimeout 確保 DOM 完全渲染
+  setTimeout(function() {
+    requestAnimationFrame(function() {
+      setTimeout(function() {
+        const container = document.getElementById('map-container');
+        if (container) {
+          container.style.width = '100%';
+          container.style.display = 'block';
+          container.style.height = '100%';
+          const wrapper = document.getElementById('map-wrapper');
+          if (wrapper && wrapper.offsetHeight === 0) {
+            wrapper.style.height = '40vh';
+            wrapper.style.minHeight = '200px';
+          }
+          // 強制回流
+          void container.offsetHeight;
+          initMap();
+        } else {
+          console.error('❌ map-container 不存在');
+          toast('地圖載入失敗，請重新整理', 'pink');
         }
-        initMap();
-      } else {
-        console.error('❌ map-container 不存在');
-        toast('地圖載入失敗，請重新整理', 'pink');
-      }
-    }, 300);
-  });
+      }, 200);
+    });
+  }, 100);
 }
 
     // ===== 商場 Modal 功能 =====
@@ -1377,30 +1418,32 @@ function initMap() {
   container.style.display = 'block';
   container.style.width = '100%';
   container.style.height = '100%';
+  // 強制回流
+  void container.offsetHeight;
 
   // ===== 如果地圖已初始化，直接刷新，不重複創建 =====
   if (mapInitialized && map && map.getContainer()) {
     console.log('🗺️ 地圖已初始化，跳過重複創建，執行刷新');
     // 強制刷新
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        if (map) {
-          // 先重置容器大小
-          const c = document.getElementById('map-container');
-          if (c) {
-            c.style.display = 'block';
-            c.style.width = '100%';
-            c.style.height = '100%';
-          }
-          map.invalidateSize(true);
-          if (userLocation) {
-            map.setView([userLocation.lat, userLocation.lng], map.getZoom());
-          }
-          updateMapMarkers();
-          updateMapList();
+    setTimeout(function() {
+      if (map) {
+        // 先重置容器大小
+        const c = document.getElementById('map-container');
+        if (c) {
+          c.style.display = 'block';
+          c.style.width = '100%';
+          c.style.height = '100%';
         }
-      }, 100);
-    });
+        // 強制刷新地圖
+        map.invalidateSize(true);
+        if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+        }
+        updateMapMarkers();
+        updateMapList();
+        console.log('🗺️ 地圖刷新完成');
+      }
+    }, 200);
     return;
   }
 
@@ -1414,6 +1457,7 @@ function initMap() {
     userMarker = null;
   }
 
+  // 初始化地圖
   let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
   let zoom = 13;
   if (userLocation) {
@@ -1444,22 +1488,15 @@ function initMap() {
     // ===== 聚合圈顯示店鋪總數 =====
     markerCluster = L.markerClusterGroup({
       iconCreateFunction: function(cluster) {
-        // 計算所有子標記代表的店鋪總數
         let totalStores = 0;
         const childMarkers = cluster.getAllChildMarkers();
-
         childMarkers.forEach(marker => {
-          // 檢查 marker 是否有 totalStores 屬性（商場合併標記）
           if (marker.options && marker.options.totalStores) {
-            // 商場合併標記：加上該商場的店鋪數量
             totalStores += marker.options.totalStores || 1;
           } else {
-            // 獨立舖或其他標記：加 1
             totalStores += 1;
           }
         });
-
-        // 如果總數小於等於 1，不顯示聚合圈（直接顯示單獨標記）
         if (totalStores <= 1) {
           return L.divIcon({
             html: '',
@@ -1467,8 +1504,6 @@ function initMap() {
             iconSize: L.point(0, 0),
           });
         }
-
-        // 返回聚合圈，顯示店鋪總數
         return L.divIcon({
           html: `<div class="marker-cluster-custom">${totalStores}</div>`,
           className: '',
@@ -1490,9 +1525,9 @@ function initMap() {
 
     mapInitialized = true;
     console.log('🗺️ 地圖初始化完成');
-    setTimeout(() => {
+    setTimeout(function() {
       if (map) map.invalidateSize();
-    }, 300);
+    }, 500);
   } catch (e) {
     console.error('地圖初始化失敗:', e);
     toast('地圖載入失敗，請重新整理', 'pink');
@@ -4694,6 +4729,262 @@ async function submitOwnerPost() {
     <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>
   `;
 }
+// ============================================================
+//   Google OAuth 綁定功能（完整版）
+// ============================================================
+
+// ===== 綁定 Google 帳號 =====
+async function bindGoogleAccount() {
+  try {
+    toast('🔐 正在連線到 Google...', 'gold');
+    
+    // 使用 Supabase 的 signInWithOAuth
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + window.location.pathname,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
+      }
+    });
+    
+    if (error) throw error;
+    
+    // 注意：signInWithOAuth 會將用戶重導向到 Google 登入頁面
+    // 用戶登入後會回到此頁面，由 checkOAuthCallback() 處理
+    
+  } catch (error) {
+    console.error('Google 登入錯誤:', error);
+    toast('❌ 登入失敗：' + error.message, 'pink');
+  }
+}
+
+// ===== 檢查 OAuth 回調 =====
+async function checkOAuthCallback() {
+  // 檢查 URL 中是否有認證相關參數
+  const params = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  
+  if (accessToken) {
+    console.log('🔐 檢測到 OAuth 回調，正在處理...');
+    
+    try {
+      // 設置 session
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || ''
+      });
+      
+      if (error) throw error;
+      
+      // 獲取用戶資訊
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      const user = userData.user;
+      
+      // 綁定成功，同步數據
+      await syncUserDataAfterBind(user);
+      
+      // 清除 URL 中的 token 參數
+      window.history.replaceState({}, '', window.location.pathname);
+      
+    } catch (error) {
+      console.error('OAuth 回調處理錯誤:', error);
+      toast('❌ 綁定失敗：' + error.message, 'pink');
+    }
+  }
+}
+
+// ===== 綁定後同步數據 =====
+async function syncUserDataAfterBind(user) {
+  try {
+    const deviceId = STATE.user.device;
+    const email = user.email || '';
+    const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || '夾客';
+    const avatarUrl = user.user_metadata?.avatar_url || '';
+    const googleId = user.id;
+    
+    // 1️⃣ 檢查 Supabase 中是否已有此用戶的記錄
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('google_id', googleId)
+      .maybeSingle();
+    
+    if (fetchError) throw fetchError;
+    
+    let userId;
+    
+    if (existingUser) {
+      // 用戶已存在：更新數據
+      userId = existingUser.id;
+      
+      const updates = {
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        total_points: Math.max(existingUser.total_points || 0, STATE.points),
+        total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
+        last_active_at: new Date().toISOString(),
+        is_anonymous: false
+      };
+      
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', userId);
+      
+      if (updateError) throw updateError;
+      
+      // 如果雲端數據比本地新，從雲端載入
+      if (existingUser.total_points > STATE.points) {
+        STATE.points = existingUser.total_points;
+      }
+      if (existingUser.total_xp > (STATE.total_xp || 0)) {
+        STATE.total_xp = existingUser.total_xp;
+      }
+      
+    } else {
+      // 新用戶：建立記錄
+      const { data: newUser, error: insertError } = await supabase
+        .from('user_profiles')
+        .insert({
+          device_id: deviceId,
+          google_id: googleId,
+          email: email,
+          display_name: displayName,
+          avatar_url: avatarUrl,
+          total_points: STATE.points,
+          total_xp: STATE.total_xp || 0,
+          level: STATE.level || 1,
+          is_anonymous: false,
+          bound_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          last_active_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (insertError) throw insertError;
+      userId = newUser.id;
+    }
+    
+    // 2️⃣ 標記用戶為已綁定
+    STATE.user.is_bound = true;
+    STATE.user.email = email;
+    STATE.user.google_id = googleId;
+    STATE.user.user_id = userId;
+    STATE.user.display_name = displayName;
+    STATE.user.avatar_url = avatarUrl;
+    
+    // 3️⃣ 同步收藏
+    if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) {
+      await syncFavorites(userId);
+    }
+    
+    // 4️⃣ 同步成就
+    if (STATE.achievements && STATE.achievements.unlocked) {
+      await syncAchievements(userId);
+    }
+    
+    // 5️⃣ 儲存到本地
+    save();
+    
+    // 6️⃣ 獎勵綁定積分
+    addPoints(20, 'Google 帳號綁定獎勵');
+    
+    toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
+    showView('me');
+    
+  } catch (error) {
+    console.error('同步數據錯誤:', error);
+    toast('⚠️ 綁定成功但數據同步失敗: ' + error.message, 'pink');
+    STATE.user.is_bound = true;
+    save();
+  }
+}
+
+// ===== 同步收藏 =====
+async function syncFavorites(userId) {
+  try {
+    for (const storeId of STATE.favStores) {
+      await supabase
+        .from('user_favorites')
+        .upsert({
+          user_id: userId,
+          store_id: storeId,
+          created_at: new Date().toISOString()
+        }, { onConflict: 'user_id, store_id' });
+    }
+    
+    for (const machineId of STATE.favMachines) {
+      await supabase
+        .from('user_favorites')
+        .upsert({
+          user_id: userId,
+          machine_id: machineId,
+          created_at: new Date().toISOString()
+        }, { onConflict: 'user_id, machine_id' });
+    }
+    
+    console.log('✅ 收藏已同步');
+  } catch (e) {
+    console.warn('收藏同步失敗:', e);
+  }
+}
+
+// ===== 同步成就 =====
+async function syncAchievements(userId) {
+  try {
+    for (const key of (STATE.achievements?.unlocked || [])) {
+      const def = ACHIEVEMENT_DEFS[key];
+      if (!def) continue;
+      
+      await supabase
+        .from('user_achievements')
+        .upsert({
+          user_id: userId,
+          achievement_key: key,
+          achievement_name: def.name,
+          unlocked_at: new Date().toISOString()
+        }, { onConflict: 'user_id, achievement_key' });
+    }
+    console.log('✅ 成就已同步');
+  } catch (e) {
+    console.warn('成就同步失敗:', e);
+  }
+}
+
+// ===== 登出 Google =====
+async function logoutGoogle() {
+  if (!confirm('確定要登出嗎？本地數據仍會保留。')) return;
+  
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    STATE.user.is_bound = false;
+    STATE.user.google_id = null;
+    STATE.user.email = null;
+    STATE.user.user_id = null;
+    STATE.user.display_name = null;
+    STATE.user.avatar_url = null;
+    save();
+    
+    toast('✅ 已登出', 'green');
+    showView('me');
+  } catch (e) {
+    toast('登出失敗: ' + e.message, 'pink');
+  }
+}
+
+// ===== 頁面載入時檢查 OAuth 回調 =====
+document.addEventListener('DOMContentLoaded', function() {
+  checkOAuthCallback();
+});
 
     function redeemAdFree() {
       if (STATE.adFree) return toast("已兌換", "pink");
