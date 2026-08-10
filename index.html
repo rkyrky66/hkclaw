@@ -244,68 +244,114 @@
     /* ============================================================
        0. SUPABASE 連線常數
     ============================================================ */
-    const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
+    // ===== Supabase 客戶端初始化（完全重寫） =====
+const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-        // ===== Supabase 客戶端初始化 =====
-    let supabaseClientInstance = null;
+let supabaseClientInstance = null;
 
-    // 嘗試從 CDN 獲取
-    if (typeof supabase !== 'undefined') {
-      console.log('✅ Supabase 已由 CDN 載入');
-      supabaseClientInstance = supabase;
-    } else {
-      console.warn('⚠️ Supabase CDN 加載失敗，嘗試從 window 獲取...');
-      
-      if (typeof window.supabase !== 'undefined') {
-        supabaseClientInstance = window.supabase;
-        console.log('✅ 從 window.supabase 獲取成功');
-      } else {
-        console.warn('⚠️ 使用離線模式（Supabase 功能受限）');
-        // 創建後備客戶端
-        supabaseClientInstance = {
-          auth: {
-            signInWithOAuth: async ({ provider, options }) => {
-              console.warn('⚠️ Auth 不可用：請檢查 Supabase CDN');
-              toast('⚠️ 認證服務不可用，請檢查網絡連接', 'pink');
-              return { data: null, error: new Error('Auth 服務不可用') };
-            },
-            signOut: async () => {
-              console.warn('⚠️ Auth 不可用');
-              return { error: null };
-            },
-            getUser: async () => {
-              return { data: { user: null }, error: new Error('Auth 不可用') };
-            },
-            setSession: async () => {
-              return { data: null, error: new Error('Auth 不可用') };
-            }
-          },
-          from: (table) => ({
-            select: (columns) => ({ 
-              eq: (col, val) => ({ maybeSingle: async () => ({ data: null, error: new Error('DB 不可用') }) }),
-              order: (col, opts) => ({ then: (cb) => cb([]) })
-            }),
-            insert: (data) => ({ then: (cb) => cb({ error: null }) }),
-            update: (data) => ({ eq: (col, val) => ({ then: (cb) => cb({ error: null }) }) }),
-            upsert: (data, opts) => ({ then: (cb) => cb({ error: null }) })
-          })
-        };
-      }
+// 初始化函數
+function initSupabaseClient() {
+    try {
+        // 檢查 supabase 全域變量是否存在（由 CDN 載入）
+        if (typeof supabase !== 'undefined' && supabase.createClient) {
+            console.log('✅ 使用 supabase 全域變量創建客戶端');
+            supabaseClientInstance = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        } 
+        // 檢查 window.supabase 是否存在
+        else if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+            console.log('✅ 使用 window.supabase 創建客戶端');
+            supabaseClientInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+        // 檢查 @supabase/supabase-js 是否通過其他方式加載
+        else if (typeof window.supabaseJs !== 'undefined') {
+            console.log('✅ 使用 window.supabaseJs 創建客戶端');
+            supabaseClientInstance = window.supabaseJs.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+        else {
+            // CDN 未載入，使用動態導入
+            console.warn('⚠️ Supabase CDN 未載入，嘗試動態導入...');
+            import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2')
+                .then(module => {
+                    console.log('✅ 動態導入成功');
+                    supabaseClientInstance = module.createClient(SUPABASE_URL, SUPABASE_KEY);
+                    console.log('✅ Supabase 客戶端初始化完成（動態導入）');
+                    console.log('🔑 Auth 可用:', !!supabaseClientInstance.auth);
+                })
+                .catch(err => {
+                    console.error('❌ 動態導入失敗:', err);
+                    createFallbackClient();
+                });
+            return;
+        }
+        
+        console.log('✅ Supabase 客戶端初始化完成');
+        console.log('🔑 Auth 可用:', !!supabaseClientInstance.auth);
+        
+    } catch (e) {
+        console.error('❌ 初始化 Supabase 客戶端失敗:', e);
+        createFallbackClient();
     }
+}
 
-    // ===== 檢查 Supabase 是否就緒 =====
-    function isSupabaseReady() {
-      if (!supabaseClientInstance) { 
+// 創建後備客戶端
+function createFallbackClient() {
+    console.warn('⚠️ 使用後備客戶端（僅限基本功能）');
+    supabaseClientInstance = {
+        auth: {
+            signInWithOAuth: async () => {
+                toast('⚠️ Auth 服務不可用，請檢查網絡或重新載入頁面', 'pink');
+                return { data: null, error: new Error('Auth 服務不可用') };
+            },
+            signOut: async () => ({ error: null }),
+            getUser: async () => ({ data: { user: null }, error: new Error('Auth 不可用') }),
+            setSession: async () => ({ data: null, error: new Error('Auth 不可用') }),
+            getSession: async () => ({ data: { session: null }, error: null })
+        },
+        from: (table) => ({
+            select: () => ({ 
+                eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+                order: () => ({ then: (cb) => cb([]) })
+            }),
+            insert: () => ({ then: (cb) => cb({ error: null }) }),
+            update: () => ({ eq: () => ({ then: (cb) => cb({ error: null }) }) }),
+            upsert: () => ({ then: (cb) => cb({ error: null }) })
+        })
+    };
+}
+
+// ===== 等待 DOM 載入後初始化 =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 DOM 已載入，開始初始化 Supabase...');
+    initSupabaseClient();
+    
+    // 2 秒後確認狀態
+    setTimeout(() => {
+        if (supabaseClientInstance && supabaseClientInstance.auth) {
+            console.log('✅ 最終確認: Auth 可用');
+        } else {
+            console.warn('⚠️ 最終確認: Auth 不可用，請檢查網絡或重新載入頁面');
+        }
+    }, 2000);
+});
+
+// ===== 檢查 Supabase 是否就緒 =====
+function isSupabaseReady() {
+    if (!supabaseClientInstance) { 
         console.error('❌ Supabase 客戶端未初始化'); 
         return false; 
-      }
-      if (typeof supabaseClientInstance.auth === 'undefined') { 
+    }
+    if (typeof supabaseClientInstance.auth === 'undefined') { 
         console.error('❌ Supabase Auth 不可用'); 
         return false; 
-      }
-      return true;
     }
+    // 額外檢查：確認 auth 有 signInWithOAuth 方法
+    if (typeof supabaseClientInstance.auth.signInWithOAuth !== 'function') {
+        console.error('❌ signInWithOAuth 方法不存在');
+        return false;
+    }
+    return true;
+}
 
 // ===== 修改 CLoud 操作使用新的客戶端 =====
 // 所有使用 supabase 的地方改為 supabaseClientInstance
