@@ -255,7 +255,12 @@
     let mapFilter = 'all'; // 'all' | 'pending' | 'incomplete'
     let isRefreshingMap = false;
     let ensureStoresVisibleCount = 0;
-
+// ===== 地圖狀態保存 =====
+let savedMapState = {
+  center: { lat: HK_CENTER.lat, lng: HK_CENTER.lng },
+  zoom: 13,
+  hasState: false
+};
     const REGION_CENTERS = {
       '銅鑼灣': { lat: 22.2799, lng: 114.1838 },
       '天后': { lat: 22.2810, lng: 114.1900 },
@@ -574,38 +579,53 @@
     const AFTER = { map: afterMapView };
 
     function showView(name) {
-      const mapContainer = document.getElementById('map-container');
-      const main = document.getElementById("main");
-      
-      if (CURRENT === 'map' && name !== 'map') {
-        if (mapContainer) mapContainer.style.display = 'none';
-        console.log('🗺️ 地圖已隱藏（保留狀態）');
-      }
-      
-      CURRENT = name;
-      
-      if (main) {
-        main.scrollTop = 0;
-        main.classList.remove("view-enter");
-        main.classList.toggle('map-page', name === 'map');
-        void main.offsetWidth;
-        main.innerHTML = VIEWS[name]();
-        main.classList.add("view-enter");
-      }
-      
-      document.querySelectorAll(".nav-btn").forEach(b => {
-        const on = b.getAttribute("data-nav") === name;
-        b.classList.toggle("active", on);
-        b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
-        b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
-      });
-      
-      document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
-      
-      if (AFTER[name]) {
-        setTimeout(() => { AFTER[name](); }, name === 'map' ? 350 : 100);
-      }
+  const mapContainer = document.getElementById('map-container');
+  const main = document.getElementById("main");
+  
+  // ===== 切換離開地圖頁面時，保存地圖狀態 =====
+  if (CURRENT === 'map' && name !== 'map') {
+    if (map && mapInitialized) {
+      // 保存地圖中心點和縮放層級
+      const center = map.getCenter();
+      savedMapState = {
+        center: { lat: center.lat, lng: center.lng },
+        zoom: map.getZoom(),
+        hasState: true
+      };
+      console.log('💾 地圖狀態已保存:', savedMapState);
     }
+    
+    // 隱藏地圖容器（保留 DOM，不銷毀）
+    if (mapContainer) {
+      mapContainer.style.display = 'none';
+    }
+    console.log('🗺️ 地圖已隱藏（保留狀態）');
+  }
+  
+  CURRENT = name;
+  
+  if (main) {
+    main.scrollTop = 0;
+    main.classList.remove("view-enter");
+    main.classList.toggle('map-page', name === 'map');
+    void main.offsetWidth;
+    main.innerHTML = VIEWS[name]();
+    main.classList.add("view-enter");
+  }
+  
+  document.querySelectorAll(".nav-btn").forEach(b => {
+    const on = b.getAttribute("data-nav") === name;
+    b.classList.toggle("active", on);
+    b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
+    b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
+  });
+  
+  document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
+  
+  if (AFTER[name]) {
+    setTimeout(() => { AFTER[name](); }, name === 'map' ? 350 : 100);
+  }
+}
 
     /* ============================================================
        4. 【地圖頁面】核心功能
@@ -687,91 +707,121 @@
     }
 
 function getStoresInBounds() {
-  if (!map) return STORES.filter(s => s.lat && s.lng);
+  if (!map) {
+    console.log('📍 map 未初始化，返回所有有座標的店鋪');
+    return STORES.filter(s => s.lat && s.lng);
+  }
+  
   const bounds = map.getBounds();
+  if (!bounds) {
+    console.log('📍 無法獲取地圖邊界，返回所有有座標的店鋪');
+    return STORES.filter(s => s.lat && s.lng);
+  }
+  
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
+  
+  // 調試：顯示地圖邊界
+  console.log(`📍 地圖邊界: lat ${sw.lat.toFixed(4)}-${ne.lat.toFixed(4)}, lng ${sw.lng.toFixed(4)}-${ne.lng.toFixed(4)}`);
+  console.log(`📍 總店鋪數: ${STORES.length}, 有座標的: ${STORES.filter(s => s.lat && s.lng).length}`);
+  
   // 使用所有店鋪，不套用 Filter
-  return STORES.filter(s => {
+  const result = STORES.filter(s => {
     if (!s.lat || !s.lng) return false;
-    return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+    const inBounds = s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+    return inBounds;
   });
+  
+  console.log(`📍 範圍內店鋪: ${result.length}`);
+  return result;
 }
 
     // ===== 優化後的 afterMapView =====
     function afterMapView() {
-      if (isRefreshingMap) return;
-      isRefreshingMap = true;
-      
-      if (!STORES || STORES.length === 0) {
-        console.log('⏳ 等待店鋪資料載入...');
-        setTimeout(() => { isRefreshingMap = false; afterMapView(); }, 500);
-        return;
-      }
-      
-      window._mallGroups = {};
-      
-      const main = document.getElementById('main');
-      if (main) main.classList.add('map-page');
-      
-      const mapContainer = document.getElementById('map-container');
-      const mapWrapper = document.getElementById('map-wrapper');
-      
-      if (mapContainer) {
-        mapContainer.style.display = 'block';
-        mapContainer.style.width = '100%';
-        mapContainer.style.height = '100%';
-        void mapContainer.offsetHeight;
-      }
-      if (mapWrapper) {
-        mapWrapper.style.display = 'block';
-        mapWrapper.style.height = '40vh';
-        mapWrapper.style.minHeight = '200px';
-      }
-      
-      if (map && mapInitialized) {
-        console.log('🗺️ afterMapView: 地圖已存在，更新標記');
+  if (isRefreshingMap) return;
+  isRefreshingMap = true;
+  
+  if (!STORES || STORES.length === 0) {
+    console.log('⏳ 等待店鋪資料載入...');
+    setTimeout(() => { isRefreshingMap = false; afterMapView(); }, 500);
+    return;
+  }
+  
+  window._mallGroups = {};
+  
+  const main = document.getElementById('main');
+  if (main) main.classList.add('map-page');
+  
+  const mapContainer = document.getElementById('map-container');
+  const mapWrapper = document.getElementById('map-wrapper');
+  
+  if (mapContainer) {
+    mapContainer.style.display = 'block';
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
+    void mapContainer.offsetHeight;
+  }
+  if (mapWrapper) {
+    mapWrapper.style.display = 'block';
+    mapWrapper.style.height = '40vh';
+    mapWrapper.style.minHeight = '200px';
+  }
+  
+  // ===== 核心修復：如果地圖已存在，直接恢復顯示 =====
+  if (map && mapInitialized) {
+    console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
+    
+    setTimeout(function() {
+      if (map) {
+        map.invalidateSize(true);
+        
+        // 如果有保存的狀態，恢復到保存的位置
+        if (savedMapState.hasState) {
+          console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
+          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom, { animate: true });
+        } else if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], 15, { animate: true });
+        } else {
+          map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
+        }
+        
         updateMapMarkers();
         updateMapList();
-        
-        setTimeout(function() {
-          if (map) {
-            map.invalidateSize(true);
-            if (userLocation) {
-              map.setView([userLocation.lat, userLocation.lng], map.getZoom() || 15, { animate: true });
-            } else {
-              map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
-            }
-            ensureStoresVisible();
-            console.log('🗺️ 地圖已刷新');
-          }
-          isRefreshingMap = false;
-        }, 300);
-        return;
+        ensureStoresVisible();
+        console.log('🗺️ 地圖已恢復');
       }
-      
-      console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
+      isRefreshingMap = false;
+    }, 300);
+    return;
+  }
+  
+  // ===== 地圖不存在，需要初始化 =====
+  console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
+  
+  setTimeout(function() {
+    requestAnimationFrame(function() {
       setTimeout(function() {
-        requestAnimationFrame(function() {
-          setTimeout(function() {
-            const container = document.getElementById('map-container');
-            if (container) {
-              container.style.width = '100%';
-              container.style.display = 'block';
-              container.style.height = '100%';
-              void container.offsetHeight;
-              initMap();
-            } else {
-              console.error('❌ map-container 不存在');
-              toast('地圖載入失敗，請重新整理', 'pink');
-            }
-            isRefreshingMap = false;
-          }, 200);
-        });
-      }, 100);
-    }
-// ===== 修復 ensureStoresVisible - 防止無限循環 =====
-
+        const container = document.getElementById('map-container');
+        if (container) {
+          container.style.width = '100%';
+          container.style.display = 'block';
+          container.style.height = '100%';
+          void container.offsetHeight;
+          
+          // 初始化時使用保存的狀態或預設值
+          const initCenter = savedMapState.hasState ? savedMapState.center : HK_CENTER;
+          const initZoom = savedMapState.hasState ? savedMapState.zoom : 13;
+          initMap(initCenter, initZoom);
+        } else {
+          console.error('❌ map-container 不存在');
+          toast('地圖載入失敗，請重新整理', 'pink');
+        }
+        isRefreshingMap = false;
+      }, 200);
+    });
+  }, 100);
+}
+// ===== 修復 ensureStoresVisible - 更穩健的版本 =====
 let lastEnsureZoom = 0;
 
 function ensureStoresVisible() {
@@ -784,44 +834,52 @@ function ensureStoresVisible() {
     return;
   }
   
-  // 使用所有店鋪來判斷（不套用 Filter）
+  // 使用所有有座標的店鋪來判斷（不套用 Filter）
   const allStores = STORES.filter(s => s.lat && s.lng);
   if (allStores.length === 0) {
-    console.log('📭 沒有店鋪資料，跳過');
+    console.log('📭 沒有店鋪座標資料，跳過');
     return;
   }
   
-  // 檢查當前視圖內是否有店鋪
+  // 獲取當前地圖邊界
   const bounds = map.getBounds();
+  if (!bounds) {
+    console.log('📍 無法獲取地圖邊界，跳過');
+    return;
+  }
+  
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
+  
+  // 檢查當前視圖內是否有店鋪
   const visibleStores = allStores.filter(s => {
     return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
   });
   
   const currentZoom = Math.round(map.getZoom());
+  console.log(`📍 當前縮放: ${currentZoom}, 可見店鋪: ${visibleStores.length}/${allStores.length}`);
   
-  if (visibleStores.length === 0) {
+  if (visibleStores.length === 0 && allStores.length > 0) {
     ensureStoresVisibleCount++;
     console.log(`📍 當前區域無店鋪，嘗試縮放 (${ensureStoresVisibleCount}/5)...`);
     
-    // 如果已經在最小縮放或縮放沒有變化，直接跳到全港視圖
-    if (currentZoom <= 11 || currentZoom === lastEnsureZoom) {
-      console.log('🗺️ 已到最小縮放，跳轉到全港視圖');
-      map.setView([HK_CENTER.lat, HK_CENTER.lng], 11);
+    // 如果已經在最小縮放或縮放沒有變化，跳到店鋪位置
+    if (currentZoom <= 11) {
+      console.log('🗺️ 已到最小縮放，跳到店鋪位置');
+      const avgLat = allStores.reduce((sum, s) => sum + parseFloat(s.lat), 0) / allStores.length;
+      const avgLng = allStores.reduce((sum, s) => sum + parseFloat(s.lng), 0) / allStores.length;
+      map.setView([avgLat, avgLng], 12);
       setTimeout(() => {
         updateMapMarkers();
         updateMapList();
       }, 300);
       ensureStoresVisibleCount = 0;
     } else {
-      lastEnsureZoom = currentZoom;
       map.setZoom(currentZoom - 1);
       setTimeout(() => ensureStoresVisible(), 400);
     }
   } else {
     ensureStoresVisibleCount = 0;
-    lastEnsureZoom = 0;
   }
 }
 
@@ -1088,97 +1146,119 @@ function renderMapStoreList() {
     /* ============================================================
        4b. 地圖核心邏輯
     ============================================================ */
-    function initMap() {
-      const container = document.getElementById('map-container');
-      if (!container) { console.error('❌ map-container 不存在'); return; }
+    function initMap(initialCenter, initialZoom) {
+  const container = document.getElementById('map-container');
+  if (!container) { console.error('❌ map-container 不存在'); return; }
 
-      container.style.display = 'block';
-      container.style.width = '100%';
-      container.style.height = '100%';
-      void container.offsetHeight;
+  container.style.display = 'block';
+  container.style.width = '100%';
+  container.style.height = '100%';
+  void container.offsetHeight;
 
-      if (mapInitialized && map && map.getContainer()) {
-        console.log('🗺️ 地圖已初始化，跳過重複創建，執行刷新');
-        setTimeout(function() {
-          if (map) {
-            const c = document.getElementById('map-container');
-            if (c) { c.style.display = 'block'; c.style.width = '100%'; c.style.height = '100%'; }
-            map.invalidateSize(true);
-            if (userLocation) map.setView([userLocation.lat, userLocation.lng], map.getZoom());
-            updateMapMarkers();
-            updateMapList();
-            ensureStoresVisible();
-            console.log('🗺️ 地圖刷新完成');
-          }
-        }, 200);
-        return;
-      }
-
+  // 如果地圖已存在，直接刷新
+  if (mapInitialized && map && map.getContainer()) {
+    console.log('🗺️ 地圖已初始化，跳過重複創建');
+    setTimeout(function() {
       if (map) {
-        try { map.remove(); } catch (e) {}
-        map = null; markerCluster = null; userMarker = null;
-      }
-
-      let center = { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
-      let zoom = 13;
-      if (userLocation) {
-        center = { lat: userLocation.lat, lng: userLocation.lng };
-        zoom = 15;
-        console.log(`🗺️ 定位到 GPS 位置`);
-      } else {
-        console.log(`🗺️ 定位到香港中心點（等待 GPS）`);
-      }
-
-      try {
-        map = L.map('map-container', {
-          center: [center.lat, center.lng],
-          zoom: zoom,
-          zoomControl: false,
-          attributionControl: true,
-        });
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
-          maxZoom: 19,
-        }).addTo(map);
-
-        map.on('moveend zoomend', function() { updateMapList(); ensureStoresVisible(); });
-
-        markerCluster = L.markerClusterGroup({
-          iconCreateFunction: function(cluster) {
-            let totalStores = 0;
-            cluster.getAllChildMarkers().forEach(marker => {
-              totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
-            });
-            if (totalStores <= 1) {
-              return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
-            }
-            return L.divIcon({
-              html: `<div class="marker-cluster-custom">${totalStores}</div>`,
-              className: '',
-              iconSize: L.point(36, 36),
-            });
-          },
-          maxClusterRadius: 60,
-          spiderfyOnMaxZoom: true,
-          showCoverageOnHover: false,
-          zoomToBoundsOnClick: true,
-        });
-        map.addLayer(markerCluster);
-
-        if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
+        map.invalidateSize(true);
+        if (savedMapState.hasState) {
+          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom);
+        } else if (userLocation) {
+          map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+        }
         updateMapMarkers();
         updateMapList();
         ensureStoresVisible();
-
-        mapInitialized = true;
-        console.log('🗺️ 地圖初始化完成');
-        setTimeout(() => { if (map) map.invalidateSize(); }, 500);
-      } catch (e) {
-        console.error('地圖初始化失敗:', e);
-        toast('地圖載入失敗，請重新整理', 'pink');
       }
+    }, 200);
+    return;
+  }
+
+  // 清理舊地圖
+  if (map) {
+    try { map.remove(); } catch (e) {}
+    map = null; markerCluster = null; userMarker = null;
+  }
+
+  // ===== 使用傳入的初始位置，或預設值 =====
+  let center = initialCenter || { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
+  let zoom = initialZoom || 13;
+  
+  // 如果有 GPS 且沒有保存的狀態，使用 GPS 位置
+  if (userLocation && !savedMapState.hasState) {
+    center = { lat: userLocation.lat, lng: userLocation.lng };
+    zoom = 15;
+    console.log(`🗺️ 定位到 GPS 位置`);
+  } else if (savedMapState.hasState) {
+    console.log(`🗺️ 使用保存的位置: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
+  } else {
+    // 沒有 GPS 時，計算店鋪平均位置
+    const storesWithCoords = STORES.filter(s => s.lat && s.lng);
+    if (storesWithCoords.length > 0) {
+      const avgLat = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lat), 0) / storesWithCoords.length;
+      const avgLng = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lng), 0) / storesWithCoords.length;
+      center = { lat: avgLat, lng: avgLng };
+      zoom = 12;
+      console.log(`🗺️ 定位到店鋪平均位置`);
     }
+  }
+
+  try {
+    map = L.map('map-container', {
+      center: [center.lat, center.lng],
+      zoom: zoom,
+      zoomControl: false,
+      attributionControl: true,
+    });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
+      maxZoom: 19,
+    }).addTo(map);
+
+    map.on('moveend zoomend', function() { updateMapList(); ensureStoresVisible(); });
+
+    markerCluster = L.markerClusterGroup({
+      iconCreateFunction: function(cluster) {
+        let totalStores = 0;
+        cluster.getAllChildMarkers().forEach(marker => {
+          totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
+        });
+        if (totalStores <= 1) {
+          return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
+        }
+        return L.divIcon({
+          html: `<div class="marker-cluster-custom">${totalStores}</div>`,
+          className: '',
+          iconSize: L.point(36, 36),
+        });
+      },
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+    });
+    map.addLayer(markerCluster);
+
+    if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
+    updateMapMarkers();
+    updateMapList();
+    ensureStoresVisible();
+
+    mapInitialized = true;
+    // 保存初始化後的狀態
+    savedMapState = {
+      center: center,
+      zoom: zoom,
+      hasState: true
+    };
+    console.log('🗺️ 地圖初始化完成');
+    setTimeout(() => { if (map) map.invalidateSize(); }, 500);
+  } catch (e) {
+    console.error('地圖初始化失敗:', e);
+    toast('地圖載入失敗，請重新整理', 'pink');
+  }
+}
 
     function updateMapList() {
   const listContainer = document.getElementById('map-store-list');
