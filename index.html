@@ -767,34 +767,55 @@ function getStoresInBounds() {
     mapWrapper.style.minHeight = '200px';
   }
   
-  // ===== 核心修復：如果地圖已存在，直接恢復顯示 =====
   if (map && mapInitialized) {
-    console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
-    
-    setTimeout(function() {
-      if (map) {
-        map.invalidateSize(true);
-        
-        // 如果有保存的狀態，恢復到保存的位置
-        if (savedMapState.hasState) {
-          console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
-          map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom, { animate: true });
-        } else if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], 15, { animate: true });
-        } else {
-          map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
-        }
-        
-        updateMapMarkers();
-        updateMapList();
-        ensureStoresVisible();
-        console.log('🗺️ 地圖已恢復');
-      }
-      isRefreshingMap = false;
-    }, 300);
-    return;
+  console.log('🗺️ afterMapView: 地圖已存在，恢復顯示');
+  
+  // 先確保容器可見
+  const container = document.getElementById('map-container');
+  if (container) {
+    container.style.display = 'block';
+    container.style.width = '100%';
+    container.style.height = '100%';
   }
   
+  // 使用多個 setTimeout 確保渲染完成
+  setTimeout(function() {
+    if (map) {
+      // 先強制刷新地圖大小
+      map.invalidateSize(true);
+      
+      // 再設置視圖
+      setTimeout(function() {
+        if (map) {
+          // 如果有保存的狀態，恢復到保存的位置
+          if (savedMapState.hasState) {
+            console.log('📍 恢復地圖到保存的位置:', savedMapState.center);
+            map.setView([savedMapState.center.lat, savedMapState.center.lng], savedMapState.zoom, { animate: false });
+          } else if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], 15, { animate: false });
+          } else {
+            map.setView([HK_CENTER.lat, HK_CENTER.lng], 13);
+          }
+          
+          // 再次刷新確保邊界正確
+          setTimeout(function() {
+            if (map) {
+              map.invalidateSize(true);
+              updateMapMarkers();
+              updateMapList();
+              ensureStoresVisible();
+              console.log('🗺️ 地圖已恢復');
+            }
+          }, 100);
+        }
+        isRefreshingMap = false;
+      }, 100);
+    } else {
+      isRefreshingMap = false;
+    }
+  }, 300);
+  return;
+}
   // ===== 地圖不存在，需要初始化 =====
   console.log('🗺️ afterMapView: 地圖未初始化，執行初始化');
   
