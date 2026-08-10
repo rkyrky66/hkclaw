@@ -414,16 +414,38 @@ function isSupabaseReady() {
       return res.status === 204 ? null : res.json();
     }
 
-    async function cloudInsert(table, row) {
-      if (!CLOUD_ON) return;
-      try {
+    // ===== 修改 cloudInsert 函數 =====
+async function cloudInsert(table, row) {
+    if (!CLOUD_ON) return;
+    try {
+        // 處理不同表的特殊情況
+        let processedRow = { ...row };
+        
+        // 如果是 claw_stores，確保 id 是字符串
+        if (table === 'claw_stores' && processedRow.id) {
+            processedRow.id = String(processedRow.id);
+        }
+        
+        // 如果是 user_achievements，處理 user_id
+        if (table === 'user_achievements' && processedRow.user_id) {
+            if (typeof processedRow.user_id === 'string' && !processedRow.user_id.includes('-')) {
+                processedRow.user_id = null;
+            }
+        }
+        
         await sbFetch(table, {
-          method: "POST",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify([{ ...row, device: STATE.user.device, created_at: new Date().toISOString() }])
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify([{ 
+                ...processedRow, 
+                device: STATE.user.device, 
+                created_at: new Date().toISOString() 
+            }])
         });
-      } catch (e) { console.log("[v0] cloudInsert 失敗:", e.message); }
+    } catch (e) { 
+        console.log("[v0] cloudInsert 失敗:", e.message); 
     }
+}
 
     async function uploadImage(file, folder = 'stores') {
       if (!CLOUD_ON) {
@@ -2006,7 +2028,17 @@ function backToMall() {
         } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
       }
       
-      const verification = { store_id: storeId, verifier_id: STATE.user.device, photo_url: photoUrl, lat: _vfGpsLat, lng: _vfGpsLng, note: document.getElementById('vf-note')?.value.trim() || '', status: 'pending', created_at: new Date().toISOString() };
+      // ===== 修改 submitVerification 函數 =====
+const verification = { 
+    store_id: storeId, 
+    verifier_id: STATE.user.user_id || STATE.user.device,  // 優先使用 uuid
+    photo_url: photoUrl, 
+    lat: _vfGpsLat, 
+    lng: _vfGpsLng, 
+    note: document.getElementById('vf-note')?.value.trim() || '', 
+    status: 'pending', 
+    created_at: new Date().toISOString() 
+};
       if (!STATE.verifications) STATE.verifications = {};
       STATE.verifications[storeId] = verification;
       save();
@@ -3297,47 +3329,67 @@ async function bindGoogleAccount() {
       }
     }
 
-        async function syncUserDataAfterBind(user) {
-      try {
+    // ===== 修改 syncUserDataAfterBind 函數 =====
+async function syncUserDataAfterBind(user) {
+    try {
         const deviceId = STATE.user.device;
         const email = user.email || '';
         const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || '夾客';
         const avatarUrl = user.user_metadata?.avatar_url || '';
         const googleId = user.id;
         
+        // 檢查用戶是否存在
         const { data: existingUser, error: fetchError } = await supabaseClientInstance
-          .from('user_profiles')
-          .select('*')
-          .eq('google_id', googleId)
-          .maybeSingle();
+            .from('user_profiles')
+            .select('*')
+            .eq('google_id', googleId)
+            .maybeSingle();
         if (fetchError) throw fetchError;
         
         let userId;
         if (existingUser) {
-          userId = existingUser.id;
-          const updates = {
-            display_name: displayName,
-            avatar_url: avatarUrl,
-            total_points: Math.max(existingUser.total_points || 0, STATE.points),
-            total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
-            last_active_at: new Date().toISOString(),
-            is_anonymous: false
-          };
-          const { error: updateError } = await supabaseClientInstance.from('user_profiles').update(updates).eq('id', userId);
-          if (updateError) throw updateError;
-          if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
-          if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
+            userId = existingUser.id;
+            // 更新現有用戶
+            const updates = {
+                device_id: deviceId,
+                display_name: displayName,
+                avatar_url: avatarUrl,
+                total_points: Math.max(existingUser.total_points || 0, STATE.points),
+                total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
+                last_active_at: new Date().toISOString(),
+                is_anonymous: false
+            };
+            
+            const { error: updateError } = await supabaseClientInstance
+                .from('user_profiles')
+                .update(updates)
+                .eq('id', userId);
+            if (updateError) throw updateError;
+            
+            if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
+            if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
         } else {
-          const { data: newUser, error: insertError } = await supabaseClientInstance.from('user_profiles').insert({
-            device_id: deviceId, google_id: googleId, email: email,
-            display_name: displayName, avatar_url: avatarUrl,
-            total_points: STATE.points, total_xp: STATE.total_xp || 0,
-            level: STATE.level || 1, is_anonymous: false,
-            bound_at: new Date().toISOString(), created_at: new Date().toISOString(),
-            last_active_at: new Date().toISOString()
-          }).select().single();
-          if (insertError) throw insertError;
-          userId = newUser.id;
+            // 創建新用戶
+            const { data: newUser, error: insertError } = await supabaseClientInstance
+                .from('user_profiles')
+                .insert({
+                    device_id: deviceId,
+                    google_id: googleId,
+                    email: email,
+                    display_name: displayName,
+                    avatar_url: avatarUrl,
+                    total_points: STATE.points,
+                    total_xp: STATE.total_xp || 0,
+                    level: STATE.level || 1,
+                    is_anonymous: false,
+                    bound_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    last_active_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+            if (insertError) throw insertError;
+            userId = newUser.id;
         }
         
         STATE.user.is_bound = true;
@@ -3347,19 +3399,27 @@ async function bindGoogleAccount() {
         STATE.user.display_name = displayName;
         STATE.user.avatar_url = avatarUrl;
         
-        if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) await syncFavorites(userId);
-        if (STATE.achievements && STATE.achievements.unlocked) await syncAchievements(userId);
+        // 同步收藏
+        if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) {
+            await syncFavorites(userId);
+        }
+        
+        // 同步成就
+        if (STATE.achievements && STATE.achievements.unlocked) {
+            await syncAchievements(userId);
+        }
+        
         save();
         addPoints(20, 'Google 帳號綁定獎勵');
         toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
         showView('me');
-      } catch (error) {
+    } catch (error) {
         console.error('同步數據錯誤:', error);
         toast('⚠️ 綁定成功但數據同步失敗: ' + error.message, 'pink');
         STATE.user.is_bound = true;
         save();
-      }
     }
+}
 
         async function syncFavorites(userId) {
       try {
@@ -3373,16 +3433,62 @@ async function bindGoogleAccount() {
       } catch (e) { console.warn('收藏同步失敗:', e); }
     }
 
-        async function syncAchievements(userId) {
-      try {
-        for (const key of (STATE.achievements?.unlocked || [])) {
-          const def = ACHIEVEMENT_DEFS[key];
-          if (!def) continue;
-          await supabaseClientInstance.from('user_achievements').upsert({ user_id: userId, achievement_key: key, achievement_name: def.name, unlocked_at: new Date().toISOString() }, { onConflict: 'user_id, achievement_key' });
-        }
-        console.log('✅ 成就已同步');
-      } catch (e) { console.warn('成就同步失敗:', e); }
+        // ===== 修改 syncAchievements 函數 =====
+async function syncAchievements(userId) {
+    if (!userId) {
+        console.warn('⚠️ 無 user_id，跳過成就同步');
+        return;
     }
+    
+    try {
+        const unlocked = STATE.achievements?.unlocked || [];
+        if (unlocked.length === 0) {
+            console.log('📭 無成就需要同步');
+            return;
+        }
+        
+        for (const key of unlocked) {
+            const def = ACHIEVEMENT_DEFS[key];
+            if (!def) continue;
+            
+            // 先檢查是否存在
+            const { data: existing, error: checkError } = await supabaseClientInstance
+                .from('user_achievements')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('achievement_key', key)
+                .maybeSingle();
+            
+            if (checkError) {
+                console.warn(`檢查成就 ${key} 失敗:`, checkError);
+                continue;
+            }
+            
+            if (existing) {
+                console.log(`✅ 成就 ${key} 已存在，跳過`);
+                continue;
+            }
+            
+            // 插入新成就
+            const { error: insertError } = await supabaseClientInstance
+                .from('user_achievements')
+                .insert({ 
+                    user_id: userId, 
+                    achievement_key: key, 
+                    achievement_name: def.name, 
+                    unlocked_at: new Date().toISOString() 
+                });
+            
+            if (insertError) {
+                console.warn(`同步成就 ${key} 失敗:`, insertError);
+            } else {
+                console.log(`✅ 成就 ${key} 已同步`);
+            }
+        }
+    } catch (e) { 
+        console.warn('成就同步失敗:', e); 
+    }
+}
 
         async function logoutGoogle() {
       if (!confirm('確定要登出嗎？本地數據仍會保留。')) return;
@@ -3601,53 +3707,55 @@ async function bindGoogleAccount() {
        雲端讀取 + 啟動
     ============================================================ */
 
-    async function loadCloud() {
-      console.log("[v0] 直接從 Supabase 讀取資料...");
-      try {
+    // ===== 修改 loadCloud 函數 =====
+async function loadCloud() {
+    console.log("[v0] 直接從 Supabase 讀取資料...");
+    try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-          }
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': 'application/json',
+            }
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const stores = await response.json();
         console.log(`✅ 成功載入 ${stores.length} 筆資料`);
+        
         STORES = stores.map(s => ({
-          id: String(s.id),
-          name: s.name || "未命名店鋪",
-          region: s.region || "旺角",
-          addr: s.addr || "（未填地址）",
-          ig: s.ig || "",
-          fb: s.fb || "",
-          verified: s.status === "verified" ? "verified" : "pending",
-          size: s.size || "中",
-          token: s.token || false,
-          hour24: s.hour24 || false,
-          staff: s.staff || false,
-          dist: (Math.random() * 2 + 0.1).toFixed(1),
-          machines: s.machines || [],
-          photo: s.photo || "",
-          lat: s.lat || null,
-          lng: s.lng || null,
-          mall: s.mall || null,
-          floor: s.floor || null,
-          submitted_by: s.submitted_by || null,
-          verification_count: s.verification_count || 0,
-          is_verified: s.is_verified || false,
-          address_detail: s.address_detail || '',
-          has_staff: s.has_staff !== undefined ? s.has_staff : null,
-          has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
-          supplement_count: s.supplement_count || 0,
+            id: String(s.id),  // bigint → text
+            name: s.name || "未命名店鋪",
+            region: s.region || "旺角",
+            addr: s.addr || "（未填地址）",
+            ig: s.ig || "",
+            fb: s.fb || "",
+            verified: s.status === "verified" ? "verified" : "pending",  // status → verified
+            size: s.size || "中",
+            token: s.token || false,
+            hour24: s.hour24 || false,
+            staff: s.staff || false,
+            dist: (Math.random() * 2 + 0.1).toFixed(1),
+            machines: s.machines || [],
+            photo: s.photo || "",
+            lat: s.lat || null,
+            lng: s.lng || null,
+            mall: s.mall || null,
+            floor: s.floor || null,
+            submitted_by: s.submitted_by || null,
+            verification_count: s.verification_count || 0,
+            is_verified: s.is_verified || false,
+            address_detail: s.address_detail || '',
+            has_staff: s.has_staff !== undefined ? s.has_staff : null,
+            has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
+            supplement_count: s.supplement_count || 0,
         }));
         console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
-      } catch (e) {
+    } catch (e) {
         console.error("[v0] 讀取失敗:", e.message);
         STORES = seedStores();
         toast("無法載入店鋪資料，使用示範店鋪", "pink");
-      }
     }
+}
 
     /* ============================================================
        成就系統
@@ -4668,17 +4776,31 @@ function doCheckinFromReminder() {
         }
       }
       
-      const newStore = {
-        id: 's' + Date.now(),
-        name, region: selectedRegion, addr,
-        verified: 'pending', size: '中', token: false, hour24: false, staff: false,
-        machines: [], photo: data.photo, lat: gpsLat, lng: gpsLng,
-        mall: selectedType === 'mall' ? selectedMall : '',
-        floor: selectedType === 'mall' ? selectedFloor : '',
-        submitted_by: STATE.user.device,
-        verification_count: 0, is_verified: false,
-        address_detail: '', has_staff: null, has_e_coin: null, supplement_count: 0,
-      };
+      // ===== 修改 submitIntel 函數中的 newStore 對象 =====
+const newStore = {
+    id: String(Date.now()),  // 轉為字符串
+    name: name,
+    region: selectedRegion,
+    addr: addr,
+    verified: 'pending',  // 表中對應 status 欄位
+    size: '中',
+    token: false,
+    hour24: false,
+    staff: false,
+    machines: [],
+    photo: data.photo,
+    lat: gpsLat,
+    lng: gpsLng,
+    mall: selectedType === 'mall' ? selectedMall : '',
+    floor: selectedType === 'mall' ? selectedFloor : '',
+    submitted_by: STATE.user.device,
+    verification_count: 0,
+    is_verified: false,
+    address_detail: '',
+    has_staff: null,
+    has_e_coin: null,
+    supplement_count: 0,
+};
       STORES.push(newStore);
       if (CLOUD_ON) cloudInsert('claw_stores', newStore);
       
