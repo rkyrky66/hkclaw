@@ -141,13 +141,14 @@
   .my-post-item { transition: all 0.2s; }
   .my-post-item.expired { opacity: 0.5; }
 
-  /* ===== Filter 按鈕樣式 ===== */
   .filter-btn { transition: all 0.2s; }
   .filter-btn.active { border-color: #D4AF37 !important; background: rgba(212,175,55,0.2) !important; color: #D4AF37 !important; }
 
-  /* ===== 表單禁用樣式 ===== */
   .form-label-disabled { color: rgba(255,255,255,0.3) !important; }
   .form-label-enabled { color: #D4AF37 !important; }
+
+  .quick-action-btn { transition: all 0.15s; }
+  .quick-action-btn:active { transform: scale(0.9); }
 </style>
 </head>
 
@@ -169,27 +170,47 @@
 
     <div class="relative flex-1 overflow-hidden">
       <main id="main" class="no-scrollbar h-full overflow-hidden px-4 py-3 pb-28">
-  <!-- ===== 地圖始終存在（不銷毀） ===== -->
-  <div id="map-page-container" style="display:flex; flex-direction:column; height:100%; position:relative; z-index:1;">
-    <div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
-      <div id="map-container" style="height:100%; width:100%;"></div>
-    </div>
-    <div class="map-divider" style="flex-shrink:0;"></div>
-    <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
-      <div id="map-store-list" class="space-y-2 pb-2"></div>
-    </div>
-  </div>
-  
-  <!-- ===== 其他頁面內容蓋在上面 ===== -->
-  <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:5; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:auto;">
-    <!-- 動態內容會渲染在這裡 -->
-  </div>
-  
-  <div id="pull-indicator" class="pull-indicator" style="z-index:20;">
-    <span class="spinner"></span>
-    <span class="text">下拉同步最新資料</span>
-  </div>
-</main>
+        <!-- ===== 地圖始終存在（不銷毀） ===== -->
+        <div id="map-page-container" style="display:flex; flex-direction:column; height:100%; position:relative; z-index:1;">
+          <div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
+            <div id="map-container" style="height:100%; width:100%;"></div>
+          </div>
+          <div class="map-divider" style="flex-shrink:0;"></div>
+          
+          <!-- ===== Filter 區域 ===== -->
+          <div id="filter-container" style="flex-shrink:0; padding:8px 4px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid rgba(212,175,55,0.1);">
+            <button id="filter-all" onclick="setMapFilter('all')" 
+              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border border-gold bg-gold/20 text-gold active">
+              📋 全部
+            </button>
+            <button id="filter-pending" onclick="setMapFilter('pending')" 
+              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border border-white/20 text-white/40">
+              ⏳ 待認證
+            </button>
+            <button id="filter-incomplete" onclick="setMapFilter('incomplete')" 
+              class="filter-btn rounded-full px-3 py-1 text-xs font-bold border border-white/20 text-white/40">
+              📝 待完善
+            </button>
+            <span id="filter-count" class="text-[10px] text-white/30 ml-auto self-center">
+              共 <span id="filter-count-number">0</span> 間
+            </span>
+          </div>
+          
+          <div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
+            <div id="map-store-list" class="space-y-2 pb-2"></div>
+          </div>
+        </div>
+        
+        <!-- ===== 其他頁面內容蓋在上面 ===== -->
+        <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:5; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:auto;">
+          <!-- 動態內容會渲染在這裡 -->
+        </div>
+        
+        <div id="pull-indicator" class="pull-indicator" style="z-index:20;">
+          <span class="spinner"></span>
+          <span class="text">下拉同步最新資料</span>
+        </div>
+      </main>
     </div>
 
     <nav id="bottom-nav" class="absolute inset-x-0 bottom-0 mx-auto grid max-w-md grid-cols-5 border-t border-gold/30 bg-black/70 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),6px)] pt-2" style="z-index:20;">
@@ -226,7 +247,7 @@
     const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-    // ===== Supabase 客戶端初始化（修復重複聲明錯誤）=====
+    // ===== Supabase 客戶端初始化 =====
     if (typeof supabase === 'undefined') {
       console.warn('⚠️ Supabase CDN 加載失敗，手動創建客戶端');
       var supabase = supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -234,16 +255,9 @@
       console.log('✅ Supabase 已由 CDN 載入');
     }
 
-    // ===== 檢查 Supabase Auth 是否可用 =====
     function isSupabaseReady() {
-      if (typeof supabase === 'undefined') {
-        console.error('❌ Supabase 未定義');
-        return false;
-      }
-      if (typeof supabase.auth === 'undefined') {
-        console.error('❌ Supabase Auth 不可用');
-        return false;
-      }
+      if (typeof supabase === 'undefined') { console.error('❌ Supabase 未定義'); return false; }
+      if (typeof supabase.auth === 'undefined') { console.error('❌ Supabase Auth 不可用'); return false; }
       return true;
     }
 
@@ -261,14 +275,12 @@
     let mallInputValue = '';
     let intelMoreOpenMap = { hk: false, kl: false, nt: false };
     
-    // ===== 下拉重新整理 =====
     let pullStartY = 0;
     let pullMoveY = 0;
     let isPulling = false;
     let isRefreshing = false;
     
-    // ===== 地圖 Filter =====
-    let mapFilter = 'all'; // 'all' | 'pending' | 'incomplete'
+    let mapFilter = 'all';
     let isRefreshingMap = false;
     let ensureStoresVisibleCount = 0;
 
@@ -590,94 +602,85 @@
     const AFTER = { map: null };
 
     function showView(name) {
-  const main = document.getElementById("main");
-  const overlay = document.getElementById('page-overlay');
-  const mapPage = document.getElementById('map-page-container');
-  
-  // 更新 CURRENT
-  CURRENT = name;
-  
-  // 切換顯示
-  if (name === 'map') {
-    // 顯示地圖，隱藏覆蓋層
-    if (mapPage) mapPage.style.display = 'flex';
-    if (overlay) {
-      overlay.style.display = 'none';
-      overlay.innerHTML = '';
-    }
-    // 刷新地圖
-    setTimeout(() => {
-      if (map && mapInitialized) {
-        map.invalidateSize(true);
-        updateMapMarkers();
-        updateMapList();
-      } else if (!mapInitialized) {
-        initMap();
+      const overlay = document.getElementById('page-overlay');
+      const mapPage = document.getElementById('map-page-container');
+      
+      CURRENT = name;
+      
+      if (name === 'map') {
+        if (mapPage) mapPage.style.display = 'flex';
+        if (overlay) {
+          overlay.style.display = 'none';
+          overlay.innerHTML = '';
+        }
+        setTimeout(() => {
+          if (map && mapInitialized) {
+            map.invalidateSize(true);
+            updateMapMarkers();
+            updateMapList();
+            updateFilterCount();
+          } else if (!mapInitialized) {
+            initMap();
+          }
+        }, 200);
+      } else {
+        if (mapPage) mapPage.style.display = 'none';
+        if (overlay) {
+          overlay.style.display = 'block';
+          overlay.style.pointerEvents = 'auto';
+          overlay.innerHTML = VIEWS[name]();
+          overlay.scrollTop = 0;
+          overlay.classList.add("view-enter");
+        }
       }
-    }, 200);
-  } else {
-    // 隱藏地圖，顯示覆蓋層
-    if (mapPage) mapPage.style.display = 'none';
-if (overlay) {
-  overlay.style.display = 'block';
-  overlay.style.pointerEvents = 'auto';  // ← 保持 auto
-  overlay.innerHTML = VIEWS[name]();
-  overlay.scrollTop = 0;
-  overlay.classList.add("view-enter");
-}
-  }
-  
-  // 更新導航高亮
-  document.querySelectorAll(".nav-btn").forEach(b => {
-    const on = b.getAttribute("data-nav") === name;
-    b.classList.toggle("active", on);
-    b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
-    b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
-  });
-  
-  document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
-  
-  // 執行頁面進入後邏輯（非地圖頁面）
-  if (AFTER[name] && name !== 'map') {
-    setTimeout(() => { AFTER[name](); }, 100);
-  }
-}
+      
+      document.querySelectorAll(".nav-btn").forEach(b => {
+        const on = b.getAttribute("data-nav") === name;
+        b.classList.toggle("active", on);
+        b.classList.remove("text-neongreen", "text-neonpink", "text-gold", "text-white/45");
+        b.classList.add(on ? NAV_COLOR[name] : "text-white/45");
+      });
+      
+      document.getElementById("page-subtitle").textContent = SUBTITLES[name] || "";
+      
+      if (AFTER[name] && name !== 'map') {
+        setTimeout(() => { AFTER[name](); }, 100);
+      }
+    }
 
     /* ============================================================
        4. 【地圖頁面】核心功能
     ============================================================ */
     function viewMap() {
-  // 確保地圖容器可見
-  const mapPage = document.getElementById('map-page-container');
-  const overlay = document.getElementById('page-overlay');
-  if (mapPage) mapPage.style.display = 'flex';
-  if (overlay) overlay.style.display = 'none';
-  
-  // 更新 Filter 計數
-  const filterCount = getFilteredStoresCount();
-  const countEl = document.getElementById('filter-count');
-  if (countEl) countEl.textContent = `共 ${filterCount} 間`;
-  
-  // 更新列表
-  updateMapList();
-  
-  // 如果地圖還沒初始化，初始化
-  if (!mapInitialized) {
-    setTimeout(() => initMap(), 300);
-  } else {
-    // 地圖已存在，刷新尺寸和標記
-    setTimeout(() => {
-      if (map) {
-        map.invalidateSize(true);
-        updateMapMarkers();
-        updateMapList();
+      const mapPage = document.getElementById('map-page-container');
+      const overlay = document.getElementById('page-overlay');
+      if (mapPage) mapPage.style.display = 'flex';
+      if (overlay) overlay.style.display = 'none';
+      
+      updateFilterCount();
+      updateMapList();
+      
+      if (!mapInitialized) {
+        setTimeout(() => initMap(), 300);
+      } else {
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize(true);
+            updateMapMarkers();
+            updateMapList();
+          }
+        }, 200);
       }
-    }, 200);
-  }
-  
-  return ''; // 返回空，因為地圖已存在
-}
-    // ===== Filter 相關函數 =====
+      
+      return '';
+    }
+
+    function updateFilterCount() {
+      const count = getFilteredStoresCount();
+      const el = document.getElementById('filter-count-number');
+      if (el) el.textContent = count;
+    }
+
     function getFilteredStores() {
       let stores = STORES;
       if (mapFilter === 'pending') {
@@ -711,108 +714,96 @@ if (overlay) {
       }
       updateMapList();
       updateMapMarkers();
-      const count = document.getElementById('filter-count');
-      if (count) count.textContent = `共 ${getFilteredStoresCount()} 間`;
+      updateFilterCount();
     }
 
-function getStoresInBounds() {
-  if (!map) {
-    console.log('📍 map 未初始化，返回所有有座標的店鋪');
-    return STORES.filter(s => s.lat && s.lng);
-  }
-  
-  const bounds = map.getBounds();
-  if (!bounds) {
-    console.log('📍 無法獲取地圖邊界，返回所有有座標的店鋪');
-    return STORES.filter(s => s.lat && s.lng);
-  }
-  
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  
-  // 調試：顯示地圖邊界
-  console.log(`📍 地圖邊界: lat ${sw.lat.toFixed(4)}-${ne.lat.toFixed(4)}, lng ${sw.lng.toFixed(4)}-${ne.lng.toFixed(4)}`);
-  console.log(`📍 總店鋪數: ${STORES.length}, 有座標的: ${STORES.filter(s => s.lat && s.lng).length}`);
-  
-  // 使用所有店鋪，不套用 Filter
-  const result = STORES.filter(s => {
-    if (!s.lat || !s.lng) return false;
-    const inBounds = s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
-    return inBounds;
-  });
-  
-  console.log(`📍 範圍內店鋪: ${result.length}`);
-  return result;
-}
-
-  // ===== 修復 ensureStoresVisible - 更穩健的版本 =====
-let lastEnsureZoom = 0;
-
-function ensureStoresVisible() {
-  if (!map) return;
-  
-  // 防止無限循環
-  if (ensureStoresVisibleCount > 5) {
-    console.log('🛑 達到最大嘗試次數，停止自動縮放');
-    ensureStoresVisibleCount = 0;
-    return;
-  }
-  
-  const allStores = STORES.filter(s => s.lat && s.lng);
-  if (allStores.length === 0) {
-    console.log('📭 沒有店鋪座標資料，跳過');
-    return;
-  }
-  
-  const bounds = map.getBounds();
-  if (!bounds) {
-    console.log('📍 無法獲取地圖邊界，跳過');
-    return;
-  }
-  
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  
-  // 檢查範圍是否有效（不是一個點）
-  const latRange = ne.lat - sw.lat;
-  const lngRange = ne.lng - sw.lng;
-  if (latRange < 0.0001 || lngRange < 0.0001) {
-    console.log('📍 地圖邊界無效（範圍太小），強制刷新');
-    map.invalidateSize(true);
-    setTimeout(() => ensureStoresVisible(), 300);
-    return;
-  }
-  
-  const visibleStores = allStores.filter(s => {
-    return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
-  });
-  
-  const currentZoom = Math.round(map.getZoom());
-  console.log(`📍 當前縮放: ${currentZoom}, 可見店鋪: ${visibleStores.length}/${allStores.length}`);
-  
-  // 只有當完全沒有店鋪可見且不是用戶縮放太小時才介入
-  if (visibleStores.length === 0 && allStores.length > 0 && currentZoom <= 11) {
-    ensureStoresVisibleCount++;
-    console.log(`📍 縮放到最小仍無店鋪，跳到店鋪位置 (${ensureStoresVisibleCount}/5)`);
-    const avgLat = allStores.reduce((sum, s) => sum + parseFloat(s.lat), 0) / allStores.length;
-    const avgLng = allStores.reduce((sum, s) => sum + parseFloat(s.lng), 0) / allStores.length;
-    map.setView([avgLat, avgLng], 12);
-    setTimeout(() => {
-      updateMapMarkers();
-      updateMapList();
-    }, 300);
-    ensureStoresVisibleCount = 0;
-  } else if (visibleStores.length === 0 && allStores.length > 0) {
-    // 有店鋪但不在視圖內，縮小一級
-    ensureStoresVisibleCount++;
-    if (currentZoom > 11) {
-      map.setZoom(currentZoom - 1);
-      setTimeout(() => ensureStoresVisible(), 500);
+    function getStoresInBounds() {
+      if (!map) {
+        console.log('📍 map 未初始化，返回所有有座標的店鋪');
+        return STORES.filter(s => s.lat && s.lng);
+      }
+      
+      const bounds = map.getBounds();
+      if (!bounds) {
+        console.log('📍 無法獲取地圖邊界，返回所有有座標的店鋪');
+        return STORES.filter(s => s.lat && s.lng);
+      }
+      
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      
+      const result = STORES.filter(s => {
+        if (!s.lat || !s.lng) return false;
+        const inBounds = s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+        return inBounds;
+      });
+      
+      return result;
     }
-  } else {
-    ensureStoresVisibleCount = 0;
-  }
-}
+
+    let lastEnsureZoom = 0;
+
+    function ensureStoresVisible() {
+      if (!map) return;
+      
+      if (ensureStoresVisibleCount > 5) {
+        console.log('🛑 達到最大嘗試次數，停止自動縮放');
+        ensureStoresVisibleCount = 0;
+        return;
+      }
+      
+      const allStores = STORES.filter(s => s.lat && s.lng);
+      if (allStores.length === 0) {
+        console.log('📭 沒有店鋪座標資料，跳過');
+        return;
+      }
+      
+      const bounds = map.getBounds();
+      if (!bounds) {
+        console.log('📍 無法獲取地圖邊界，跳過');
+        return;
+      }
+      
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      
+      const latRange = ne.lat - sw.lat;
+      const lngRange = ne.lng - sw.lng;
+      if (latRange < 0.0001 || lngRange < 0.0001) {
+        console.log('📍 地圖邊界無效（範圍太小），強制刷新');
+        map.invalidateSize(true);
+        setTimeout(() => ensureStoresVisible(), 300);
+        return;
+      }
+      
+      const visibleStores = allStores.filter(s => {
+        return s.lat >= sw.lat && s.lat <= ne.lat && s.lng >= sw.lng && s.lng <= ne.lng;
+      });
+      
+      const currentZoom = Math.round(map.getZoom());
+      console.log(`📍 當前縮放: ${currentZoom}, 可見店鋪: ${visibleStores.length}/${allStores.length}`);
+      
+      if (visibleStores.length === 0 && allStores.length > 0 && currentZoom <= 11) {
+        ensureStoresVisibleCount++;
+        console.log(`📍 縮放到最小仍無店鋪，跳到店鋪位置 (${ensureStoresVisibleCount}/5)`);
+        const avgLat = allStores.reduce((sum, s) => sum + parseFloat(s.lat), 0) / allStores.length;
+        const avgLng = allStores.reduce((sum, s) => sum + parseFloat(s.lng), 0) / allStores.length;
+        map.setView([avgLat, avgLng], 12);
+        setTimeout(() => {
+          updateMapMarkers();
+          updateMapList();
+        }, 300);
+        ensureStoresVisibleCount = 0;
+      } else if (visibleStores.length === 0 && allStores.length > 0) {
+        ensureStoresVisibleCount++;
+        if (currentZoom > 11) {
+          map.setZoom(currentZoom - 1);
+          setTimeout(() => ensureStoresVisible(), 500);
+        }
+      } else {
+        ensureStoresVisibleCount = 0;
+      }
+    }
 
     function getFloorsInMall(mallName) {
       const group = window._mallGroups && window._mallGroups[mallName];
@@ -957,254 +948,227 @@ function ensureStoresVisible() {
       openStore(storeId);
     }
 
-    // ===== 內部渲染函數（接收數據） =====
-function renderMapStoreListWithData(inBounds) {
-  if (!inBounds.length) {
-    return `<p class="py-6 text-center text-sm text-white/40">${getFilteredStoresCount() > 0 ? '此區域暫無符合條件的店鋪' : '暫無店鋪資料'}</p>`;
-  }
-  
-  const mallGroups = {};
-  const standaloneStores = [];
-  inBounds.forEach(s => {
-    if (s.mall && s.mall.trim() !== '') {
-      const key = s.mall;
-      if (!mallGroups[key]) mallGroups[key] = { mallName: key, stores: [], totalStores: 0 };
-      mallGroups[key].stores.push(s);
-      mallGroups[key].totalStores++;
-    } else {
-      standaloneStores.push(s);
+    function renderMapStoreListWithData(inBounds) {
+      if (!inBounds.length) {
+        return `<p class="py-6 text-center text-sm text-white/40">${getFilteredStoresCount() > 0 ? '此區域暫無符合條件的店鋪' : '暫無店鋪資料'}</p>`;
+      }
+      
+      const mallGroups = {};
+      const standaloneStores = [];
+      inBounds.forEach(s => {
+        if (s.mall && s.mall.trim() !== '') {
+          const key = s.mall;
+          if (!mallGroups[key]) mallGroups[key] = { mallName: key, stores: [], totalStores: 0 };
+          mallGroups[key].stores.push(s);
+          mallGroups[key].totalStores++;
+        } else {
+          standaloneStores.push(s);
+        }
+      });
+
+      const formatDist = (s) => {
+        const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
+        if (dist === 9999) return '📍 位置未知';
+        if (dist < 1) return `${Math.round(dist * 1000)}m`;
+        return `${dist.toFixed(1)}km`;
+      };
+
+      const renderStoreItem = (s, index) => {
+        const isVerified = s.verified === "verified";
+        const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
+        const statusLabel = isVerified ? '已認證' : '審核中';
+        const distText = formatDist(s);
+        return `<button onclick="flyToStore('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-gold font-bold text-sm min-w-[20px]">#${index + 1}</span>
+                <span class="${dotColor}">●</span>
+                <span class="font-bold text-gold text-sm truncate">${s.name}</span>
+                <span class="text-[9px] text-white/30">${statusLabel}</span>
+              </div>
+              <p class="text-[11px] text-white/40 truncate pl-[20px]">${s.region} · ${s.addr}</p>
+            </div>
+            <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
+          </div>
+        </button>`;
+      };
+
+      const renderMallGroup = (group) => {
+        const isAllVerified = group.stores.every(s => s.verified === "verified");
+        const dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
+        const statusLabel = isAllVerified ? '全部已認證' : '部分審核中';
+        const distText = formatDist(group.stores[0]);
+        return `<button onclick="openMallModal('${group.mallName.replace(/'/g, "\\'")}')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-gold font-bold text-sm">🏬</span>
+                <span class="font-bold text-gold text-sm truncate">${group.mallName}</span>
+                <span class="text-[9px] text-white/30">${group.totalStores} 間</span>
+                <span class="text-[9px] ${dotColor}">${statusLabel}</span>
+              </div>
+              <p class="text-[11px] text-white/40 truncate">${group.stores[0]?.region || ''} · 點擊查看全部店鋪</p>
+            </div>
+            <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
+          </div>
+        </button>`;
+      };
+
+      const mallList = Object.keys(mallGroups).map(key => mallGroups[key]);
+      mallList.sort((a, b) => {
+        const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
+        const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.stores[0].lat, b.stores[0].lng) : 9999;
+        return distA - distB;
+      });
+
+      standaloneStores.sort((a, b) => {
+        const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng) : 9999;
+        const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.lat, b.lng) : 9999;
+        return distA - distB;
+      });
+
+      let itemIndex = 0;
+      const htmlParts = [];
+      mallList.forEach(group => { htmlParts.push(renderMallGroup(group)); });
+      standaloneStores.forEach(s => {
+        htmlParts.push(renderStoreItem(s, itemIndex));
+        itemIndex++;
+      });
+
+      const totalStores = inBounds.length;
+      const totalMalls = Object.keys(mallGroups).length;
+      const totalStandalone = standaloneStores.length;
+      const headerHtml = `<div class="text-[10px] text-white/30 text-center py-1">${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪</div>`;
+      return headerHtml + htmlParts.join('');
     }
-  });
 
-  const formatDist = (s) => {
-    const dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
-    if (dist === 9999) return '📍 位置未知';
-    if (dist < 1) return `${Math.round(dist * 1000)}m`;
-    return `${dist.toFixed(1)}km`;
-  };
-
-  const renderStoreItem = (s, index) => {
-    const isVerified = s.verified === "verified";
-    const dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
-    const statusLabel = isVerified ? '已認證' : '審核中';
-    const distText = formatDist(s);
-    return `<button onclick="flyToStore('${s.id}')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">
-      <div class="flex items-center justify-between gap-2">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="text-gold font-bold text-sm min-w-[20px]">#${index + 1}</span>
-            <span class="${dotColor}">●</span>
-            <span class="font-bold text-gold text-sm truncate">${s.name}</span>
-            <span class="text-[9px] text-white/30">${statusLabel}</span>
-          </div>
-          <p class="text-[11px] text-white/40 truncate pl-[20px]">${s.region} · ${s.addr}</p>
-        </div>
-        <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
-      </div>
-    </button>`;
-  };
-
-  const renderMallGroup = (group) => {
-    const isAllVerified = group.stores.every(s => s.verified === "verified");
-    const dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
-    const statusLabel = isAllVerified ? '全部已認證' : '部分審核中';
-    const distText = formatDist(group.stores[0]);
-    return `<button onclick="openMallModal('${group.mallName.replace(/'/g, "\\'")}')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">
-      <div class="flex items-center justify-between gap-2">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="text-gold font-bold text-sm">🏬</span>
-            <span class="font-bold text-gold text-sm truncate">${group.mallName}</span>
-            <span class="text-[9px] text-white/30">${group.totalStores} 間</span>
-            <span class="text-[9px] ${dotColor}">${statusLabel}</span>
-          </div>
-          <p class="text-[11px] text-white/40 truncate">${group.stores[0]?.region || ''} · 點擊查看全部店鋪</p>
-        </div>
-        <span class="text-xs text-neonpink whitespace-nowrap">📍 ${distText}</span>
-      </div>
-    </button>`;
-  };
-
-  const mallList = Object.keys(mallGroups).map(key => mallGroups[key]);
-  mallList.sort((a, b) => {
-    const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
-    const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.stores[0].lat, b.stores[0].lng) : 9999;
-    return distA - distB;
-  });
-
-  standaloneStores.sort((a, b) => {
-    const distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng) : 9999;
-    const distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.lat, b.lng) : 9999;
-    return distA - distB;
-  });
-
-  let itemIndex = 0;
-  const htmlParts = [];
-  mallList.forEach(group => { htmlParts.push(renderMallGroup(group)); });
-  standaloneStores.forEach(s => {
-    htmlParts.push(renderStoreItem(s, itemIndex));
-    itemIndex++;
-  });
-
-  const totalStores = inBounds.length;
-  const totalMalls = Object.keys(mallGroups).length;
-  const totalStandalone = standaloneStores.length;
-  const headerHtml = `<div class="text-[10px] text-white/30 text-center py-1">${totalMalls} 個商場合併 · ${totalStandalone} 間獨立舖 · 共 ${totalStores} 間店鋪</div>`;
-  return headerHtml + htmlParts.join('');
-}
-
-// ===== 原來的 renderMapStoreList 改為調用內部函數 =====
-function renderMapStoreList() {
-  const inBounds = getStoresInBounds();
-  
-  // 套用 Filter
-  let filtered = inBounds;
-  if (mapFilter === 'pending') {
-    filtered = filtered.filter(s => s.verified !== 'verified');
-  } else if (mapFilter === 'incomplete') {
-    filtered = filtered.filter(s => {
-      const hasAddress = s.address_detail && s.address_detail !== '';
-      const hasSize = s.size && s.size !== '中';
-      const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
-      const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
-      return !(hasAddress && hasSize && hasStaff && hasCoin);
-    });
-  }
-  
-  return renderMapStoreListWithData(filtered);
-}
+    function renderMapStoreList() {
+      const inBounds = getStoresInBounds();
+      
+      let filtered = inBounds;
+      if (mapFilter === 'pending') {
+        filtered = filtered.filter(s => s.verified !== 'verified');
+      } else if (mapFilter === 'incomplete') {
+        filtered = filtered.filter(s => {
+          const hasAddress = s.address_detail && s.address_detail !== '';
+          const hasSize = s.size && s.size !== '中';
+          const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+          const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+          return !(hasAddress && hasSize && hasStaff && hasCoin);
+        });
+      }
+      
+      return renderMapStoreListWithData(filtered);
+    }
 
     /* ============================================================
        4b. 地圖核心邏輯
     ============================================================ */
     function initMap(initialCenter, initialZoom) {
-  const container = document.getElementById('map-container');
-  if (!container) { console.error('❌ map-container 不存在'); return; }
+      const container = document.getElementById('map-container');
+      if (!container) { console.error('❌ map-container 不存在'); return; }
 
-  container.style.display = 'block';
-  container.style.width = '100%';
-  container.style.height = '100%';
-  void container.offsetHeight;
+      container.style.display = 'block';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      void container.offsetHeight;
 
-  // 如果地圖已存在，直接刷新
-  if (mapInitialized && map && map.getContainer()) {
-    console.log('🗺️ 地圖已初始化，跳過重複創建');
-    setTimeout(function() {
+      if (mapInitialized && map && map.getContainer()) {
+        console.log('🗺️ 地圖已初始化，跳過重複創建');
+        setTimeout(function() {
+          if (map) {
+            map.invalidateSize(true);
+            if (userLocation) {
+              map.setView([userLocation.lat, userLocation.lng], map.getZoom() || 15);
+            }
+            updateMapMarkers();
+            updateMapList();
+            ensureStoresVisible();
+          }
+        }, 200);
+        return;
+      }
+
       if (map) {
-        map.invalidateSize(true);
-        // 如果有 GPS 位置，移動到 GPS 位置
-        if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], map.getZoom() || 15);
+        try { map.remove(); } catch (e) {}
+        map = null; markerCluster = null; userMarker = null;
+      }
+
+      let center = initialCenter || { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
+      let zoom = initialZoom || 13;
+      
+      if (userLocation) {
+        center = { lat: userLocation.lat, lng: userLocation.lng };
+        zoom = 15;
+        console.log(`🗺️ 定位到 GPS 位置`);
+      } else {
+        const storesWithCoords = STORES.filter(s => s.lat && s.lng);
+        if (storesWithCoords.length > 0) {
+          const avgLat = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lat), 0) / storesWithCoords.length;
+          const avgLng = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lng), 0) / storesWithCoords.length;
+          center = { lat: avgLat, lng: avgLng };
+          zoom = 12;
+          console.log(`🗺️ 定位到店鋪平均位置`);
         }
+      }
+
+      try {
+        map = L.map('map-container', {
+          center: [center.lat, center.lng],
+          zoom: zoom,
+          zoomControl: false,
+          attributionControl: true,
+        });
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
+          maxZoom: 19,
+        }).addTo(map);
+
+        map.on('moveend zoomend', function() { updateMapList(); ensureStoresVisible(); });
+
+        markerCluster = L.markerClusterGroup({
+          iconCreateFunction: function(cluster) {
+            let totalStores = 0;
+            cluster.getAllChildMarkers().forEach(marker => {
+              totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
+            });
+            if (totalStores <= 1) {
+              return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
+            }
+            return L.divIcon({
+              html: `<div class="marker-cluster-custom">${totalStores}</div>`,
+              className: '',
+              iconSize: L.point(36, 36),
+            });
+          },
+          maxClusterRadius: 60,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true,
+        });
+        map.addLayer(markerCluster);
+
+        if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
         updateMapMarkers();
         updateMapList();
         ensureStoresVisible();
+
+        mapInitialized = true;
+        console.log('🗺️ 地圖初始化完成');
+        setTimeout(() => { if (map) map.invalidateSize(); }, 500);
+      } catch (e) {
+        console.error('地圖初始化失敗:', e);
+        toast('地圖載入失敗，請重新整理', 'pink');
       }
-    }, 200);
-    return;
-  }
-
-  // 清理舊地圖
-  if (map) {
-    try { map.remove(); } catch (e) {}
-    map = null; markerCluster = null; userMarker = null;
-  }
-
-  // ===== 使用傳入的初始位置，或預設值 =====
-  let center = initialCenter || { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
-  let zoom = initialZoom || 13;
-  
-  // 如果有 GPS，使用 GPS 位置
-  if (userLocation) {
-    center = { lat: userLocation.lat, lng: userLocation.lng };
-    zoom = 15;
-    console.log(`🗺️ 定位到 GPS 位置`);
-  } else {
-    // 沒有 GPS 時，計算店鋪平均位置
-    const storesWithCoords = STORES.filter(s => s.lat && s.lng);
-    if (storesWithCoords.length > 0) {
-      const avgLat = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lat), 0) / storesWithCoords.length;
-      const avgLng = storesWithCoords.reduce((sum, s) => sum + parseFloat(s.lng), 0) / storesWithCoords.length;
-      center = { lat: avgLat, lng: avgLng };
-      zoom = 12;
-      console.log(`🗺️ 定位到店鋪平均位置`);
     }
-  }
-
-  try {
-    map = L.map('map-container', {
-      center: [center.lat, center.lng],
-      zoom: zoom,
-      zoomControl: false,
-      attributionControl: true,
-    });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
-      maxZoom: 19,
-    }).addTo(map);
-
-    map.on('moveend zoomend', function() { updateMapList(); ensureStoresVisible(); });
-
-    markerCluster = L.markerClusterGroup({
-      iconCreateFunction: function(cluster) {
-        let totalStores = 0;
-        cluster.getAllChildMarkers().forEach(marker => {
-          totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
-        });
-        if (totalStores <= 1) {
-          return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
-        }
-        return L.divIcon({
-          html: `<div class="marker-cluster-custom">${totalStores}</div>`,
-          className: '',
-          iconSize: L.point(36, 36),
-        });
-      },
-      maxClusterRadius: 60,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true,
-    });
-    map.addLayer(markerCluster);
-
-    if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
-    updateMapMarkers();
-    updateMapList();
-    ensureStoresVisible();
-
-    mapInitialized = true;
-    console.log('🗺️ 地圖初始化完成');
-    setTimeout(() => { if (map) map.invalidateSize(); }, 500);
-  } catch (e) {
-    console.error('地圖初始化失敗:', e);
-    toast('地圖載入失敗，請重新整理', 'pink');
-  }
-}
 
     function updateMapList() {
-  const listContainer = document.getElementById('map-store-list');
-  if (!listContainer) return;
-  
-  // 獲取當前視圖內的所有店鋪
-  const inBounds = getStoresInBounds();
-  
-  // 套用 Filter
-  let filtered = inBounds;
-  if (mapFilter === 'pending') {
-    filtered = filtered.filter(s => s.verified !== 'verified');
-  } else if (mapFilter === 'incomplete') {
-    filtered = filtered.filter(s => {
-      const hasAddress = s.address_detail && s.address_detail !== '';
-      const hasSize = s.size && s.size !== '中';
-      const hasStaff = s.has_staff !== undefined && s.has_staff !== null;
-      const hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
-      return !(hasAddress && hasSize && hasStaff && hasCoin);
-    });
-  }
-  
-  listContainer.innerHTML = renderMapStoreListWithData(filtered);
-}
+      const listContainer = document.getElementById('map-store-list');
+      if (!listContainer) return;
+      listContainer.innerHTML = renderMapStoreList();
+    }
 
     function addUserMarker(lat, lng) {
       if (!map) return;
@@ -1443,6 +1407,7 @@ function renderMapStoreList() {
           ${isInMall ? `<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>` : ''}
           ${!isVerified ? `<button onclick="openVerifyForm('${s.id}')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>` : ''}
           <button onclick="openSupplementForm('${s.id}')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>
+          <button onclick="quickAction('post', '${s.id}')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>
         </div>
         <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">
           ${s.size && s.size !== '中' ? `<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ${s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)'}</span>` : ''}
@@ -1762,9 +1727,9 @@ function renderMapStoreList() {
       if (type === "store") openStore(id);
     }
 
-    // ============================================================
-    //   店鋪認證功能
-    // ============================================================
+    /* ============================================================
+       店鋪認證功能
+    ============================================================ */
 
     function openVerifyForm(storeId) {
       const s = STORES.find(x => x.id === storeId);
@@ -1933,9 +1898,9 @@ function renderMapStoreList() {
       openStore(storeId);
     }
 
-    // ============================================================
-    //   補充資料功能
-    // ============================================================
+    /* ============================================================
+       補充資料功能
+    ============================================================ */
 
     function openSupplementForm(storeId) {
       const s = STORES.find(x => x.id === storeId);
@@ -2141,9 +2106,96 @@ function renderMapStoreList() {
       return regionMap[region] || null;
     }
 
-    // ============================================================
-    //   任務頁面
-    // ============================================================
+    /* ============================================================
+       任務頁面
+    ============================================================ */
+
+    // ===== 打卡月曆 =====
+    function getCheckinMonthData() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay();
+      
+      const monthData = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const key = date.toISOString().slice(0, 10);
+        const checked = STATE.daily[key] && STATE.daily[key].checkin > 0;
+        monthData.push({ day: d, checked, key });
+      }
+      return { monthData, firstDay, year, month, daysInMonth };
+    }
+
+    function renderCheckinCalendar() {
+      const { monthData, firstDay, year, month, daysInMonth } = getCheckinMonthData();
+      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+      
+      let html = `<div class="text-center text-xs text-white/40 mb-2">${monthNames[month]} ${year}</div>`;
+      html += `<div class="grid grid-cols-7 gap-1 text-center">`;
+      html += dayNames.map(d => `<div class="text-[10px] text-white/30 py-1">${d}</div>`).join('');
+      
+      for (let i = 0; i < firstDay; i++) {
+        html += `<div class="py-1"></div>`;
+      }
+      
+      monthData.forEach(({ day, checked }) => {
+        const isToday = day === new Date().getDate();
+        const bg = checked ? 'bg-neongreen/30 border-neongreen' : 'bg-white/5 border-white/10';
+        const text = checked ? 'text-neongreen' : 'text-white/30';
+        const todayClass = isToday ? 'border-gold' : '';
+        html += `<div class="py-1 rounded-lg border ${bg} ${todayClass} text-xs ${text}">${day}</div>`;
+      });
+      
+      html += `</div>`;
+      
+      const checkedCount = monthData.filter(d => d.checked).length;
+      html += `<div class="text-center text-[10px] text-white/30 mt-2">本月打卡 ${checkedCount}/${daysInMonth} 天</div>`;
+      
+      return html;
+    }
+
+    // ===== 成就進度 =====
+    function renderAchievementProgress() {
+      const achState = getAchievementState();
+      const unlocked = achState.unlocked || [];
+      const total = Object.keys(ACHIEVEMENT_DEFS).length;
+      
+      let nextAch = null;
+      let minProgress = 100;
+      for (const key of Object.keys(ACHIEVEMENT_DEFS)) {
+        if (unlocked.includes(key)) continue;
+        const progress = getAchievementProgress(key);
+        if (progress.percentage < minProgress && progress.percentage > 0) {
+          minProgress = progress.percentage;
+          nextAch = { key, ...progress, def: ACHIEVEMENT_DEFS[key] };
+        }
+      }
+      
+      let html = `<div class="mt-4 rounded-xl border border-gold/20 bg-zinc-950/50 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-white/40">🏆 成就進度</span>
+          <span class="text-[10px] text-gold">${unlocked.length}/${total}</span>
+        </div>
+        <div class="mt-1 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+          <div class="h-full rounded-full bg-gold transition-all" style="width:${(unlocked.length / total) * 100}%"></div>
+        </div>`;
+      
+      if (nextAch) {
+        html += `<div class="mt-2 text-[10px] text-white/40">
+          下一個成就：<span class="text-gold">${nextAch.def.icon} ${nextAch.def.name}</span>
+          （${nextAch.current}/${nextAch.required}）
+        </div>`;
+      } else {
+        html += `<div class="mt-2 text-[10px] text-neongreen">🎉 所有成就已解鎖！</div>`;
+      }
+      
+      html += `</div>`;
+      return html;
+    }
+
     function viewTask() {
       const d = daily();
       const levelInfo = getUserLevel();
@@ -2187,12 +2239,13 @@ function renderMapStoreList() {
         <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常</h3>
           <div class="space-y-2">
             <div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">
-              <div>
+              <div class="flex-1">
                 <p class="text-sm font-bold text-white/90">日常打卡</p>
                 <p class="text-[11px] text-white/50">每日簽到</p>
                 <p class="text-[10px] text-white/30">今日 ${d.checkin}/1 次</p>
+                <div class="mt-2">${renderCheckinCalendar()}</div>
               </div>
-              <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black">+5</button>
+              <button onclick="doCheckin()" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black flex-shrink-0 ml-2">+5</button>
             </div>
           </div>
         </div>
@@ -2208,78 +2261,1274 @@ function renderMapStoreList() {
             </div>
           </div>
         </div>
+        
+        ${renderAchievementProgress()}
       `;
     }
 
-    // ===== 任務：認證店鋪（跳轉到地圖 + Filter）=====
     function openVerifyTask() {
       showView('map');
       setTimeout(() => {
         setMapFilter('pending');
         toast('🔍 顯示待認證店鋪，請在地圖上選擇並認證', 'gold');
+        showFilterGuide('請點擊地圖上黃色的圖釘來開始認證 🗺️');
       }, 400);
     }
 
-    // ===== 任務：完善店鋪（跳轉到地圖 + Filter）=====
     function openSupplementTask() {
       showView('map');
       setTimeout(() => {
         setMapFilter('incomplete');
         toast('📝 顯示待完善店鋪，請在地圖上選擇並補充資料', 'gold');
+        showFilterGuide('請點擊地圖上標記的店鋪來補充資料 📝');
       }, 400);
     }
 
-    // ===== 打卡功能（優化版）=====
-    function doCheckin() {
-      const d = daily();
-      if (d.checkin >= 1) {
-        toast('今日已打卡，明天再來吧！', 'gold');
+    function showFilterGuide(message) {
+      const oldGuide = document.getElementById('filter-guide');
+      if (oldGuide) oldGuide.remove();
+      
+      const filterContainer = document.getElementById('filter-container');
+      if (!filterContainer) return;
+      
+      const guide = document.createElement('div');
+      guide.id = 'filter-guide';
+      guide.style.cssText = 'width:100%; text-align:center; padding:4px 0; font-size:11px; color:rgba(255,255,255,0.6); background:rgba(212,175,55,0.1); border-radius:4px;';
+      guide.textContent = '💡 ' + message;
+      filterContainer.appendChild(guide);
+      
+      setTimeout(() => {
+        if (guide.parentNode) guide.remove();
+      }, 5000);
+    }
+
+    /* ============================================================
+       實時頁面 + 發布戰報
+    ============================================================ */
+
+    function viewLive() {
+      const allPosts = STATE.livePosts || [];
+      const validPosts = allPosts.filter(p => p.expire > now());
+      
+      return `
+        <div class="flex gap-2">
+          <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客</button>
+          <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主</button>
+        </div>
+        <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
+          ${liveTrack === "player" ? "🎯 分享你的夾娃娃戰果！拍照上傳，讓大家羨慕一下！+5 分" : "🏬 台主專屬宣傳區！上傳海報/活動照，吸引更多夾客！+5 分"}
+        </div>
+        <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
+          ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
+        </button>
+        <div class="mt-4 space-y-3">
+          ${validPosts.filter(x => x.track === liveTrack).length > 0 ? validPosts.filter(x => x.track === liveTrack).map(p => {
+            const hasLiked = p.likes && p.likes.includes(STATE.user.device);
+            return `<div class="rounded-2xl border border-${p.track === "player" ? 'neongreen' : 'neonpink'}/30 bg-zinc-950 p-3">
+              ${p.photo ? `<img src="${p.photo}" class="h-48 w-full rounded-lg object-cover" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${p.track === "player" ? "🎉" : "🖼️"}</div>`}
+              <div class="mt-2 flex items-start justify-between">
+                <div><p class="text-sm text-white/80">${p.content || p.prize || '無內容'}</p>${p.store_name ? `<p class="text-xs text-gold/60 mt-1">📍 ${p.store_name}</p>` : ''}${p.is_linked ? `<span class="text-[9px] text-neongreen">🔗 已連結機台 (${Math.ceil((p.expire - now()) / DAY)}天)</span>` : ''}</div>
+                <span class="text-[10px] text-white/30 whitespace-nowrap ml-2">${timeAgo(p.ts)}</span>
+              </div>
+              <div class="mt-1 flex items-center gap-3 text-[10px] text-white/30">
+                <span>👤 ${p.author || '匿名'}</span>
+                <button onclick="toggleLike('${p.id}')" class="flex items-center gap-1 ${hasLiked ? 'text-neonpink' : 'text-white/30'}">${hasLiked ? '❤️' : '🤍'} ${p.likes ? p.likes.length : 0}</button>
+              </div>
+            </div>`;
+          }).join('') : `<p class="text-center text-sm text-white/40 py-6">暫無戰報，快來發布第一個！</p>`}
+        </div>
+      `;
+    }
+
+    function toggleLike(postId) {
+      const post = STATE.livePosts.find(p => p.id === postId);
+      if (!post) return;
+      const userDevice = STATE.user.device;
+      if (!post.likes) post.likes = [];
+      const idx = post.likes.indexOf(userDevice);
+      if (idx >= 0) post.likes.splice(idx, 1);
+      else post.likes.push(userDevice);
+      save();
+      showView('live');
+    }
+
+    function setLiveTrack(track) { liveTrack = track; showView('live'); }
+
+    function selectStoreFromMap(prefix) {
+      closeModal();
+      
+      if (CURRENT !== 'map') {
+        showView('map');
+      }
+      
+      toast('🗺️ 請點擊地圖上的圖釘選擇店鋪', 'gold');
+      
+      if (markerCluster) {
+        markerCluster.on('click', function(e) {
+          const layer = e.layer;
+          if (layer.options && layer.options.storeId) {
+            const store = STORES.find(s => s.id === layer.options.storeId);
+            if (store) {
+              markerCluster.off('click');
+              setTimeout(() => {
+                openPlayerPostWithStore(prefix, store);
+              }, 300);
+            }
+          } else if (layer.options && layer.options.mallName) {
+            toast('🏬 請選擇商場內的具體店鋪', 'gold');
+            openMallModal(layer.options.mallName);
+          }
+        });
+      }
+    }
+
+    function openPlayerPostWithStore(prefix, store) {
+      openPlayerPost();
+      
+      setTimeout(() => {
+        const input = document.getElementById(`${prefix}-store-search`);
+        const hidden = document.getElementById(`${prefix}-store-id`);
+        const display = document.getElementById(`${prefix}-selected-store`);
+        const nameDisplay = document.getElementById(`${prefix}-selected-store-name`);
+        
+        if (input) input.value = store.name;
+        if (hidden) hidden.value = store.id;
+        if (display) display.classList.remove('hidden');
+        if (nameDisplay) nameDisplay.textContent = store.name;
+        
+        const container = document.getElementById(`${prefix}-store-suggestions`);
+        if (container) container.classList.add('hidden');
+        
+        checkPostForm(prefix);
+        
+        toast(`✅ 已選擇「${store.name}」`, 'green');
+      }, 500);
+    }
+
+    function openPlayerPost() {
+      openModal(`
+        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
+          <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>
+          <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+          <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
+            <p class="text-xs text-white/40">分享你的夾娃娃戰果，讓大家羨慕一下！</p>
+            <p class="text-xs text-neongreen mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
+            <div style="display:flex; gap:6px;">
+              <input id="lp-store-search" placeholder="輸入店名搜尋..." 
+                class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" 
+                autocomplete="off" oninput="filterStoreSuggestions('lp')" onfocus="filterStoreSuggestions('lp')" />
+              <button onclick="selectStoreFromMap('lp')" 
+                class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">
+                🗺️ 地圖選
+              </button>
+            </div>
+            <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
+            <input type="hidden" id="lp-store-id" value="" />
+            <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">📝 內容 <span class="text-white/40">（選填）</span></label>
+            <textarea id="lp-content" placeholder="例如：10 抽爆機山崩！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>
+            <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+              <button onclick="openCamera('lp')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+              <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+            </div>
+          </div>
+        </div>
+        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+          <button onclick="submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋或選擇店鋪</button>
+        </div>
+      `);
+      
+      setTimeout(() => {
+        const input = document.getElementById('lp-store-search');
+        if (input) { input.focus(); filterStoreSuggestions('lp'); }
+      }, 100);
+      
+      const checkInterval = setInterval(() => {
+        const storeId = document.getElementById('lp-store-id')?.value;
+        const photoReady = window._camPreview && window._camPreview.lp;
+        const btn = document.getElementById('lp-submit-btn');
+        if (btn) {
+          if (storeId && photoReady) {
+            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            btn.innerHTML = '✅ 發布戰報（+5 分）';
+          } else {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+            btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+          }
+        }
+      }, 300);
+      setTimeout(() => clearInterval(checkInterval), 30000);
+    }
+
+    function filterStoreSuggestions(prefix) {
+      const input = document.getElementById(`${prefix}-store-search`);
+      const container = document.getElementById(`${prefix}-store-suggestions`);
+      if (!input || !container) return;
+      
+      const query = input.value.trim().toLowerCase();
+      let filtered = STORES;
+      if (query) filtered = STORES.filter(s => s.name.toLowerCase().includes(query) || s.region.toLowerCase().includes(query));
+      filtered = filtered.slice(0, 10);
+      
+      if (filtered.length === 0) { container.classList.add('hidden'); return; }
+      container.classList.remove('hidden');
+      container.innerHTML = filtered.map(s => `
+        <button onclick="selectStoreSuggestion('${prefix}', '${s.id}', '${s.name.replace(/'/g, "\\'")}')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0 transition-colors">
+          <span class="text-gold">${s.name}</span>
+          <span class="text-[10px] text-white/40 ml-2">${s.region}</span>
+        </button>
+      `).join('');
+      
+      setTimeout(() => {
+        document.addEventListener('click', function closeSuggestions(e) {
+          if (!container.contains(e.target) && e.target !== input) {
+            container.classList.add('hidden');
+            document.removeEventListener('click', closeSuggestions);
+          }
+        });
+      }, 100);
+    }
+
+    function selectStoreSuggestion(prefix, storeId, storeName) {
+      const input = document.getElementById(`${prefix}-store-search`);
+      const container = document.getElementById(`${prefix}-store-suggestions`);
+      const hiddenInput = document.getElementById(`${prefix}-store-id`);
+      if (input) input.value = storeName;
+      if (hiddenInput) hiddenInput.value = storeId;
+      if (container) container.classList.add('hidden');
+      checkPostForm(prefix);
+    }
+
+    function checkPostForm(prefix) {
+      const hiddenInput = document.getElementById(`${prefix}-store-id`);
+      const photoReady = window._camPreview && window._camPreview[prefix];
+      const btn = document.getElementById(`${prefix}-submit-btn`);
+      if (btn) {
+        if (hiddenInput && hiddenInput.value && photoReady) {
+          btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+          btn.disabled = false;
+          btn.innerHTML = '✅ 發布戰報（+5 分）';
+        } else {
+          btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+          btn.disabled = true;
+          btn.innerHTML = photoReady ? (hiddenInput && hiddenInput.value ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+        }
+      }
+    }
+
+    async function submitPlayerPost() {
+      const storeId = document.getElementById('lp-store-id')?.value;
+      if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
+      const photoBlob = window._cam?.lp;
+      if (!photoBlob) { toast('請先拍照', 'pink'); return; }
+      const content = document.getElementById('lp-content')?.value.trim() || '🎉 出貨成功！';
+      const store = STORES.find(s => s.id === storeId);
+      
+      let photoUrl = '';
+      if (CLOUD_ON) {
+        try {
+          const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          photoUrl = await uploadImage(file, 'posts');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+      }
+      
+      const post = {
+        id: 'p' + Date.now(),
+        track: 'player',
+        store_id: storeId,
+        store_name: store ? store.name : '',
+        content: content,
+        photo: photoUrl,
+        author: STATE.user.name,
+        ts: now(),
+        expire: now() + DAY,
+        likes: [],
+        likeCount: 0,
+        is_linked: false
+      };
+      
+      if (!STATE.livePosts) STATE.livePosts = [];
+      STATE.livePosts.unshift(post);
+      save();
+      
+      addPoints(5, '發布出貨戰報');
+      updateStreak();
+      
+      toast('✅ 戰報發布成功！+5 分', 'green');
+      closeModal();
+      showView('live');
+    }
+
+    function openOwnerPost() {
+      const myStores = STORES.filter(s => s.submitted_by === STATE.user.device);
+      if (myStores.length === 0) { toast('你還沒有提交過店鋪，無法使用台主宣傳功能', 'gold'); return; }
+      
+      openModal(`
+        <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">
+          <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>
+          <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+          <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">
+            <p class="text-xs text-white/40">宣傳你的店鋪和機台，吸引更多夾客！</p>
+            <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
+            <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions('lo')" onfocus="filterStoreSuggestions('lo')" />
+            <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
+            <input type="hidden" id="lo-store-id" value="" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>
+            <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>
+            <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">
+              <button onclick="openCamera('lo')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+              <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+            </div>
+          </div>
+          <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+            <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>
+            <div class="mt-2 grid grid-cols-3 gap-2">
+              <button onclick="selectLinkPlan(3, 50)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 3天<br><span class="text-gold">50分</span></button>
+              <button onclick="selectLinkPlan(5, 70)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 5天<br><span class="text-gold">70分</span></button>
+              <button onclick="selectLinkPlan(7, 80)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">80分</span></button>
+            </div>
+            <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>
+          </div>
+        </div>
+        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+          <button onclick="submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>
+        </div>
+      `);
+      
+      setTimeout(() => {
+        const input = document.getElementById('lo-store-search');
+        if (input) { input.focus(); filterStoreSuggestions('lo'); }
+      }, 100);
+      
+      window._loLinkPlan = null;
+      
+      const checkInterval = setInterval(() => {
+        const storeId = document.getElementById('lo-store-id')?.value;
+        const photoReady = window._camPreview && window._camPreview.lo;
+        const btn = document.getElementById('lo-submit-btn');
+        if (btn) {
+          if (storeId && photoReady) {
+            btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            const plan = window._loLinkPlan;
+            btn.innerHTML = plan ? `✅ 發布宣傳（${plan.days}天 · -${plan.cost}分）` : '✅ 發布宣傳（+5 分）';
+          } else {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+            btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
+          }
+        }
+      }, 300);
+      setTimeout(() => clearInterval(checkInterval), 30000);
+    }
+
+    function selectLinkPlan(days, cost) {
+      window._loLinkPlan = { days, cost };
+      document.querySelectorAll('.link-plan-btn').forEach(el => {
+        const isActive = el.textContent.includes(`${days}天`);
+        el.classList.toggle('border-gold', isActive);
+        el.classList.toggle('bg-gold/20', isActive);
+        el.classList.toggle('text-gold', isActive);
+        el.classList.toggle('text-white/40', !isActive);
+      });
+      document.getElementById('link-plan-info').textContent = `✅ 選中 ${days} 天方案，將扣除 ${cost} 積分，貼文顯示在機台頁面`;
+      const btn = document.getElementById('lo-submit-btn');
+      if (btn && !btn.disabled) btn.innerHTML = `✅ 發布宣傳（${days}天 · -${cost}分）`;
+    }
+
+    async function submitOwnerPost() {
+      const storeId = document.getElementById('lo-store-id')?.value;
+      if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
+      const photoBlob = window._cam?.lo;
+      if (!photoBlob) { toast('請先拍照', 'pink'); return; }
+      const content = document.getElementById('lo-content')?.value.trim() || '🏬 新機台上架！';
+      const store = STORES.find(s => s.id === storeId);
+      const plan = window._loLinkPlan || null;
+      
+      if (plan && STATE.points < plan.cost) { toast(`積分不足 ${plan.cost}，無法使用連結功能`, 'pink'); return; }
+      
+      let photoUrl = '';
+      if (CLOUD_ON) {
+        try {
+          const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          photoUrl = await uploadImage(file, 'posts');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+      }
+      
+      if (plan) addPoints(-plan.cost, `連結機台宣傳 (${plan.days}天)`);
+      
+      const post = {
+        id: 'p' + Date.now(),
+        track: 'owner',
+        store_id: storeId,
+        store_name: store ? store.name : '',
+        content: content,
+        photo: photoUrl,
+        author: STATE.user.name,
+        ts: now(),
+        expire: plan ? now() + DAY * plan.days : now() + DAY,
+        is_linked: !!plan,
+        link_days: plan ? plan.days : 0,
+        likes: [],
+        likeCount: 0
+      };
+      
+      if (!STATE.livePosts) STATE.livePosts = [];
+      STATE.livePosts.unshift(post);
+      save();
+      
+      if (!plan) addPoints(5, '發布台主宣傳');
+      updateStreak();
+      
+      toast(plan ? `✅ 宣傳發布成功！連結已啟用 (${plan.days}天)` : '✅ 宣傳發布成功！+5 分', 'green');
+      closeModal();
+      showView('live');
+    }
+
+    /* ============================================================
+       我的頁面 + 收藏店鋪快捷操作
+    ============================================================ */
+
+    function quickAction(action, storeId) {
+      const store = STORES.find(s => s.id === storeId);
+      if (!store) { toast('找不到該店鋪', 'pink'); return; }
+      
+      switch(action) {
+        case 'checkin':
+          doCheckin();
+          break;
+          
+        case 'update':
+          showView('map');
+          setTimeout(() => {
+            if (map && store.lat && store.lng) {
+              map.flyTo([store.lat, store.lng], 16, { duration: 1 });
+              setTimeout(() => {
+                openStore(storeId);
+                toast(`📍 前往「${store.name}」更新資訊`, 'green');
+              }, 800);
+            } else {
+              openStore(storeId);
+            }
+          }, 300);
+          break;
+          
+        case 'post':
+          showView('live');
+          setTimeout(() => {
+            openPlayerPostWithStore('lp', store);
+            toast(`📢 為「${store.name}」發布戰報`, 'green');
+          }, 400);
+          break;
+          
+        default:
+          toast('未知操作', 'pink');
+      }
+    }
+
+    function viewMe() {
+      const favS = STORES.filter(s => STATE.favStores.includes(s.id));
+      const levelInfo = getUserLevel();
+      const achState = getAchievementState();
+      const unlockedCount = (achState.unlocked || []).length;
+      const totalAchievements = Object.keys(ACHIEVEMENT_DEFS).length;
+      
+      const myPosts = (STATE.livePosts || []).filter(p => p.author === STATE.user.name).sort((a, b) => b.ts - a.ts);
+      const postHtml = myPosts.length ? myPosts.map(p => {
+        const isExpired = p.expire < now();
+        const isLinked = p.is_linked || false;
+        const status = isExpired ? '<span class="text-white/30">⏳ 已過期</span>' : `<span class="text-neongreen">✅ ${Math.ceil((p.expire - now()) / DAY)} 天${isLinked ? ' 🔗' : ''}</span>`;
+        return `<div class="my-post-item rounded-xl border ${isExpired ? 'border-white/10 expired' : 'border-gold/30'} bg-zinc-950/80 p-3">
+          <div class="flex items-center justify-between"><span class="text-sm text-white/80 truncate flex-1">${p.content || '貼文'}</span>${status}</div>
+          <div class="flex items-center gap-3 text-[10px] text-white/30 mt-1"><span>${timeAgo(p.ts)}</span><span>${p.track === 'player' ? '🎯 出貨戰報' : '🏬 台主宣傳'}</span>${p.is_linked ? `<span class="text-neongreen">🔗 ${p.link_days || 3}天方案</span>` : ''}</div>
+        </div>`;
+      }).join('') : '<p class="text-white/40 text-center text-xs py-4">尚無貼文</p>';
+      
+      let levelHtml = `<div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">🏅 等級</h3>
+        <div class="rounded-xl border border-gold/25 bg-zinc-950 p-3">
+          <div class="flex items-center justify-between"><span class="text-lg font-black text-gold">${levelInfo.title}</span><span class="text-xs text-white/40">Lv.${levelInfo.level} / 10</span></div>
+          <div class="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gold transition-all" style="width:${levelInfo.percentage}%"></div></div>
+          <div class="mt-1 flex justify-between text-[10px] text-white/40"><span>${levelInfo.xpForCurrent} XP</span><span>${levelInfo.xp} XP</span><span>${levelInfo.xpForNext} XP</span></div>
+          <div class="mt-1 text-[10px] text-white/30 text-center">${levelInfo.nextTitle ? `下一級：${levelInfo.nextTitle} (還需 ${levelInfo.xpForNext - levelInfo.xp} XP)` : '👑 已達最高等級！'}</div>
+        </div>
+      </div>`;
+      
+      const categories = {
+        submission: { label: '🏪 店鋪提交' },
+        verification: { label: '🔍 店鋪認證' },
+        complete: { label: '🏅 完整貢獻' },
+        region: { label: '🏙️ 地區探索' },
+        supplement: { label: '📝 資料補充' },
+        streak: { label: '🔥 連續貢獻' }
+      };
+      
+      let achListHtml = '';
+      Object.keys(categories).forEach(catKey => {
+        const cat = categories[catKey];
+        const items = Object.keys(ACHIEVEMENT_DEFS).filter(k => ACHIEVEMENT_DEFS[k].category === catKey).map(k => {
+          const def = ACHIEVEMENT_DEFS[k];
+          const progress = getAchievementProgress(k);
+          const isUnlocked = progress.isUnlocked;
+          return `<div class="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+            <span class="text-base">${isUnlocked ? '✅' : '⏳'}</span>
+            <span class="text-xs flex-1 ${isUnlocked ? 'text-gold' : 'text-white/40'}">${def.icon} ${def.name}</span>
+            <span class="text-[10px] ${isUnlocked ? 'text-neongreen' : 'text-white/30'}">${isUnlocked ? '已解鎖' : `${progress.current}/${progress.required}`}</span>
+          </div>`;
+        }).join('');
+        if (items) achListHtml += `<div class="mt-3"><p class="text-[10px] font-bold text-white/40">${cat.label}</p><div class="mt-1 rounded-lg bg-white/5 p-2">${items}</div></div>`;
+      });
+      
+      let achievementHtml = `<div class="mt-5"><div class="flex items-center justify-between"><h3 class="text-sm font-black text-white/90">🏆 成就 (${unlockedCount}/${totalAchievements})</h3></div>${levelHtml}${achListHtml}</div>`;
+      
+      return `
+        <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
+          <div class="flex items-center gap-4"><div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div><div><div class="text-lg font-black">${STATE.user.name}</div><div class="text-[11px] text-gold/70">裝置 ${STATE.user.device}</div></div></div>
+          <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">${STATE.points}</div></div><div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">${filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通"}</div></div></div>
+          <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ${STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold"} py-3.5 text-base font-black">${STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）"}</button>
+        </div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📝 我的貼文</h3><div class="space-y-2">${postHtml}</div></div>
+        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3>
+          <div class="space-y-2">
+            ${favS.length ? favS.map(s => `
+              <div class="flex items-center gap-2 rounded-xl border border-gold/25 bg-zinc-950 p-3">
+                <button onclick="openStore('${s.id}')" class="flex-1 text-left text-sm text-gold truncate">
+                  ${s.name} <span class="text-[10px] text-white/40">· ${s.region}</span>
+                </button>
+                <div class="flex gap-1 flex-shrink-0">
+                  <button onclick="quickAction('checkin', '${s.id}')" class="quick-action-btn rounded-lg border border-neongreen/30 px-2 py-1 text-[10px] text-neongreen hover:bg-neongreen/10 transition-all">打卡</button>
+                  <button onclick="quickAction('update', '${s.id}')" class="quick-action-btn rounded-lg border border-gold/30 px-2 py-1 text-[10px] text-gold hover:bg-gold/10 transition-all">更新</button>
+                  <button onclick="quickAction('post', '${s.id}')" class="quick-action-btn rounded-lg border border-neonpink/30 px-2 py-1 text-[10px] text-neonpink hover:bg-neonpink/10 transition-all">戰報</button>
+                </div>
+              </div>
+            `).join("") : `<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>`}
+          </div>
+        </div>
+        ${!STATE.user.is_bound ? `
+        <div class="mt-4 rounded-xl border border-gold/30 bg-gold/5 p-4">
+          <p class="text-sm font-bold text-gold">🔗 綁定帳號</p>
+          <p class="text-xs text-white/40 mt-1">綁定後數據永久保存，換手機也不怕遺失</p>
+          <button onclick="bindGoogleAccount()" class="mt-3 w-full rounded-lg bg-white text-black py-2.5 text-sm font-black">🔐 用 Google 帳號綁定</button>
+          <p class="text-[9px] text-white/30 mt-2">📌 綁定後可獲得 <span class="text-neongreen">+20 積分</span></p>
+          <p class="text-[8px] text-white/20 mt-1">💡 需要 Supabase 後台啟用 Google Provider</p>
+        </div>
+        ` : `
+        <div class="mt-4 rounded-xl border border-neongreen/30 bg-neongreen/5 p-4">
+          <div class="flex items-center gap-2">
+            <span class="text-neongreen">✅ 已綁定</span>
+            <span class="text-xs text-white/40">${STATE.user.email || ''}</span>
+            <button onclick="logoutGoogle()" class="ml-auto text-xs text-white/30 hover:text-white">登出</button>
+          </div>
+        </div>
+        `}
+        ${achievementHtml}
+        <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>
+      `;
+    }
+
+    /* ============================================================
+       Google OAuth 綁定功能
+    ============================================================ */
+
+    async function bindGoogleAccount() {
+      if (!isSupabaseReady()) {
+        toast('⚠️ 認證服務暫時不可用，請稍後再試', 'pink');
         return;
       }
       
-      d.checkin = 1;
-      
-      // 計算連續打卡天數
-      const streak = getCheckinStreak();
-      let bonus = 5;
-      let bonusMsg = '';
-      
-      if (streak >= 30) {
-        bonus = 25;
-        bonusMsg = '🔥 連續 30 天！額外 +20 分！';
-      } else if (streak >= 14) {
-        bonus = 15;
-        bonusMsg = '🔥 連續 14 天！額外 +10 分！';
-      } else if (streak >= 7) {
-        bonus = 10;
-        bonusMsg = '🔥 連續 7 天！額外 +5 分！';
+      try {
+        toast('🔐 正在連線到 Google...', 'gold');
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + window.location.pathname,
+            queryParams: { access_type: 'offline', prompt: 'consent' }
+          }
+        });
+        if (error) {
+          if (error.message && error.message.includes('provider is not enabled')) {
+            toast('⚠️ Google 登入尚未啟用，請聯繫管理員', 'pink');
+          } else {
+            toast('❌ 登入失敗：' + error.message, 'pink');
+          }
+          throw error;
+        }
+      } catch (error) {
+        console.error('Google 登入錯誤:', error);
       }
-      
-      addPoints(bonus, `打卡 (連續 ${streak} 天)`);
-      updateAchievementStat('checkin', 1);
-      updateStreak();
-      
-      toast(`✅ 打卡成功！獲得 ${bonus} 分${bonusMsg ? ' ' + bonusMsg : ''}`, 'green');
-      showView('task');
     }
 
-    function getCheckinStreak() {
-      let streak = 0;
-      const today = new Date();
-      for (let i = 0; i < 365; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        if (STATE.daily[key] && STATE.daily[key].checkin > 0) {
-          streak++;
-        } else if (i > 0) {
-          break;
+    async function checkOAuthCallback() {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      
+      if (accessToken) {
+        console.log('🔐 檢測到 OAuth 回調，正在處理...');
+        try {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          });
+          if (error) throw error;
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError) throw userError;
+          await syncUserDataAfterBind(userData.user);
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch (error) {
+          console.error('OAuth 回調處理錯誤:', error);
+          toast('❌ 綁定失敗：' + error.message, 'pink');
         }
       }
-      return streak;
     }
 
-    // ===== 表單狀態變量 =====
+    async function syncUserDataAfterBind(user) {
+      try {
+        const deviceId = STATE.user.device;
+        const email = user.email || '';
+        const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || '夾客';
+        const avatarUrl = user.user_metadata?.avatar_url || '';
+        const googleId = user.id;
+        
+        const { data: existingUser, error: fetchError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('google_id', googleId)
+          .maybeSingle();
+        if (fetchError) throw fetchError;
+        
+        let userId;
+        if (existingUser) {
+          userId = existingUser.id;
+          const updates = {
+            display_name: displayName,
+            avatar_url: avatarUrl,
+            total_points: Math.max(existingUser.total_points || 0, STATE.points),
+            total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
+            last_active_at: new Date().toISOString(),
+            is_anonymous: false
+          };
+          const { error: updateError } = await supabase.from('user_profiles').update(updates).eq('id', userId);
+          if (updateError) throw updateError;
+          if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
+          if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
+        } else {
+          const { data: newUser, error: insertError } = await supabase.from('user_profiles').insert({
+            device_id: deviceId, google_id: googleId, email: email,
+            display_name: displayName, avatar_url: avatarUrl,
+            total_points: STATE.points, total_xp: STATE.total_xp || 0,
+            level: STATE.level || 1, is_anonymous: false,
+            bound_at: new Date().toISOString(), created_at: new Date().toISOString(),
+            last_active_at: new Date().toISOString()
+          }).select().single();
+          if (insertError) throw insertError;
+          userId = newUser.id;
+        }
+        
+        STATE.user.is_bound = true;
+        STATE.user.email = email;
+        STATE.user.google_id = googleId;
+        STATE.user.user_id = userId;
+        STATE.user.display_name = displayName;
+        STATE.user.avatar_url = avatarUrl;
+        
+        if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) await syncFavorites(userId);
+        if (STATE.achievements && STATE.achievements.unlocked) await syncAchievements(userId);
+        save();
+        addPoints(20, 'Google 帳號綁定獎勵');
+        toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
+        showView('me');
+      } catch (error) {
+        console.error('同步數據錯誤:', error);
+        toast('⚠️ 綁定成功但數據同步失敗: ' + error.message, 'pink');
+        STATE.user.is_bound = true;
+        save();
+      }
+    }
+
+    async function syncFavorites(userId) {
+      try {
+        for (const storeId of STATE.favStores) {
+          await supabase.from('user_favorites').upsert({ user_id: userId, store_id: storeId, created_at: new Date().toISOString() }, { onConflict: 'user_id, store_id' });
+        }
+        for (const machineId of STATE.favMachines) {
+          await supabase.from('user_favorites').upsert({ user_id: userId, machine_id: machineId, created_at: new Date().toISOString() }, { onConflict: 'user_id, machine_id' });
+        }
+        console.log('✅ 收藏已同步');
+      } catch (e) { console.warn('收藏同步失敗:', e); }
+    }
+
+    async function syncAchievements(userId) {
+      try {
+        for (const key of (STATE.achievements?.unlocked || [])) {
+          const def = ACHIEVEMENT_DEFS[key];
+          if (!def) continue;
+          await supabase.from('user_achievements').upsert({ user_id: userId, achievement_key: key, achievement_name: def.name, unlocked_at: new Date().toISOString() }, { onConflict: 'user_id, achievement_key' });
+        }
+        console.log('✅ 成就已同步');
+      } catch (e) { console.warn('成就同步失敗:', e); }
+    }
+
+    async function logoutGoogle() {
+      if (!confirm('確定要登出嗎？本地數據仍會保留。')) return;
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+        STATE.user.is_bound = false;
+        STATE.user.google_id = null;
+        STATE.user.email = null;
+        STATE.user.user_id = null;
+        STATE.user.display_name = null;
+        STATE.user.avatar_url = null;
+        save();
+        toast('✅ 已登出', 'green');
+        showView('me');
+      } catch (e) { toast('登出失敗: ' + e.message, 'pink'); }
+    }
+
+    document.addEventListener('DOMContentLoaded', checkOAuthCallback);
+
+    function redeemAdFree() {
+      if (STATE.adFree) return toast("已兌換", "pink");
+      if (STATE.points < 80) return toast("積分不足 80", "pink");
+      addPoints(-80, "兌換免廣告");
+      STATE.adFree = true;
+      save();
+      showView("me");
+    }
+
+    function resetAll() {
+      if (confirm("確定重置所有本地資料？")) {
+        localStorage.removeItem("claw_state");
+        STATE = load();
+        save();
+        showView("me");
+      }
+    }
+
+    /* ============================================================
+       工具函數
+    ============================================================ */
+
+    window._cam = {};
+    window._camPreview = {};
+    window._camStreams = {};
+
+    function openCamera(key) {
+      const container = document.getElementById(`${key}-camera-container`);
+      if (!container) return;
+      
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            gpsLat = pos.coords.latitude;
+            gpsLng = pos.coords.longitude;
+            isGpsReady = true;
+            console.log('📍 拍照時定位成功:', gpsLat, gpsLng);
+            if (document.getElementById('nt-gps')) {
+              const el = document.getElementById('nt-gps');
+              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
+              el.className = 'text-neongreen text-xs';
+            }
+            if (document.getElementById('vf-gps')) {
+              const el = document.getElementById('vf-gps');
+              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
+              el.className = 'text-neongreen text-xs';
+              _vfGpsReady = true;
+              _vfGpsLat = gpsLat;
+              _vfGpsLng = gpsLng;
+            }
+            updateFormState();
+          },
+          () => { console.log('⚠️ 拍照時定位失敗，使用上次位置'); },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      }
+      
+      if (window._camPreview && window._camPreview[key]) {
+        container.innerHTML = `<div class="relative"><img src="${window._camPreview[key]}" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera('${key}')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>`;
+        return;
+      }
+      
+      container.innerHTML = `<video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video><div class="mt-2 flex gap-2"><button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button><button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button></div>`;
+      
+      const videoEl = document.getElementById(`${key}-video`);
+      if (!videoEl) return;
+      
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => { videoEl.srcObject = stream; videoEl.play(); window._camStreams[key] = stream; })
+        .catch((err) => { handleCameraError(err, key); });
+    }
+
+    function handleCameraError(err, key) {
+      const container = document.getElementById(`${key}-camera-container`);
+      if (!container) return;
+      let errorTitle = '❌ 無法開啟相機', errorMsg = '', guideSteps = [];
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorTitle = '📱 相機權限被拒絕';
+        errorMsg = '為了確保店鋪情報的真實性，需要拍攝現場照片。';
+        guideSteps = ['1️⃣ 開啟手機「設定」應用程式','2️⃣ 點選「隱私權」或「應用程式管理」','3️⃣ 點選「相機」','4️⃣ 找到「Chrome」或「Safari」等瀏覽器','5️⃣ 將相機權限改為「允許」','6️⃣ 返回此頁面，點擊下方「重新嘗試」'];
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errorTitle = '📷 找不到相機裝置';
+        errorMsg = '請確認你的裝置有後置鏡頭，且未被其他應用程式佔用。';
+        guideSteps = ['1️⃣ 確認手機有後置鏡頭','2️⃣ 關閉其他使用相機的 App（如 Instagram、WhatsApp）','3️⃣ 重新啟動手機後再試','4️⃣ 如果仍無法使用，可嘗試使用其他瀏覽器'];
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errorTitle = '🔒 相機被其他 App 佔用';
+        errorMsg = '相機可能正在被其他應用程式使用。';
+        guideSteps = ['1️⃣ 關閉所有使用相機的應用程式','2️⃣ 重新啟動瀏覽器','3️⃣ 再次點擊「開啟相機拍照」'];
+      } else {
+        errorTitle = '⚠️ 相機開啟失敗';
+        errorMsg = '發生未知錯誤，請嘗試以下步驟：';
+        guideSteps = ['1️⃣ 重新整理頁面（按 F5 或下拉重整）','2️⃣ 重新啟動手機','3️⃣ 嘗試使用其他瀏覽器（Chrome 或 Safari）','4️⃣ 如果持續失敗，可先提交其他情報'];
+      }
+      container.innerHTML = `<div class="rounded-xl border border-neonpink/50 bg-neonpink/5 p-4 text-left"><div class="flex items-start gap-2"><span class="text-2xl">${errorTitle.split(' ')[0]}</span><div class="flex-1"><p class="font-bold text-neonpink">${errorTitle}</p><p class="text-xs text-white/60 mt-1">${errorMsg}</p></div></div><div class="mt-3 rounded-lg bg-black/40 p-3"><p class="text-[10px] font-bold text-gold/70 mb-1">📋 解決步驟：</p>${guideSteps.map(step => `<p class="text-[10px] text-white/50 leading-relaxed">${step}</p>`).join('')}</div><div class="mt-3 flex gap-2"><button onclick="openCamera('${key}')" class="flex-1 rounded-lg bg-neongreen/80 py-2 text-sm font-black text-black">🔄 重新嘗試</button><button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-xs text-white/50">暫時跳過</button></div><p class="text-[8px] text-white/30 mt-2 text-center">💡 提示：拍照是為了確保情報真實性，建立社群信任</p></div>`;
+    }
+
+    function closeCamera(key) {
+      const stream = window._camStreams?.[key];
+      if (stream) { stream.getTracks().forEach(t => t.stop()); delete window._camStreams[key]; }
+      const container = document.getElementById(`${key}-camera-container`);
+      if (container) container.innerHTML = `<button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>`;
+    }
+
+    async function capturePhoto(key) {
+      const videoEl = document.getElementById(`${key}-video`);
+      if (!videoEl) return toast('請先開啟相機', 'pink');
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth || 800;
+      canvas.height = videoEl.videoHeight || 600;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      const img = document.getElementById(`${key}-preview`);
+      if (img) { img.src = dataUrl; img.classList.remove('hidden'); img.style.display = 'block'; }
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+      window._cam[key] = blob;
+      window._camPreview[key] = dataUrl;
+      
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; isGpsReady = true;
+            if (document.getElementById('nt-gps')) {
+              const el = document.getElementById('nt-gps');
+              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
+              el.className = 'text-neongreen text-xs';
+            }
+            if (document.getElementById('vf-gps')) {
+              const el = document.getElementById('vf-gps');
+              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
+              el.className = 'text-neongreen text-xs';
+              _vfGpsReady = true; _vfGpsLat = gpsLat; _vfGpsLng = gpsLng;
+            }
+            updateFormState();
+          },
+          () => { console.log('⚠️ 拍照完成時定位失敗，使用上次位置'); },
+          { enableHighAccuracy: true, timeout: 3000 }
+        );
+      }
+      
+      closeCamera(key);
+      const container = document.getElementById(`${key}-camera-container`);
+      if (container) {
+        container.innerHTML = `<div class="relative"><img src="${dataUrl}" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera('${key}')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>`;
+      }
+      
+      if (typeof checkPostForm === 'function') {
+        const prefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
+        if (prefix) checkPostForm(prefix);
+      }
+      
+      toast('✅ 已拍照！', 'green');
+    }
+
+    function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = null; openCamera(key); }
+    
+    function clearPhoto(key) {
+      window._cam[key] = null; window._camPreview[key] = null;
+      const container = document.getElementById(`${key}-camera-container`);
+      if (container) container.innerHTML = `<button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>`;
+      const img = document.getElementById(`${key}-preview`);
+      if (img) { img.classList.add('hidden'); img.style.display = 'none'; }
+      toast('已移除照片', 'pink');
+    }
+
+    function timeAgo(ts) {
+      const diff = now() - ts;
+      if (diff < HOUR) return Math.max(1, Math.floor(diff / 60000)) + " 分鐘前";
+      if (diff < DAY) return Math.floor(diff / HOUR) + " 小時前";
+      return Math.floor(diff / DAY) + " 天前";
+    }
+
+    function openModal(html) {
+      const root = document.getElementById("modal-root");
+      root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
+      root.innerHTML = `<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; display:flex; flex-direction:column;">${html}</div>`;
+    }
+
+    function closeModal() {
+      const root = document.getElementById("modal-root");
+      root.className = "pointer-events-none fixed inset-0 z-50";
+      root.innerHTML = "";
+    }
+
+    function toast(msg, color = "green") {
+      const root = document.getElementById("toast-root");
+      const c = color === "pink" ? "border-neonpink text-neonpink glow-pink" : "border-neongreen text-neongreen glow-green";
+      const el = document.createElement("div");
+      el.className = `animate-pop pointer-events-auto rounded-full border ${c} bg-black px-4 py-2 text-sm font-bold`;
+      el.textContent = msg;
+      root.appendChild(el);
+      setTimeout(() => el.remove(), 2200);
+    }
+
+    /* ============================================================
+       雲端讀取 + 啟動
+    ============================================================ */
+
+    async function loadCloud() {
+      console.log("[v0] 直接從 Supabase 讀取資料...");
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const stores = await response.json();
+        console.log(`✅ 成功載入 ${stores.length} 筆資料`);
+        STORES = stores.map(s => ({
+          id: String(s.id),
+          name: s.name || "未命名店鋪",
+          region: s.region || "旺角",
+          addr: s.addr || "（未填地址）",
+          ig: s.ig || "",
+          fb: s.fb || "",
+          verified: s.status === "verified" ? "verified" : "pending",
+          size: s.size || "中",
+          token: s.token || false,
+          hour24: s.hour24 || false,
+          staff: s.staff || false,
+          dist: (Math.random() * 2 + 0.1).toFixed(1),
+          machines: s.machines || [],
+          photo: s.photo || "",
+          lat: s.lat || null,
+          lng: s.lng || null,
+          mall: s.mall || null,
+          floor: s.floor || null,
+          submitted_by: s.submitted_by || null,
+          verification_count: s.verification_count || 0,
+          is_verified: s.is_verified || false,
+          address_detail: s.address_detail || '',
+          has_staff: s.has_staff !== undefined ? s.has_staff : null,
+          has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
+          supplement_count: s.supplement_count || 0,
+        }));
+        console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
+      } catch (e) {
+        console.error("[v0] 讀取失敗:", e.message);
+        STORES = seedStores();
+        toast("無法載入店鋪資料，使用示範店鋪", "pink");
+      }
+    }
+
+    /* ============================================================
+       成就系統
+    ============================================================ */
+
+    const ACHIEVEMENT_DEFS = {
+      pioneer: { key: 'pioneer', name: '開路先鋒', category: 'submission', icon: '🏪', description: '提交第 1 間店鋪', condition: { type: 'submit_store', count: 1 }, reward: { points: 10, title: '拓荒者' } },
+      local_guide: { key: 'local_guide', name: '在地導遊', category: 'submission', icon: '🏪', description: '提交 5 間店鋪', condition: { type: 'submit_store', count: 5 }, reward: { points: 20, title: null } },
+      explorer: { key: 'explorer', name: '城市探險家', category: 'submission', icon: '🏪', description: '提交 15 間店鋪', condition: { type: 'submit_store', count: 15 }, reward: { points: 50, title: '探險家' } },
+      hk_expert: { key: 'hk_expert', name: '香港通', category: 'submission', icon: '🏪', description: '提交 30 間店鋪', condition: { type: 'submit_store', count: 30 }, reward: { points: 100, title: '香港通' } },
+      store_king: { key: 'store_king', name: '店鋪之王', category: 'submission', icon: '🏪', description: '提交 50 間店鋪', condition: { type: 'submit_store', count: 50 }, reward: { points: 200, title: '店王' } },
+      legend_hunter: { key: 'legend_hunter', name: '傳奇店鋪獵人', category: 'submission', icon: '🏪', description: '提交 100 間店鋪', condition: { type: 'submit_store', count: 100 }, reward: { points: 500, title: '傳奇獵人' } },
+      trainee_verifier: { key: 'trainee_verifier', name: '見習驗證員', category: 'verification', icon: '🔍', description: '認證 1 間店鋪', condition: { type: 'verify_store', count: 1 }, reward: { points: 10, title: null } },
+      senior_verifier: { key: 'senior_verifier', name: '資深驗證員', category: 'verification', icon: '🔍', description: '認證 10 間店鋪', condition: { type: 'verify_store', count: 10 }, reward: { points: 30, title: '驗證員' } },
+      chief_verifier: { key: 'chief_verifier', name: '首席驗證官', category: 'verification', icon: '🔍', description: '認證 30 間店鋪', condition: { type: 'verify_store', count: 30 }, reward: { points: 80, title: '首席驗證官' } },
+      trusted: { key: 'trusted', name: '信譽保證', category: 'verification', icon: '🔍', description: '認證 50 間店鋪（且無錯誤記錄）', condition: { type: 'verify_store', count: 50 }, reward: { points: 150, title: '信譽保證' } },
+      first_complete: { key: 'first_complete', name: '完成任務', category: 'complete', icon: '🏅', description: '有 1 間店鋪完成全部認證', condition: { type: 'store_complete', count: 1 }, reward: { points: 10, title: null } },
+      reliable: { key: 'reliable', name: '可靠情報員', category: 'complete', icon: '🏅', description: '有 5 間店鋪完成全部認證', condition: { type: 'store_complete', count: 5 }, reward: { points: 30, title: '可靠情報員' } },
+      gold_spy: { key: 'gold_spy', name: '金牌情報員', category: 'complete', icon: '🏅', description: '有 15 間店鋪完成全部認證', condition: { type: 'store_complete', count: 15 }, reward: { points: 80, title: '金牌情報員' } },
+      diamond_spy: { key: 'diamond_spy', name: '鑽石情報員', category: 'complete', icon: '🏅', description: '有 30 間店鋪完成全部認證', condition: { type: 'store_complete', count: 30 }, reward: { points: 200, title: '鑽石情報員' } },
+      hk_island: { key: 'hk_island', name: '港島通', category: 'region', icon: '🏙️', description: '在港島區有 5 間店鋪完成認證', condition: { type: 'region_hk_island', count: 5 }, reward: { points: 20, title: null } },
+      kowloon: { key: 'kowloon', name: '九龍通', category: 'region', icon: '🏙️', description: '在九龍區有 5 間店鋪完成認證', condition: { type: 'region_kowloon', count: 5 }, reward: { points: 20, title: null } },
+      nt: { key: 'nt', name: '新界通', category: 'region', icon: '🏙️', description: '在新界區有 5 間店鋪完成認證', condition: { type: 'region_nt', count: 5 }, reward: { points: 20, title: null } },
+      hk_all: { key: 'hk_all', name: '全港制霸', category: 'region', icon: '🌟', description: '三個地區成就全解鎖', condition: { type: 'region_all', count: 1 }, reward: { points: 100, title: '全港制霸' } },
+      data_assistant: { key: 'data_assistant', name: '資料助理', category: 'supplement', icon: '📝', description: '補充 10 次店鋪資料', condition: { type: 'supplement', count: 10 }, reward: { points: 15, title: null } },
+      data_expert: { key: 'data_expert', name: '資料專家', category: 'supplement', icon: '📝', description: '補充 30 次店鋪資料', condition: { type: 'supplement', count: 30 }, reward: { points: 40, title: '資料專家' } },
+      data_master: { key: 'data_master', name: '資料大師', category: 'supplement', icon: '📝', description: '補充 50 次店鋪資料', condition: { type: 'supplement', count: 50 }, reward: { points: 80, title: '資料大師' } },
+      perfect_file: { key: 'perfect_file', name: '完美檔案', category: 'supplement', icon: '📝', description: '同一間店鋪完成全部 4 項補充', condition: { type: 'perfect_file', count: 1 }, reward: { points: 20, title: '檔案整理師' } },
+      streak_7: { key: 'streak_7', name: '連續 7 天貢獻', category: 'streak', icon: '🔥', description: '連續 7 天有提交或認證', condition: { type: 'streak', count: 7 }, reward: { points: 20, title: null } },
+      streak_30: { key: 'streak_30', name: '連續 30 天貢獻', category: 'streak', icon: '🔥🔥', description: '連續 30 天有提交或認證', condition: { type: 'streak', count: 30 }, reward: { points: 80, title: null } },
+      streak_100: { key: 'streak_100', name: '連續 100 天貢獻', category: 'streak', icon: '🔥🔥🔥', description: '連續 100 天有提交或認證', condition: { type: 'streak', count: 100 }, reward: { points: 300, title: null } },
+      weekly_perfect: { key: 'weekly_perfect', name: '一週全勤', category: 'streak', icon: '⭐', description: '一週 7 天都有貢獻', condition: { type: 'weekly_perfect', count: 1 }, reward: { points: 30, title: null } },
+      monthly_perfect: { key: 'monthly_perfect', name: '月度全勤', category: 'streak', icon: '⭐', description: '一個月 30 天都有貢獻', condition: { type: 'monthly_perfect', count: 1 }, reward: { points: 100, title: null } }
+    };
+
+    function getAchievementState() {
+      if (!STATE.achievements) {
+        STATE.achievements = {
+          unlocked: [],
+          stats: {
+            submit_store: 0, verify_store: 0, supplement: 0,
+            store_complete: 0, region_hk_island: 0, region_kowloon: 0,
+            region_nt: 0, perfect_file: 0, streak_days: 0,
+            last_active_date: '', weekly_days: [], monthly_days: []
+          }
+        };
+        save();
+      }
+      return STATE.achievements;
+    }
+
+    function updateAchievementStat(statType, increment = 1) {
+      const state = getAchievementState();
+      if (state.stats[statType] !== undefined) {
+        state.stats[statType] += increment;
+        save();
+        checkAchievements();
+      }
+    }
+
+    function updateStreak() {
+      const state = getAchievementState();
+      const today = todayKey();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayKey = yesterday.toISOString().slice(0, 10);
+      if (state.stats.last_active_date === today) return;
+      if (state.stats.last_active_date === yesterdayKey) state.stats.streak_days += 1;
+      else if (state.stats.last_active_date !== today) state.stats.streak_days = 1;
+      state.stats.last_active_date = today;
+      const dayOfWeek = new Date().getDay();
+      const weekDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+      if (!state.stats.weekly_days.includes(weekDay)) {
+        state.stats.weekly_days.push(weekDay);
+        if (state.stats.weekly_days.length === 7) {
+          updateAchievementStat('weekly_perfect', 1);
+          state.stats.weekly_days = [];
+        }
+      }
+      const dayOfMonth = new Date().getDate();
+      if (!state.stats.monthly_days.includes(dayOfMonth)) {
+        state.stats.monthly_days.push(dayOfMonth);
+        if (state.stats.monthly_days.length === 30 || state.stats.monthly_days.length === 31) {
+          updateAchievementStat('monthly_perfect', 1);
+          state.stats.monthly_days = [];
+        }
+      }
+      save();
+      checkAchievements();
+    }
+
+    function checkAchievements() {
+      const state = getAchievementState();
+      const unlocked = state.unlocked || [];
+      Object.keys(ACHIEVEMENT_DEFS).forEach(key => {
+        if (unlocked.includes(key)) return;
+        const def = ACHIEVEMENT_DEFS[key];
+        const stats = state.stats;
+        let isUnlocked = false;
+        switch (def.condition.type) {
+          case 'submit_store': if (stats.submit_store >= def.condition.count) isUnlocked = true; break;
+          case 'verify_store': if (stats.verify_store >= def.condition.count) isUnlocked = true; break;
+          case 'store_complete': if (stats.store_complete >= def.condition.count) isUnlocked = true; break;
+          case 'region_hk_island': if (stats.region_hk_island >= def.condition.count) isUnlocked = true; break;
+          case 'region_kowloon': if (stats.region_kowloon >= def.condition.count) isUnlocked = true; break;
+          case 'region_nt': if (stats.region_nt >= def.condition.count) isUnlocked = true; break;
+          case 'region_all': if (unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt')) isUnlocked = true; break;
+          case 'supplement': if (stats.supplement >= def.condition.count) isUnlocked = true; break;
+          case 'perfect_file': if (stats.perfect_file >= def.condition.count) isUnlocked = true; break;
+          case 'streak': if (stats.streak_days >= def.condition.count) isUnlocked = true; break;
+          case 'weekly_perfect': if (stats.weekly_perfect >= def.condition.count) isUnlocked = true; break;
+          case 'monthly_perfect': if (stats.monthly_perfect >= def.condition.count) isUnlocked = true; break;
+          default: break;
+        }
+        if (isUnlocked) {
+          unlocked.push(key);
+          if (def.reward.points > 0) addPoints(def.reward.points, `解鎖成就：${def.name}`);
+          if (def.reward.title) {
+            if (!STATE.titles) STATE.titles = [];
+            if (!STATE.titles.includes(def.reward.title)) STATE.titles.push(def.reward.title);
+          }
+          if (CLOUD_ON) cloudInsert('user_achievements', { user_id: STATE.user.device, achievement_key: key, achievement_name: def.name });
+          showAchievementUnlock(def);
+        }
+      });
+      STATE.achievements.unlocked = unlocked;
+      save();
+    }
+
+    function showAchievementUnlock(def) {
+      const root = document.getElementById('toast-root');
+      if (!root) return;
+      const el = document.createElement('div');
+      el.className = 'animate-pop pointer-events-auto rounded-2xl border border-gold bg-black/90 px-5 py-3 text-center glow-gold max-w-sm';
+      el.innerHTML = `<div class="text-2xl">${def.icon}</div><div class="text-xs text-white/50 mt-0.5">🏆 成就解鎖！</div><div class="text-sm font-bold text-gold">${def.name}</div><div class="text-[10px] text-white/40">${def.description}</div>${def.reward.points > 0 ? `<div class="text-[10px] text-neongreen mt-1">+${def.reward.points} 積分</div>` : ''}${def.reward.title ? `<div class="text-[10px] text-neonpink">獲得稱號：${def.reward.title}</div>` : ''}`;
+      root.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    function getAchievementProgress(key) {
+      const state = getAchievementState();
+      const def = ACHIEVEMENT_DEFS[key];
+      if (!def) return { current: 0, required: 0, percentage: 0, isUnlocked: false };
+      const stats = state.stats;
+      const unlocked = state.unlocked || [];
+      let current = 0, required = def.condition.count;
+      switch (def.condition.type) {
+        case 'submit_store': current = stats.submit_store || 0; break;
+        case 'verify_store': current = stats.verify_store || 0; break;
+        case 'store_complete': current = stats.store_complete || 0; break;
+        case 'region_hk_island': current = stats.region_hk_island || 0; break;
+        case 'region_kowloon': current = stats.region_kowloon || 0; break;
+        case 'region_nt': current = stats.region_nt || 0; break;
+        case 'region_all': current = unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt') ? 1 : 0; break;
+        case 'supplement': current = stats.supplement || 0; break;
+        case 'perfect_file': current = stats.perfect_file || 0; break;
+        case 'streak': current = stats.streak_days || 0; break;
+        case 'weekly_perfect': current = stats.weekly_perfect || 0; break;
+        case 'monthly_perfect': current = stats.monthly_perfect || 0; break;
+        default: break;
+      }
+      const isUnlocked = unlocked.includes(key);
+      const percentage = Math.min(100, Math.round((current / required) * 100));
+      return { current, required, percentage, isUnlocked };
+    }
+
+    function getUserLevel() {
+      const xp = STATE.total_xp || 0;
+      const levels = [
+        { level: 1, title: '新手爪友', xp: 0 },
+        { level: 2, title: '見習爪客', xp: 50 },
+        { level: 3, title: '探索爪客', xp: 150 },
+        { level: 4, title: '情報爪客', xp: 300 },
+        { level: 5, title: '資深爪客', xp: 500 },
+        { level: 6, title: '偵查爪客', xp: 800 },
+        { level: 7, title: '獵人爪客', xp: 1200 },
+        { level: 8, title: '金牌爪客', xp: 1800 },
+        { level: 9, title: '傳說爪客', xp: 2500 },
+        { level: 10, title: '爪皇', xp: 3500 }
+      ];
+      let currentLevel = levels[0], nextLevel = levels[1];
+      for (let i = levels.length - 1; i >= 0; i--) {
+        if (xp >= levels[i].xp) { currentLevel = levels[i]; nextLevel = levels[i + 1] || null; break; }
+      }
+      return {
+        level: currentLevel.level,
+        title: currentLevel.title,
+        xp: xp,
+        xpForCurrent: currentLevel.xp,
+        xpForNext: nextLevel ? nextLevel.xp : xp,
+        nextTitle: nextLevel ? nextLevel.title : null,
+        percentage: nextLevel ? Math.min(100, Math.round(((xp - currentLevel.xp) / (nextLevel.xp - currentLevel.xp)) * 100)) : 100
+      };
+    }
+
+    function addXP(amount, actionType) {
+      if (!STATE.total_xp) STATE.total_xp = 0;
+      STATE.total_xp += amount;
+      save();
+    }
+
+    function updateDailyActivity(type) {
+      const today = todayKey();
+      if (!STATE.daily[today]) STATE.daily[today] = { checkin: 0, review: 0, zombie: 0, ad: 0, adCooldownUntil: 0, live: 0, promoUsed: 0 };
+      if (type === 'checkin') {
+        STATE.daily[today].checkin = (STATE.daily[today].checkin || 0) + 1;
+        updateStreak();
+        checkAchievements();
+      }
+      save();
+    }
+
+    function updateCheckinStreak() {
+      const streak = getCheckinStreak();
+      if (!STATE.achievements) STATE.achievements = {};
+      if (!STATE.achievements.stats) STATE.achievements.stats = {};
+      STATE.achievements.stats.checkin_streak = streak;
+      save();
+    }
+
+    renderPoints();
+
+    /* ============================================================
+       下拉重新整理
+    ============================================================ */
+
+    function initPullToRefresh() {
+      const container = document.getElementById('main');
+      const indicator = document.getElementById('pull-indicator');
+      if (!container || !indicator) return;
+      
+      container.addEventListener('touchstart', (e) => {
+        if (container.scrollTop === 0) { pullStartY = e.touches[0].clientY; isPulling = true; pullMoveY = 0; }
+      }, { passive: true });
+      
+      container.addEventListener('touchmove', (e) => {
+        if (!isPulling || isRefreshing) return;
+        const deltaY = e.touches[0].clientY - pullStartY;
+        if (deltaY > 0 && container.scrollTop === 0) {
+          pullMoveY = Math.min(deltaY, 80);
+          indicator.style.top = `${Math.min(pullMoveY - 60, 0)}px`;
+          const text = indicator.querySelector('.text');
+          if (text) text.textContent = pullMoveY > 60 ? '🔄 鬆手同步資料' : '⬇️ 下拉同步最新資料';
+          indicator.classList.toggle('active', pullMoveY > 60);
+        }
+      }, { passive: true });
+      
+      container.addEventListener('touchend', async () => {
+        if (isPulling && pullMoveY > 60 && !isRefreshing) {
+          isRefreshing = true;
+          const indicator = document.getElementById('pull-indicator');
+          if (indicator) { indicator.classList.add('loading'); indicator.style.top = '0px'; const text = indicator.querySelector('.text'); if (text) text.textContent = '🔄 同步中...'; }
+          try { await refreshAllData(); } catch (e) { toast('同步失敗: ' + e.message, 'pink'); }
+          if (indicator) { indicator.classList.remove('loading', 'active'); indicator.style.top = '-60px'; const text = indicator.querySelector('.text'); if (text) text.textContent = '⬇️ 下拉同步最新資料'; }
+          isRefreshing = false;
+        }
+        isPulling = false; pullMoveY = 0;
+      }, { passive: true });
+    }
+
+    async function refreshAllData() {
+      toast('🔄 正在同步最新資料...', 'green');
+      await loadCloud();
+      await loadMalls();
+      if (CURRENT === 'map') {
+        if (mapInitialized) { updateMapMarkers(); updateMapList(); ensureStoresVisible(); }
+        else { initMap(); }
+      } else { showView(CURRENT); }
+      toast('✅ 已更新至最新資料', 'green');
+    }
+
+    /* ============================================================
+       提交店鋪情報表單
+    ============================================================ */
+
     let intelStep = 1;
     let selectedRegion = '';
     let selectedType = '';
@@ -2288,33 +3537,56 @@ function renderMapStoreList() {
     let isGpsReady = false;
     let gpsAccuracy = null;
 
-    // ===== 表單狀態管理（動態更新）=====
     function updateFormState() {
       const name = document.getElementById('nt-name')?.value.trim();
       const hasName = !!name;
       const hasRegion = !!selectedRegion;
       const canProceed = hasName && hasRegion;
       
-      // 店鋪類型按鈕
+      const guideEl = document.getElementById('form-guide');
+      if (guideEl) {
+        if (!hasName) {
+          guideEl.textContent = '📝 請先輸入店名';
+          guideEl.className = 'text-xs text-yellow-400';
+        } else if (!hasRegion) {
+          guideEl.textContent = '📍 請選擇地區';
+          guideEl.className = 'text-xs text-yellow-400';
+        } else if (!selectedType) {
+          guideEl.textContent = '🏪 請選擇店鋪類型';
+          guideEl.className = 'text-xs text-yellow-400';
+        } else if (!isGpsReady) {
+          guideEl.textContent = '📍 請等待 GPS 定位完成...';
+          guideEl.className = 'text-xs text-yellow-400';
+        } else {
+          guideEl.textContent = '✅ 所有必填欄位已完成，可以提交了！';
+          guideEl.className = 'text-xs text-neongreen';
+        }
+      }
+      
       document.querySelectorAll('.type-btn').forEach(btn => {
         if (!canProceed) {
           btn.disabled = true;
           btn.classList.add('opacity-50', 'cursor-not-allowed');
           btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
           btn.classList.add('border-white/20', 'text-white/45');
+          btn.innerHTML = '🔒 ' + btn.textContent.replace('🔒 ', '');
         } else {
           btn.disabled = false;
           btn.classList.remove('opacity-50', 'cursor-not-allowed');
+          btn.innerHTML = btn.textContent.replace('🔒 ', '');
         }
       });
       
-      // 店鋪類型標題
       const typeLabel = document.querySelector('label[for="store-type"]');
       if (typeLabel) {
         typeLabel.className = `text-xs font-bold ${canProceed ? 'text-gold' : 'text-white/30'}`;
+        if (!canProceed) {
+          typeLabel.innerHTML = '🔒 店鋪類型 <span class="text-neonpink">（請先填寫店名和地區）</span>';
+        } else {
+          typeLabel.innerHTML = '店鋪類型 <span class="text-neonpink">（必填）</span>';
+        }
       }
       
-      // 相機和 GPS（需要先選類型）
       const hasType = !!selectedType;
       const canCamera = canProceed && hasType;
       
@@ -2324,20 +3596,25 @@ function renderMapStoreList() {
           camBtn.disabled = true;
           camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
           camBtn.onclick = null;
+          camBtn.innerHTML = '🔒 請先完成上一步';
         } else {
           camBtn.disabled = false;
           camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
           camBtn.onclick = function() { openCamera('nt'); };
+          camBtn.innerHTML = '📸 開啟相機拍照';
         }
       }
       
-      // GPS 標題
       const gpsLabel = document.querySelector('label[for="gps-section"]');
       if (gpsLabel) {
         gpsLabel.className = `text-xs font-bold ${canCamera ? 'text-gold' : 'text-white/30'}`;
+        if (!canCamera) {
+          gpsLabel.innerHTML = '🔒 定位 <span class="text-neonpink">（請先完成上一步）</span>';
+        } else {
+          gpsLabel.innerHTML = '定位 <span class="text-neonpink">（必填）</span>';
+        }
       }
       
-      // 提交按鈕
       updateSubmitButton();
     }
 
@@ -2381,14 +3658,12 @@ function renderMapStoreList() {
       const confirmed = document.getElementById('region-confirmed');
       if (confirmed) confirmed.classList.remove('hidden');
       
-      // 重置類型選擇
       selectedType = '';
       document.querySelectorAll('.type-btn').forEach(btn => {
         btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
         btn.classList.add('border-white/20', 'text-white/45');
       });
       
-      // 隱藏相關區塊
       const mallSection = document.getElementById('mall-section');
       if (mallSection) mallSection.classList.add('hidden');
       const floorSection = document.getElementById('floor-section');
@@ -2396,7 +3671,6 @@ function renderMapStoreList() {
       const streetSection = document.getElementById('street-address-section');
       if (streetSection) streetSection.classList.add('hidden');
       
-      // 重置商場
       const mallSelector = document.getElementById('mall-selector');
       if (mallSelector) mallSelector.classList.remove('hidden');
       const mallConfirmed = document.getElementById('mall-confirmed');
@@ -2414,7 +3688,6 @@ function renderMapStoreList() {
       mallSelectionMode = 'button';
       mallInputValue = '';
       
-      // 更新表單狀態
       updateFormState();
     }
 
@@ -2793,7 +4066,6 @@ function renderMapStoreList() {
       
       console.log('📝 提交數據:', data);
       
-      // 商場防重複寫入
       if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
         let existsInCache = false;
         if (MALLS_CACHE) {
@@ -2923,6 +4195,7 @@ function renderMapStoreList() {
           <div>
             <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>
             <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />
+            <div id="form-guide" class="text-xs text-yellow-400 mt-1">📝 請先輸入店名</div>
             <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>
           </div>
           <div>
@@ -3024,1166 +4297,63 @@ function renderMapStoreList() {
       if (d.review === 3) addPoints(30, "滿3追加");
       showView("task"); }
 
-    // ============================================================
-    //   實時頁面
-    // ============================================================
-    function viewLive() {
-      const allPosts = STATE.livePosts || [];
-      const validPosts = allPosts.filter(p => p.expire > now());
-      
-      return `
-        <div class="flex gap-2">
-          <button onclick="setLiveTrack('player')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45"}">🎯 夾客</button>
-          <button onclick="setLiveTrack('owner')" class="flex-1 rounded-xl border py-2 text-sm font-black ${liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45"}">🏬 台主</button>
-        </div>
-        <div class="mt-3 rounded-xl border ${liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30"} bg-zinc-950 p-3 text-[11px] text-white/60">
-          ${liveTrack === "player" ? "🎯 分享你的夾娃娃戰果！拍照上傳，讓大家羨慕一下！+5 分" : "🏬 台主專屬宣傳區！上傳海報/活動照，吸引更多夾客！+5 分"}
-        </div>
-        <button onclick="${liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()"}" class="mt-3 w-full rounded-2xl py-3 font-black ${liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink"}">
-          ${liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳"}
-        </button>
-        <div class="mt-4 space-y-3">
-          ${validPosts.filter(x => x.track === liveTrack).length > 0 ? validPosts.filter(x => x.track === liveTrack).map(p => {
-            const hasLiked = p.likes && p.likes.includes(STATE.user.device);
-            return `<div class="rounded-2xl border border-${p.track === "player" ? 'neongreen' : 'neonpink'}/30 bg-zinc-950 p-3">
-              ${p.photo ? `<img src="${p.photo}" class="h-48 w-full rounded-lg object-cover" />` : `<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">${p.track === "player" ? "🎉" : "🖼️"}</div>`}
-              <div class="mt-2 flex items-start justify-between">
-                <div><p class="text-sm text-white/80">${p.content || p.prize || '無內容'}</p>${p.store_name ? `<p class="text-xs text-gold/60 mt-1">📍 ${p.store_name}</p>` : ''}${p.is_linked ? `<span class="text-[9px] text-neongreen">🔗 已連結機台 (${Math.ceil((p.expire - now()) / DAY)}天)</span>` : ''}</div>
-                <span class="text-[10px] text-white/30 whitespace-nowrap ml-2">${timeAgo(p.ts)}</span>
-              </div>
-              <div class="mt-1 flex items-center gap-3 text-[10px] text-white/30">
-                <span>👤 ${p.author || '匿名'}</span>
-                <button onclick="toggleLike('${p.id}')" class="flex items-center gap-1 ${hasLiked ? 'text-neonpink' : 'text-white/30'}">${hasLiked ? '❤️' : '🤍'} ${p.likes ? p.likes.length : 0}</button>
-              </div>
-            </div>`;
-          }).join('') : `<p class="text-center text-sm text-white/40 py-6">暫無戰報，快來發布第一個！</p>`}
-        </div>
-      `;
-    }
-
-    function toggleLike(postId) {
-      const post = STATE.livePosts.find(p => p.id === postId);
-      if (!post) return;
-      const userDevice = STATE.user.device;
-      if (!post.likes) post.likes = [];
-      const idx = post.likes.indexOf(userDevice);
-      if (idx >= 0) post.likes.splice(idx, 1);
-      else post.likes.push(userDevice);
-      save();
-      showView('live');
-    }
-
-    function setLiveTrack(track) { liveTrack = track; showView('live'); }
-
-    // ===== 發布出貨戰報（夾客）- 可搜索店鋪 =====
-    function openPlayerPost() {
-      openModal(`
-        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
-          <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>
-          <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
-        </div>
-        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
-          <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
-            <p class="text-xs text-white/40">分享你的夾娃娃戰果，讓大家羨慕一下！</p>
-            <p class="text-xs text-neongreen mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
-            <input id="lp-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions('lp')" onfocus="filterStoreSuggestions('lp')" />
-            <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
-            <input type="hidden" id="lp-store-id" value="" />
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📝 內容 <span class="text-white/40">（選填）</span></label>
-            <textarea id="lp-content" placeholder="例如：10 抽爆機山崩！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>
-            <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
-              <button onclick="openCamera('lp')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
-              <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
-            </div>
-          </div>
-        </div>
-        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-          <button onclick="submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>
-        </div>
-      `);
-      
-      setTimeout(() => {
-        const input = document.getElementById('lp-store-search');
-        if (input) { input.focus(); filterStoreSuggestions('lp'); }
-      }, 100);
-      
-      const checkInterval = setInterval(() => {
-        const storeId = document.getElementById('lp-store-id')?.value;
-        const photoReady = window._camPreview && window._camPreview.lp;
-        const btn = document.getElementById('lp-submit-btn');
-        if (btn) {
-          if (storeId && photoReady) {
-            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-            btn.disabled = false;
-            btn.innerHTML = '✅ 發布戰報（+5 分）';
-          } else {
-            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-            btn.disabled = true;
-            btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
-          }
-        }
-      }, 300);
-      setTimeout(() => clearInterval(checkInterval), 30000);
-    }
-
-    // ===== 過濾店鋪建議 =====
-    function filterStoreSuggestions(prefix) {
-      const input = document.getElementById(`${prefix}-store-search`);
-      const container = document.getElementById(`${prefix}-store-suggestions`);
-      if (!input || !container) return;
-      
-      const query = input.value.trim().toLowerCase();
-      let filtered = STORES;
-      if (query) filtered = STORES.filter(s => s.name.toLowerCase().includes(query) || s.region.toLowerCase().includes(query));
-      filtered = filtered.slice(0, 10);
-      
-      if (filtered.length === 0) { container.classList.add('hidden'); return; }
-      container.classList.remove('hidden');
-      container.innerHTML = filtered.map(s => `
-        <button onclick="selectStoreSuggestion('${prefix}', '${s.id}', '${s.name.replace(/'/g, "\\'")}')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0 transition-colors">
-          <span class="text-gold">${s.name}</span>
-          <span class="text-[10px] text-white/40 ml-2">${s.region}</span>
-        </button>
-      `).join('');
-      
-      // 點擊外部關閉
-      setTimeout(() => {
-        document.addEventListener('click', function closeSuggestions(e) {
-          if (!container.contains(e.target) && e.target !== input) {
-            container.classList.add('hidden');
-            document.removeEventListener('click', closeSuggestions);
-          }
-        });
-      }, 100);
-    }
-
-    function selectStoreSuggestion(prefix, storeId, storeName) {
-      const input = document.getElementById(`${prefix}-store-search`);
-      const container = document.getElementById(`${prefix}-store-suggestions`);
-      const hiddenInput = document.getElementById(`${prefix}-store-id`);
-      if (input) input.value = storeName;
-      if (hiddenInput) hiddenInput.value = storeId;
-      if (container) container.classList.add('hidden');
-      checkPostForm(prefix);
-    }
-
-    function checkPostForm(prefix) {
-      const hiddenInput = document.getElementById(`${prefix}-store-id`);
-      const photoReady = window._camPreview && window._camPreview[prefix];
-      const btn = document.getElementById(`${prefix}-submit-btn`);
-      if (btn) {
-        if (hiddenInput && hiddenInput.value && photoReady) {
-          btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-          btn.disabled = false;
-          btn.innerHTML = '✅ 發布戰報（+5 分）';
-        } else {
-          btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-          btn.disabled = true;
-          btn.innerHTML = photoReady ? (hiddenInput && hiddenInput.value ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
-        }
-      }
-    }
-
-    // ===== 提交出貨戰報 =====
-    async function submitPlayerPost() {
-      const storeId = document.getElementById('lp-store-id')?.value;
-      if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
-      const photoBlob = window._cam?.lp;
-      if (!photoBlob) { toast('請先拍照', 'pink'); return; }
-      const content = document.getElementById('lp-content')?.value.trim() || '🎉 出貨成功！';
-      const store = STORES.find(s => s.id === storeId);
-      
-      let photoUrl = '';
-      if (CLOUD_ON) {
-        try {
-          const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          photoUrl = await uploadImage(file, 'posts');
-        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-      }
-      
-      const post = {
-        id: 'p' + Date.now(),
-        track: 'player',
-        store_id: storeId,
-        store_name: store ? store.name : '',
-        content: content,
-        photo: photoUrl,
-        author: STATE.user.name,
-        ts: now(),
-        expire: now() + DAY,
-        likes: [],
-        likeCount: 0,
-        is_linked: false
-      };
-      
-      if (!STATE.livePosts) STATE.livePosts = [];
-      STATE.livePosts.unshift(post);
-      save();
-      
-      addPoints(5, '發布出貨戰報');
-      updateStreak();
-      
-      toast('✅ 戰報發布成功！+5 分', 'green');
-      closeModal();
-      showView('live');
-    }
-
-    // ===== 發布台主宣傳 =====
-    function openOwnerPost() {
-      const myStores = STORES.filter(s => s.submitted_by === STATE.user.device);
-      if (myStores.length === 0) { toast('你還沒有提交過店鋪，無法使用台主宣傳功能', 'gold'); return; }
-      
-      openModal(`
-        <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">
-          <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>
-          <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
-        </div>
-        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
-          <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">
-            <p class="text-xs text-white/40">宣傳你的店鋪和機台，吸引更多夾客！</p>
-            <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>
-            <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions('lo')" onfocus="filterStoreSuggestions('lo')" />
-            <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
-            <input type="hidden" id="lo-store-id" value="" />
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>
-            <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>
-            <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">
-              <button onclick="openCamera('lo')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
-              <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
-            </div>
-          </div>
-          <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-            <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>
-            <div class="mt-2 grid grid-cols-3 gap-2">
-              <button onclick="selectLinkPlan(3, 50)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 3天<br><span class="text-gold">50分</span></button>
-              <button onclick="selectLinkPlan(5, 70)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 5天<br><span class="text-gold">70分</span></button>
-              <button onclick="selectLinkPlan(7, 80)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">80分</span></button>
-            </div>
-            <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>
-          </div>
-        </div>
-        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-          <button onclick="submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>
-        </div>
-      `);
-      
-      setTimeout(() => {
-        const input = document.getElementById('lo-store-search');
-        if (input) { input.focus(); filterStoreSuggestions('lo'); }
-      }, 100);
-      
-      window._loLinkPlan = null;
-      
-      const checkInterval = setInterval(() => {
-        const storeId = document.getElementById('lo-store-id')?.value;
-        const photoReady = window._camPreview && window._camPreview.lo;
-        const btn = document.getElementById('lo-submit-btn');
-        if (btn) {
-          if (storeId && photoReady) {
-            btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
-            btn.disabled = false;
-            const plan = window._loLinkPlan;
-            btn.innerHTML = plan ? `✅ 發布宣傳（${plan.days}天 · -${plan.cost}分）` : '✅ 發布宣傳（+5 分）';
-          } else {
-            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-            btn.disabled = true;
-            btn.innerHTML = photoReady ? (storeId ? '✅ 可以發布' : '🏪 請選擇店鋪') : '📷 請先拍照';
-          }
-        }
-      }, 300);
-      setTimeout(() => clearInterval(checkInterval), 30000);
-    }
-
-    function selectLinkPlan(days, cost) {
-      window._loLinkPlan = { days, cost };
-      document.querySelectorAll('.link-plan-btn').forEach(el => {
-        const isActive = el.textContent.includes(`${days}天`);
-        el.classList.toggle('border-gold', isActive);
-        el.classList.toggle('bg-gold/20', isActive);
-        el.classList.toggle('text-gold', isActive);
-        el.classList.toggle('text-white/40', !isActive);
-      });
-      document.getElementById('link-plan-info').textContent = `✅ 選中 ${days} 天方案，將扣除 ${cost} 積分，貼文顯示在機台頁面`;
-      const btn = document.getElementById('lo-submit-btn');
-      if (btn && !btn.disabled) btn.innerHTML = `✅ 發布宣傳（${days}天 · -${cost}分）`;
-    }
-
-    async function submitOwnerPost() {
-      const storeId = document.getElementById('lo-store-id')?.value;
-      if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
-      const photoBlob = window._cam?.lo;
-      if (!photoBlob) { toast('請先拍照', 'pink'); return; }
-      const content = document.getElementById('lo-content')?.value.trim() || '🏬 新機台上架！';
-      const store = STORES.find(s => s.id === storeId);
-      const plan = window._loLinkPlan || null;
-      
-      if (plan && STATE.points < plan.cost) { toast(`積分不足 ${plan.cost}，無法使用連結功能`, 'pink'); return; }
-      
-      let photoUrl = '';
-      if (CLOUD_ON) {
-        try {
-          const file = new File([photoBlob], `post_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          photoUrl = await uploadImage(file, 'posts');
-        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-      }
-      
-      if (plan) addPoints(-plan.cost, `連結機台宣傳 (${plan.days}天)`);
-      
-      const post = {
-        id: 'p' + Date.now(),
-        track: 'owner',
-        store_id: storeId,
-        store_name: store ? store.name : '',
-        content: content,
-        photo: photoUrl,
-        author: STATE.user.name,
-        ts: now(),
-        expire: plan ? now() + DAY * plan.days : now() + DAY,
-        is_linked: !!plan,
-        link_days: plan ? plan.days : 0,
-        likes: [],
-        likeCount: 0
-      };
-      
-      if (!STATE.livePosts) STATE.livePosts = [];
-      STATE.livePosts.unshift(post);
-      save();
-      
-      if (!plan) addPoints(5, '發布台主宣傳');
-      updateStreak();
-      
-      toast(plan ? `✅ 宣傳發布成功！連結已啟用 (${plan.days}天)` : '✅ 宣傳發布成功！+5 分', 'green');
-      closeModal();
-      showView('live');
-    }
-
-    // ============================================================
-    //   我的頁面
-    // ============================================================
-    function viewMe() {
-      const favS = STORES.filter(s => STATE.favStores.includes(s.id));
-      const levelInfo = getUserLevel();
-      const achState = getAchievementState();
-      const unlockedCount = (achState.unlocked || []).length;
-      const totalAchievements = Object.keys(ACHIEVEMENT_DEFS).length;
-      
-      const myPosts = (STATE.livePosts || []).filter(p => p.author === STATE.user.name).sort((a, b) => b.ts - a.ts);
-      const postHtml = myPosts.length ? myPosts.map(p => {
-        const isExpired = p.expire < now();
-        const isLinked = p.is_linked || false;
-        const status = isExpired ? '<span class="text-white/30">⏳ 已過期</span>' : `<span class="text-neongreen">✅ ${Math.ceil((p.expire - now()) / DAY)} 天${isLinked ? ' 🔗' : ''}</span>`;
-        return `<div class="my-post-item rounded-xl border ${isExpired ? 'border-white/10 expired' : 'border-gold/30'} bg-zinc-950/80 p-3">
-          <div class="flex items-center justify-between"><span class="text-sm text-white/80 truncate flex-1">${p.content || '貼文'}</span>${status}</div>
-          <div class="flex items-center gap-3 text-[10px] text-white/30 mt-1"><span>${timeAgo(p.ts)}</span><span>${p.track === 'player' ? '🎯 出貨戰報' : '🏬 台主宣傳'}</span>${p.is_linked ? `<span class="text-neongreen">🔗 ${p.link_days || 3}天方案</span>` : ''}</div>
-        </div>`;
-      }).join('') : '<p class="text-white/40 text-center text-xs py-4">尚無貼文</p>';
-      
-      let levelHtml = `<div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">🏅 等級</h3>
-        <div class="rounded-xl border border-gold/25 bg-zinc-950 p-3">
-          <div class="flex items-center justify-between"><span class="text-lg font-black text-gold">${levelInfo.title}</span><span class="text-xs text-white/40">Lv.${levelInfo.level} / 10</span></div>
-          <div class="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gold transition-all" style="width:${levelInfo.percentage}%"></div></div>
-          <div class="mt-1 flex justify-between text-[10px] text-white/40"><span>${levelInfo.xpForCurrent} XP</span><span>${levelInfo.xp} XP</span><span>${levelInfo.xpForNext} XP</span></div>
-          <div class="mt-1 text-[10px] text-white/30 text-center">${levelInfo.nextTitle ? `下一級：${levelInfo.nextTitle} (還需 ${levelInfo.xpForNext - levelInfo.xp} XP)` : '👑 已達最高等級！'}</div>
-        </div>
-      </div>`;
-      
-      const categories = {
-        submission: { label: '🏪 店鋪提交' },
-        verification: { label: '🔍 店鋪認證' },
-        complete: { label: '🏅 完整貢獻' },
-        region: { label: '🏙️ 地區探索' },
-        supplement: { label: '📝 資料補充' },
-        streak: { label: '🔥 連續貢獻' }
-      };
-      
-      let achListHtml = '';
-      Object.keys(categories).forEach(catKey => {
-        const cat = categories[catKey];
-        const items = Object.keys(ACHIEVEMENT_DEFS).filter(k => ACHIEVEMENT_DEFS[k].category === catKey).map(k => {
-          const def = ACHIEVEMENT_DEFS[k];
-          const progress = getAchievementProgress(k);
-          const isUnlocked = progress.isUnlocked;
-          return `<div class="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
-            <span class="text-base">${isUnlocked ? '✅' : '⏳'}</span>
-            <span class="text-xs flex-1 ${isUnlocked ? 'text-gold' : 'text-white/40'}">${def.icon} ${def.name}</span>
-            <span class="text-[10px] ${isUnlocked ? 'text-neongreen' : 'text-white/30'}">${isUnlocked ? '已解鎖' : `${progress.current}/${progress.required}`}</span>
-          </div>`;
-        }).join('');
-        if (items) achListHtml += `<div class="mt-3"><p class="text-[10px] font-bold text-white/40">${cat.label}</p><div class="mt-1 rounded-lg bg-white/5 p-2">${items}</div></div>`;
-      });
-      
-      let achievementHtml = `<div class="mt-5"><div class="flex items-center justify-between"><h3 class="text-sm font-black text-white/90">🏆 成就 (${unlockedCount}/${totalAchievements})</h3></div>${levelHtml}${achListHtml}</div>`;
-      
-      return `
-        <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">
-          <div class="flex items-center gap-4"><div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div><div><div class="text-lg font-black">${STATE.user.name}</div><div class="text-[11px] text-gold/70">裝置 ${STATE.user.device}</div></div></div>
-          <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">${STATE.points}</div></div><div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">${filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通"}</div></div></div>
-          <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ${STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold"} py-3.5 text-base font-black">${STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）"}</button>
-        </div>
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📝 我的貼文</h3><div class="space-y-2">${postHtml}</div></div>
-        <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3><div class="space-y-2">${favS.length ? favS.map(s => `<button onclick="openStore('${s.id}')" class="w-full rounded-xl border border-gold/25 bg-zinc-950 p-3 text-left text-sm text-gold">${s.name} <span class="text-[10px] text-white/40">· ${s.region}</span></button>`).join("") : `<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>`}</div></div>
-        ${!STATE.user.is_bound ? `<div class="mt-4 rounded-xl border border-gold/30 bg-gold/5 p-4"><p class="text-sm font-bold text-gold">🔗 綁定帳號</p><p class="text-xs text-white/40 mt-1">綁定後數據永久保存，換手機也不怕遺失</p><button onclick="bindGoogleAccount()" class="mt-3 w-full rounded-lg bg-white text-black py-2.5 text-sm font-black">🔐 用 Google 帳號綁定</button><p class="text-[9px] text-white/30 mt-2">📌 綁定後可獲得 <span class="text-neongreen">+20 積分</span></p></div>` : `<div class="mt-4 rounded-xl border border-neongreen/30 bg-neongreen/5 p-4"><div class="flex items-center gap-2"><span class="text-neongreen">✅ 已綁定</span><span class="text-xs text-white/40">${STATE.user.email || ''}</span><button onclick="logoutGoogle()" class="ml-auto text-xs text-white/30 hover:text-white">登出</button></div></div>`}
-        ${achievementHtml}
-        <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>
-      `;
-    }
-
-    // ============================================================
-    //   Google OAuth 綁定功能（修復版）
-    // ============================================================
-    async function bindGoogleAccount() {
-      if (!isSupabaseReady()) {
-        toast('⚠️ 認證服務暫時不可用，請稍後再試', 'pink');
-        return;
-      }
-      
-      try {
-        toast('🔐 正在連線到 Google...', 'gold');
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin + window.location.pathname,
-            queryParams: { access_type: 'offline', prompt: 'consent' }
-          }
-        });
-        if (error) throw error;
-      } catch (error) {
-        console.error('Google 登入錯誤:', error);
-        toast('❌ 登入失敗：' + error.message, 'pink');
-      }
-    }
-
-    async function checkOAuthCallback() {
-      const params = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      
-      if (accessToken) {
-        console.log('🔐 檢測到 OAuth 回調，正在處理...');
-        try {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken || ''
-          });
-          if (error) throw error;
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          if (userError) throw userError;
-          await syncUserDataAfterBind(userData.user);
-          window.history.replaceState({}, '', window.location.pathname);
-        } catch (error) {
-          console.error('OAuth 回調處理錯誤:', error);
-          toast('❌ 綁定失敗：' + error.message, 'pink');
-        }
-      }
-    }
-
-    async function syncUserDataAfterBind(user) {
-      try {
-        const deviceId = STATE.user.device;
-        const email = user.email || '';
-        const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || '夾客';
-        const avatarUrl = user.user_metadata?.avatar_url || '';
-        const googleId = user.id;
-        
-        const { data: existingUser, error: fetchError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('google_id', googleId)
-          .maybeSingle();
-        if (fetchError) throw fetchError;
-        
-        let userId;
-        if (existingUser) {
-          userId = existingUser.id;
-          const updates = {
-            display_name: displayName,
-            avatar_url: avatarUrl,
-            total_points: Math.max(existingUser.total_points || 0, STATE.points),
-            total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
-            last_active_at: new Date().toISOString(),
-            is_anonymous: false
-          };
-          const { error: updateError } = await supabase.from('user_profiles').update(updates).eq('id', userId);
-          if (updateError) throw updateError;
-          if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
-          if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
-        } else {
-          const { data: newUser, error: insertError } = await supabase.from('user_profiles').insert({
-            device_id: deviceId, google_id: googleId, email: email,
-            display_name: displayName, avatar_url: avatarUrl,
-            total_points: STATE.points, total_xp: STATE.total_xp || 0,
-            level: STATE.level || 1, is_anonymous: false,
-            bound_at: new Date().toISOString(), created_at: new Date().toISOString(),
-            last_active_at: new Date().toISOString()
-          }).select().single();
-          if (insertError) throw insertError;
-          userId = newUser.id;
-        }
-        
-        STATE.user.is_bound = true;
-        STATE.user.email = email;
-        STATE.user.google_id = googleId;
-        STATE.user.user_id = userId;
-        STATE.user.display_name = displayName;
-        STATE.user.avatar_url = avatarUrl;
-        
-        if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) await syncFavorites(userId);
-        if (STATE.achievements && STATE.achievements.unlocked) await syncAchievements(userId);
-        save();
-        addPoints(20, 'Google 帳號綁定獎勵');
-        toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
-        showView('me');
-      } catch (error) {
-        console.error('同步數據錯誤:', error);
-        toast('⚠️ 綁定成功但數據同步失敗: ' + error.message, 'pink');
-        STATE.user.is_bound = true;
-        save();
-      }
-    }
-
-    async function syncFavorites(userId) {
-      try {
-        for (const storeId of STATE.favStores) {
-          await supabase.from('user_favorites').upsert({ user_id: userId, store_id: storeId, created_at: new Date().toISOString() }, { onConflict: 'user_id, store_id' });
-        }
-        for (const machineId of STATE.favMachines) {
-          await supabase.from('user_favorites').upsert({ user_id: userId, machine_id: machineId, created_at: new Date().toISOString() }, { onConflict: 'user_id, machine_id' });
-        }
-        console.log('✅ 收藏已同步');
-      } catch (e) { console.warn('收藏同步失敗:', e); }
-    }
-
-    async function syncAchievements(userId) {
-      try {
-        for (const key of (STATE.achievements?.unlocked || [])) {
-          const def = ACHIEVEMENT_DEFS[key];
-          if (!def) continue;
-          await supabase.from('user_achievements').upsert({ user_id: userId, achievement_key: key, achievement_name: def.name, unlocked_at: new Date().toISOString() }, { onConflict: 'user_id, achievement_key' });
-        }
-        console.log('✅ 成就已同步');
-      } catch (e) { console.warn('成就同步失敗:', e); }
-    }
-
-    async function logoutGoogle() {
-      if (!confirm('確定要登出嗎？本地數據仍會保留。')) return;
-      try {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-        STATE.user.is_bound = false;
-        STATE.user.google_id = null;
-        STATE.user.email = null;
-        STATE.user.user_id = null;
-        STATE.user.display_name = null;
-        STATE.user.avatar_url = null;
-        save();
-        toast('✅ 已登出', 'green');
-        showView('me');
-      } catch (e) { toast('登出失敗: ' + e.message, 'pink'); }
-    }
-
-    document.addEventListener('DOMContentLoaded', checkOAuthCallback);
-
-    function redeemAdFree() {
-      if (STATE.adFree) return toast("已兌換", "pink");
-      if (STATE.points < 80) return toast("積分不足 80", "pink");
-      addPoints(-80, "兌換免廣告");
-      STATE.adFree = true;
-      save();
-      showView("me");
-    }
-
-    function resetAll() {
-      if (confirm("確定重置所有本地資料？")) {
-        localStorage.removeItem("claw_state");
-        STATE = load();
-        save();
-        showView("me");
-      }
-    }
-
     /* ============================================================
-       7. 工具函數
+       啟動
     ============================================================ */
-    window._cam = {};
-    window._camPreview = {};
-    window._camStreams = {};
-
-    function openCamera(key) {
-      const container = document.getElementById(`${key}-camera-container`);
-      if (!container) return;
-      
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            gpsLat = pos.coords.latitude;
-            gpsLng = pos.coords.longitude;
-            isGpsReady = true;
-            console.log('📍 拍照時定位成功:', gpsLat, gpsLng);
-            if (document.getElementById('nt-gps')) {
-              const el = document.getElementById('nt-gps');
-              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
-              el.className = 'text-neongreen text-xs';
-            }
-            if (document.getElementById('vf-gps')) {
-              const el = document.getElementById('vf-gps');
-              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
-              el.className = 'text-neongreen text-xs';
-              _vfGpsReady = true;
-              _vfGpsLat = gpsLat;
-              _vfGpsLng = gpsLng;
-            }
-            updateFormState();
-          },
-          () => { console.log('⚠️ 拍照時定位失敗，使用上次位置'); },
-          { enableHighAccuracy: true, timeout: 5000 }
-        );
-      }
-      
-      if (window._camPreview && window._camPreview[key]) {
-        container.innerHTML = `<div class="relative"><img src="${window._camPreview[key]}" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera('${key}')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>`;
-        return;
-      }
-      
-      container.innerHTML = `<video id="${key}-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video><div class="mt-2 flex gap-2"><button onclick="capturePhoto('${key}')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button><button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button></div>`;
-      
-      const videoEl = document.getElementById(`${key}-video`);
-      if (!videoEl) return;
-      
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(stream => { videoEl.srcObject = stream; videoEl.play(); window._camStreams[key] = stream; })
-        .catch((err) => { handleCameraError(err, key); });
-    }
-
-    function handleCameraError(err, key) {
-      const container = document.getElementById(`${key}-camera-container`);
-      if (!container) return;
-      let errorTitle = '❌ 無法開啟相機', errorMsg = '', guideSteps = [];
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorTitle = '📱 相機權限被拒絕';
-        errorMsg = '為了確保店鋪情報的真實性，需要拍攝現場照片。';
-        guideSteps = ['1️⃣ 開啟手機「設定」應用程式','2️⃣ 點選「隱私權」或「應用程式管理」','3️⃣ 點選「相機」','4️⃣ 找到「Chrome」或「Safari」等瀏覽器','5️⃣ 將相機權限改為「允許」','6️⃣ 返回此頁面，點擊下方「重新嘗試」'];
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errorTitle = '📷 找不到相機裝置';
-        errorMsg = '請確認你的裝置有後置鏡頭，且未被其他應用程式佔用。';
-        guideSteps = ['1️⃣ 確認手機有後置鏡頭','2️⃣ 關閉其他使用相機的 App（如 Instagram、WhatsApp）','3️⃣ 重新啟動手機後再試','4️⃣ 如果仍無法使用，可嘗試使用其他瀏覽器'];
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        errorTitle = '🔒 相機被其他 App 佔用';
-        errorMsg = '相機可能正在被其他應用程式使用。';
-        guideSteps = ['1️⃣ 關閉所有使用相機的應用程式','2️⃣ 重新啟動瀏覽器','3️⃣ 再次點擊「開啟相機拍照」'];
-      } else {
-        errorTitle = '⚠️ 相機開啟失敗';
-        errorMsg = '發生未知錯誤，請嘗試以下步驟：';
-        guideSteps = ['1️⃣ 重新整理頁面（按 F5 或下拉重整）','2️⃣ 重新啟動手機','3️⃣ 嘗試使用其他瀏覽器（Chrome 或 Safari）','4️⃣ 如果持續失敗，可先提交其他情報'];
-      }
-      container.innerHTML = `<div class="rounded-xl border border-neonpink/50 bg-neonpink/5 p-4 text-left"><div class="flex items-start gap-2"><span class="text-2xl">${errorTitle.split(' ')[0]}</span><div class="flex-1"><p class="font-bold text-neonpink">${errorTitle}</p><p class="text-xs text-white/60 mt-1">${errorMsg}</p></div></div><div class="mt-3 rounded-lg bg-black/40 p-3"><p class="text-[10px] font-bold text-gold/70 mb-1">📋 解決步驟：</p>${guideSteps.map(step => `<p class="text-[10px] text-white/50 leading-relaxed">${step}</p>`).join('')}</div><div class="mt-3 flex gap-2"><button onclick="openCamera('${key}')" class="flex-1 rounded-lg bg-neongreen/80 py-2 text-sm font-black text-black">🔄 重新嘗試</button><button onclick="closeCamera('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-xs text-white/50">暫時跳過</button></div><p class="text-[8px] text-white/30 mt-2 text-center">💡 提示：拍照是為了確保情報真實性，建立社群信任</p></div>`;
-    }
-
-    function closeCamera(key) {
-      const stream = window._camStreams?.[key];
-      if (stream) { stream.getTracks().forEach(t => t.stop()); delete window._camStreams[key]; }
-      const container = document.getElementById(`${key}-camera-container`);
-      if (container) container.innerHTML = `<button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>`;
-    }
-
-    async function capturePhoto(key) {
-      const videoEl = document.getElementById(`${key}-video`);
-      if (!videoEl) return toast('請先開啟相機', 'pink');
-      const canvas = document.createElement('canvas');
-      canvas.width = videoEl.videoWidth || 800;
-      canvas.height = videoEl.videoHeight || 600;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      const img = document.getElementById(`${key}-preview`);
-      if (img) { img.src = dataUrl; img.classList.remove('hidden'); img.style.display = 'block'; }
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-      window._cam[key] = blob;
-      window._camPreview[key] = dataUrl;
-      
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; isGpsReady = true;
-            if (document.getElementById('nt-gps')) {
-              const el = document.getElementById('nt-gps');
-              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
-              el.className = 'text-neongreen text-xs';
-            }
-            if (document.getElementById('vf-gps')) {
-              const el = document.getElementById('vf-gps');
-              el.textContent = `📍 定位成功：${gpsLat.toFixed(2)}, ${gpsLng.toFixed(2)}`;
-              el.className = 'text-neongreen text-xs';
-              _vfGpsReady = true; _vfGpsLat = gpsLat; _vfGpsLng = gpsLng;
-            }
-            updateFormState();
-          },
-          () => { console.log('⚠️ 拍照完成時定位失敗，使用上次位置'); },
-          { enableHighAccuracy: true, timeout: 3000 }
-        );
-      }
-      
-      closeCamera(key);
-      const container = document.getElementById(`${key}-camera-container`);
-      if (container) {
-        container.innerHTML = `<div class="relative"><img src="${dataUrl}" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera('${key}')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto('${key}')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>`;
-      }
-      
-      // 如果有 checkPostForm，觸發更新
-      if (typeof checkPostForm === 'function') {
-        const prefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
-        if (prefix) checkPostForm(prefix);
-      }
-      
-      toast('✅ 已拍照！', 'green');
-    }
-
-    function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = null; openCamera(key); }
-    function clearPhoto(key) {
-      window._cam[key] = null; window._camPreview[key] = null;
-      const container = document.getElementById(`${key}-camera-container`);
-      if (container) container.innerHTML = `<button onclick="openCamera('${key}')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>`;
-      const img = document.getElementById(`${key}-preview`);
-      if (img) { img.classList.add('hidden'); img.style.display = 'none'; }
-      toast('已移除照片', 'pink');
-    }
-
-    function timeAgo(ts) {
-      const diff = now() - ts;
-      if (diff < HOUR) return Math.max(1, Math.floor(diff / 60000)) + " 分鐘前";
-      if (diff < DAY) return Math.floor(diff / HOUR) + " 小時前";
-      return Math.floor(diff / DAY) + " 天前";
-    }
-
-    function openModal(html) {
-      const root = document.getElementById("modal-root");
-      root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
-      root.innerHTML = `<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; display:flex; flex-direction:column;">${html}</div>`;
-    }
-
-    function closeModal() {
-      const root = document.getElementById("modal-root");
-      root.className = "pointer-events-none fixed inset-0 z-50";
-      root.innerHTML = "";
-    }
-
-    function toast(msg, color = "green") {
-      const root = document.getElementById("toast-root");
-      const c = color === "pink" ? "border-neonpink text-neonpink glow-pink" : "border-neongreen text-neongreen glow-green";
-      const el = document.createElement("div");
-      el.className = `animate-pop pointer-events-auto rounded-full border ${c} bg-black px-4 py-2 text-sm font-bold`;
-      el.textContent = msg;
-      root.appendChild(el);
-      setTimeout(() => el.remove(), 2200);
-    }
-
-    /* ============================================================
-       8. 雲端讀取 + 啟動
-    ============================================================ */
-    async function loadCloud() {
-      console.log("[v0] 直接從 Supabase 讀取資料...");
-      try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-          }
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const stores = await response.json();
-        console.log(`✅ 成功載入 ${stores.length} 筆資料`);
-        STORES = stores.map(s => ({
-          id: String(s.id),
-          name: s.name || "未命名店鋪",
-          region: s.region || "旺角",
-          addr: s.addr || "（未填地址）",
-          ig: s.ig || "",
-          fb: s.fb || "",
-          verified: s.status === "verified" ? "verified" : "pending",
-          size: s.size || "中",
-          token: s.token || false,
-          hour24: s.hour24 || false,
-          staff: s.staff || false,
-          dist: (Math.random() * 2 + 0.1).toFixed(1),
-          machines: s.machines || [],
-          photo: s.photo || "",
-          lat: s.lat || null,
-          lng: s.lng || null,
-          mall: s.mall || null,
-          floor: s.floor || null,
-          submitted_by: s.submitted_by || null,
-          verification_count: s.verification_count || 0,
-          is_verified: s.is_verified || false,
-          address_detail: s.address_detail || '',
-          has_staff: s.has_staff !== undefined ? s.has_staff : null,
-          has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
-          supplement_count: s.supplement_count || 0,
-        }));
-        console.log(`✅ 已更新 STORES 陣列，共 ${STORES.length} 家店鋪`);
-      } catch (e) {
-        console.error("[v0] 讀取失敗:", e.message);
-        STORES = seedStores();
-        toast("無法載入店鋪資料，使用示範店鋪", "pink");
-      }
-    }
-
-    /* ============================================================
-       成就系統 (Achievement System)
-    ============================================================ */
-    const ACHIEVEMENT_DEFS = {
-      pioneer: { key: 'pioneer', name: '開路先鋒', category: 'submission', icon: '🏪', description: '提交第 1 間店鋪', condition: { type: 'submit_store', count: 1 }, reward: { points: 10, title: '拓荒者' } },
-      local_guide: { key: 'local_guide', name: '在地導遊', category: 'submission', icon: '🏪', description: '提交 5 間店鋪', condition: { type: 'submit_store', count: 5 }, reward: { points: 20, title: null } },
-      explorer: { key: 'explorer', name: '城市探險家', category: 'submission', icon: '🏪', description: '提交 15 間店鋪', condition: { type: 'submit_store', count: 15 }, reward: { points: 50, title: '探險家' } },
-      hk_expert: { key: 'hk_expert', name: '香港通', category: 'submission', icon: '🏪', description: '提交 30 間店鋪', condition: { type: 'submit_store', count: 30 }, reward: { points: 100, title: '香港通' } },
-      store_king: { key: 'store_king', name: '店鋪之王', category: 'submission', icon: '🏪', description: '提交 50 間店鋪', condition: { type: 'submit_store', count: 50 }, reward: { points: 200, title: '店王' } },
-      legend_hunter: { key: 'legend_hunter', name: '傳奇店鋪獵人', category: 'submission', icon: '🏪', description: '提交 100 間店鋪', condition: { type: 'submit_store', count: 100 }, reward: { points: 500, title: '傳奇獵人' } },
-      trainee_verifier: { key: 'trainee_verifier', name: '見習驗證員', category: 'verification', icon: '🔍', description: '認證 1 間店鋪', condition: { type: 'verify_store', count: 1 }, reward: { points: 10, title: null } },
-      senior_verifier: { key: 'senior_verifier', name: '資深驗證員', category: 'verification', icon: '🔍', description: '認證 10 間店鋪', condition: { type: 'verify_store', count: 10 }, reward: { points: 30, title: '驗證員' } },
-      chief_verifier: { key: 'chief_verifier', name: '首席驗證官', category: 'verification', icon: '🔍', description: '認證 30 間店鋪', condition: { type: 'verify_store', count: 30 }, reward: { points: 80, title: '首席驗證官' } },
-      trusted: { key: 'trusted', name: '信譽保證', category: 'verification', icon: '🔍', description: '認證 50 間店鋪（且無錯誤記錄）', condition: { type: 'verify_store', count: 50 }, reward: { points: 150, title: '信譽保證' } },
-      first_complete: { key: 'first_complete', name: '完成任務', category: 'complete', icon: '🏅', description: '有 1 間店鋪完成全部認證', condition: { type: 'store_complete', count: 1 }, reward: { points: 10, title: null } },
-      reliable: { key: 'reliable', name: '可靠情報員', category: 'complete', icon: '🏅', description: '有 5 間店鋪完成全部認證', condition: { type: 'store_complete', count: 5 }, reward: { points: 30, title: '可靠情報員' } },
-      gold_spy: { key: 'gold_spy', name: '金牌情報員', category: 'complete', icon: '🏅', description: '有 15 間店鋪完成全部認證', condition: { type: 'store_complete', count: 15 }, reward: { points: 80, title: '金牌情報員' } },
-      diamond_spy: { key: 'diamond_spy', name: '鑽石情報員', category: 'complete', icon: '🏅', description: '有 30 間店鋪完成全部認證', condition: { type: 'store_complete', count: 30 }, reward: { points: 200, title: '鑽石情報員' } },
-      hk_island: { key: 'hk_island', name: '港島通', category: 'region', icon: '🏙️', description: '在港島區有 5 間店鋪完成認證', condition: { type: 'region_hk_island', count: 5 }, reward: { points: 20, title: null } },
-      kowloon: { key: 'kowloon', name: '九龍通', category: 'region', icon: '🏙️', description: '在九龍區有 5 間店鋪完成認證', condition: { type: 'region_kowloon', count: 5 }, reward: { points: 20, title: null } },
-      nt: { key: 'nt', name: '新界通', category: 'region', icon: '🏙️', description: '在新界區有 5 間店鋪完成認證', condition: { type: 'region_nt', count: 5 }, reward: { points: 20, title: null } },
-      hk_all: { key: 'hk_all', name: '全港制霸', category: 'region', icon: '🌟', description: '三個地區成就全解鎖', condition: { type: 'region_all', count: 1 }, reward: { points: 100, title: '全港制霸' } },
-      data_assistant: { key: 'data_assistant', name: '資料助理', category: 'supplement', icon: '📝', description: '補充 10 次店鋪資料', condition: { type: 'supplement', count: 10 }, reward: { points: 15, title: null } },
-      data_expert: { key: 'data_expert', name: '資料專家', category: 'supplement', icon: '📝', description: '補充 30 次店鋪資料', condition: { type: 'supplement', count: 30 }, reward: { points: 40, title: '資料專家' } },
-      data_master: { key: 'data_master', name: '資料大師', category: 'supplement', icon: '📝', description: '補充 50 次店鋪資料', condition: { type: 'supplement', count: 50 }, reward: { points: 80, title: '資料大師' } },
-      perfect_file: { key: 'perfect_file', name: '完美檔案', category: 'supplement', icon: '📝', description: '同一間店鋪完成全部 4 項補充', condition: { type: 'perfect_file', count: 1 }, reward: { points: 20, title: '檔案整理師' } },
-      streak_7: { key: 'streak_7', name: '連續 7 天貢獻', category: 'streak', icon: '🔥', description: '連續 7 天有提交或認證', condition: { type: 'streak', count: 7 }, reward: { points: 20, title: null } },
-      streak_30: { key: 'streak_30', name: '連續 30 天貢獻', category: 'streak', icon: '🔥🔥', description: '連續 30 天有提交或認證', condition: { type: 'streak', count: 30 }, reward: { points: 80, title: null } },
-      streak_100: { key: 'streak_100', name: '連續 100 天貢獻', category: 'streak', icon: '🔥🔥🔥', description: '連續 100 天有提交或認證', condition: { type: 'streak', count: 100 }, reward: { points: 300, title: null } },
-      weekly_perfect: { key: 'weekly_perfect', name: '一週全勤', category: 'streak', icon: '⭐', description: '一週 7 天都有貢獻', condition: { type: 'weekly_perfect', count: 1 }, reward: { points: 30, title: null } },
-      monthly_perfect: { key: 'monthly_perfect', name: '月度全勤', category: 'streak', icon: '⭐', description: '一個月 30 天都有貢獻', condition: { type: 'monthly_perfect', count: 1 }, reward: { points: 100, title: null } }
-    };
-
-    function getAchievementState() {
-      if (!STATE.achievements) {
-        STATE.achievements = {
-          unlocked: [],
-          stats: {
-            submit_store: 0, verify_store: 0, supplement: 0,
-            store_complete: 0, region_hk_island: 0, region_kowloon: 0,
-            region_nt: 0, perfect_file: 0, streak_days: 0,
-            last_active_date: '', weekly_days: [], monthly_days: []
-          }
-        };
-        save();
-      }
-      return STATE.achievements;
-    }
-
-    function updateAchievementStat(statType, increment = 1) {
-      const state = getAchievementState();
-      if (state.stats[statType] !== undefined) {
-        state.stats[statType] += increment;
-        save();
-        checkAchievements();
-      }
-    }
-
-    function updateStreak() {
-      const state = getAchievementState();
-      const today = todayKey();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayKey = yesterday.toISOString().slice(0, 10);
-      if (state.stats.last_active_date === today) return;
-      if (state.stats.last_active_date === yesterdayKey) state.stats.streak_days += 1;
-      else if (state.stats.last_active_date !== today) state.stats.streak_days = 1;
-      state.stats.last_active_date = today;
-      const dayOfWeek = new Date().getDay();
-      const weekDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-      if (!state.stats.weekly_days.includes(weekDay)) {
-        state.stats.weekly_days.push(weekDay);
-        if (state.stats.weekly_days.length === 7) {
-          updateAchievementStat('weekly_perfect', 1);
-          state.stats.weekly_days = [];
-        }
-      }
-      const dayOfMonth = new Date().getDate();
-      if (!state.stats.monthly_days.includes(dayOfMonth)) {
-        state.stats.monthly_days.push(dayOfMonth);
-        if (state.stats.monthly_days.length === 30 || state.stats.monthly_days.length === 31) {
-          updateAchievementStat('monthly_perfect', 1);
-          state.stats.monthly_days = [];
-        }
-      }
-      save();
-      checkAchievements();
-    }
-
-    function checkAchievements() {
-      const state = getAchievementState();
-      const unlocked = state.unlocked || [];
-      Object.keys(ACHIEVEMENT_DEFS).forEach(key => {
-        if (unlocked.includes(key)) return;
-        const def = ACHIEVEMENT_DEFS[key];
-        const stats = state.stats;
-        let isUnlocked = false;
-        switch (def.condition.type) {
-          case 'submit_store': if (stats.submit_store >= def.condition.count) isUnlocked = true; break;
-          case 'verify_store': if (stats.verify_store >= def.condition.count) isUnlocked = true; break;
-          case 'store_complete': if (stats.store_complete >= def.condition.count) isUnlocked = true; break;
-          case 'region_hk_island': if (stats.region_hk_island >= def.condition.count) isUnlocked = true; break;
-          case 'region_kowloon': if (stats.region_kowloon >= def.condition.count) isUnlocked = true; break;
-          case 'region_nt': if (stats.region_nt >= def.condition.count) isUnlocked = true; break;
-          case 'region_all': if (unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt')) isUnlocked = true; break;
-          case 'supplement': if (stats.supplement >= def.condition.count) isUnlocked = true; break;
-          case 'perfect_file': if (stats.perfect_file >= def.condition.count) isUnlocked = true; break;
-          case 'streak': if (stats.streak_days >= def.condition.count) isUnlocked = true; break;
-          case 'weekly_perfect': if (stats.weekly_perfect >= def.condition.count) isUnlocked = true; break;
-          case 'monthly_perfect': if (stats.monthly_perfect >= def.condition.count) isUnlocked = true; break;
-          default: break;
-        }
-        if (isUnlocked) {
-          unlocked.push(key);
-          if (def.reward.points > 0) addPoints(def.reward.points, `解鎖成就：${def.name}`);
-          if (def.reward.title) {
-            if (!STATE.titles) STATE.titles = [];
-            if (!STATE.titles.includes(def.reward.title)) STATE.titles.push(def.reward.title);
-          }
-          if (CLOUD_ON) cloudInsert('user_achievements', { user_id: STATE.user.device, achievement_key: key, achievement_name: def.name });
-          showAchievementUnlock(def);
-        }
-      });
-      STATE.achievements.unlocked = unlocked;
-      save();
-    }
-
-    function showAchievementUnlock(def) {
-      const root = document.getElementById('toast-root');
-      if (!root) return;
-      const el = document.createElement('div');
-      el.className = 'animate-pop pointer-events-auto rounded-2xl border border-gold bg-black/90 px-5 py-3 text-center glow-gold max-w-sm';
-      el.innerHTML = `<div class="text-2xl">${def.icon}</div><div class="text-xs text-white/50 mt-0.5">🏆 成就解鎖！</div><div class="text-sm font-bold text-gold">${def.name}</div><div class="text-[10px] text-white/40">${def.description}</div>${def.reward.points > 0 ? `<div class="text-[10px] text-neongreen mt-1">+${def.reward.points} 積分</div>` : ''}${def.reward.title ? `<div class="text-[10px] text-neonpink">獲得稱號：${def.reward.title}</div>` : ''}`;
-      root.appendChild(el);
-      setTimeout(() => el.remove(), 4000);
-    }
-
-    function getAchievementProgress(key) {
-      const state = getAchievementState();
-      const def = ACHIEVEMENT_DEFS[key];
-      if (!def) return { current: 0, required: 0, percentage: 0, isUnlocked: false };
-      const stats = state.stats;
-      const unlocked = state.unlocked || [];
-      let current = 0, required = def.condition.count;
-      switch (def.condition.type) {
-        case 'submit_store': current = stats.submit_store || 0; break;
-        case 'verify_store': current = stats.verify_store || 0; break;
-        case 'store_complete': current = stats.store_complete || 0; break;
-        case 'region_hk_island': current = stats.region_hk_island || 0; break;
-        case 'region_kowloon': current = stats.region_kowloon || 0; break;
-        case 'region_nt': current = stats.region_nt || 0; break;
-        case 'region_all': current = unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt') ? 1 : 0; break;
-        case 'supplement': current = stats.supplement || 0; break;
-        case 'perfect_file': current = stats.perfect_file || 0; break;
-        case 'streak': current = stats.streak_days || 0; break;
-        case 'weekly_perfect': current = stats.weekly_perfect || 0; break;
-        case 'monthly_perfect': current = stats.monthly_perfect || 0; break;
-        default: break;
-      }
-      const isUnlocked = unlocked.includes(key);
-      const percentage = Math.min(100, Math.round((current / required) * 100));
-      return { current, required, percentage, isUnlocked };
-    }
-
-    function getUserLevel() {
-      const xp = STATE.total_xp || 0;
-      const levels = [
-        { level: 1, title: '新手爪友', xp: 0 },
-        { level: 2, title: '見習爪客', xp: 50 },
-        { level: 3, title: '探索爪客', xp: 150 },
-        { level: 4, title: '情報爪客', xp: 300 },
-        { level: 5, title: '資深爪客', xp: 500 },
-        { level: 6, title: '偵查爪客', xp: 800 },
-        { level: 7, title: '獵人爪客', xp: 1200 },
-        { level: 8, title: '金牌爪客', xp: 1800 },
-        { level: 9, title: '傳說爪客', xp: 2500 },
-        { level: 10, title: '爪皇', xp: 3500 }
-      ];
-      let currentLevel = levels[0], nextLevel = levels[1];
-      for (let i = levels.length - 1; i >= 0; i--) {
-        if (xp >= levels[i].xp) { currentLevel = levels[i]; nextLevel = levels[i + 1] || null; break; }
-      }
-      return {
-        level: currentLevel.level,
-        title: currentLevel.title,
-        xp: xp,
-        xpForCurrent: currentLevel.xp,
-        xpForNext: nextLevel ? nextLevel.xp : xp,
-        nextTitle: nextLevel ? nextLevel.title : null,
-        percentage: nextLevel ? Math.min(100, Math.round(((xp - currentLevel.xp) / (nextLevel.xp - currentLevel.xp)) * 100)) : 100
-      };
-    }
-
-    function addXP(amount, actionType) {
-      if (!STATE.total_xp) STATE.total_xp = 0;
-      STATE.total_xp += amount;
-      save();
-    }
-
-    function updateDailyActivity(type) {
-      const today = todayKey();
-      if (!STATE.daily[today]) STATE.daily[today] = { checkin: 0, review: 0, zombie: 0, ad: 0, adCooldownUntil: 0, live: 0, promoUsed: 0 };
-      if (type === 'checkin') {
-        STATE.daily[today].checkin = (STATE.daily[today].checkin || 0) + 1;
-        updateStreak();
-        checkAchievements();
-      }
-      save();
-    }
-
-    function updateCheckinStreak() {
-      const streak = getCheckinStreak();
-      if (!STATE.achievements) STATE.achievements = {};
-      if (!STATE.achievements.stats) STATE.achievements.stats = {};
-      STATE.achievements.stats.checkin_streak = streak;
-      save();
-    }
-
-    renderPoints();
-
-    // ===== 下拉重新整理 =====
-    function initPullToRefresh() {
-      const container = document.getElementById('main');
-      const indicator = document.getElementById('pull-indicator');
-      if (!container || !indicator) return;
-      
-      container.addEventListener('touchstart', (e) => {
-        if (container.scrollTop === 0) { pullStartY = e.touches[0].clientY; isPulling = true; pullMoveY = 0; }
-      }, { passive: true });
-      
-      container.addEventListener('touchmove', (e) => {
-        if (!isPulling || isRefreshing) return;
-        const deltaY = e.touches[0].clientY - pullStartY;
-        if (deltaY > 0 && container.scrollTop === 0) {
-          pullMoveY = Math.min(deltaY, 80);
-          indicator.style.top = `${Math.min(pullMoveY - 60, 0)}px`;
-          const text = indicator.querySelector('.text');
-          if (text) text.textContent = pullMoveY > 60 ? '🔄 鬆手同步資料' : '⬇️ 下拉同步最新資料';
-          indicator.classList.toggle('active', pullMoveY > 60);
-        }
-      }, { passive: true });
-      
-      container.addEventListener('touchend', async () => {
-        if (isPulling && pullMoveY > 60 && !isRefreshing) {
-          isRefreshing = true;
-          const indicator = document.getElementById('pull-indicator');
-          if (indicator) { indicator.classList.add('loading'); indicator.style.top = '0px'; const text = indicator.querySelector('.text'); if (text) text.textContent = '🔄 同步中...'; }
-          try { await refreshAllData(); } catch (e) { toast('同步失敗: ' + e.message, 'pink'); }
-          if (indicator) { indicator.classList.remove('loading', 'active'); indicator.style.top = '-60px'; const text = indicator.querySelector('.text'); if (text) text.textContent = '⬇️ 下拉同步最新資料'; }
-          isRefreshing = false;
-        }
-        isPulling = false; pullMoveY = 0;
-      }, { passive: true });
-    }
-
-    async function refreshAllData() {
-  toast('🔄 正在同步最新資料...', 'green');
-  await loadCloud();
-  await loadMalls();
-  if (CURRENT === 'map') {
-    if (mapInitialized) { 
-      updateMapMarkers(); 
-      updateMapList(); 
-      ensureStoresVisible(); 
-    } else { 
-      initMap();  // ← 改為直接初始化
-    }
-  } else { 
-    showView(CURRENT); 
-  }
-  toast('✅ 已更新至最新資料', 'green');
-}
 
     (async function initApp() {
-  console.log('🚀 爪爪情報站啟動中...');
-  await loadCloud();
-  await loadMalls();
-  
-  // ===== 修改這裡：直接初始化地圖，不通過 showView =====
-  // showView('map');  // ← 註解掉或刪除這行
-  
-  // 1. 設置地圖頁面為顯示狀態
-  const mapPage = document.getElementById('map-page-container');
-  const overlay = document.getElementById('page-overlay');
-  if (mapPage) mapPage.style.display = 'flex';
-  if (overlay) overlay.style.display = 'none';
-  
-  // 2. 初始化地圖
-  setTimeout(() => {
-    initMap();
-  }, 300);
-  
-  // 3. 更新列表
-  setTimeout(() => {
-    updateMapList();
-  }, 500);
-  
-  // 4. 初始化下拉重新整理
-  setTimeout(initPullToRefresh, 500);
+      console.log('🚀 爪爪情報站啟動中...');
+      await loadCloud();
+      await loadMalls();
+      
+      const mapPage = document.getElementById('map-page-container');
+      const overlay = document.getElementById('page-overlay');
+      if (mapPage) mapPage.style.display = 'flex';
+      if (overlay) overlay.style.display = 'none';
+      
+      setTimeout(() => { initMap(); }, 300);
+      setTimeout(() => { updateMapList(); }, 500);
+      setTimeout(initPullToRefresh, 500);
 
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        gpsLat = userLocation.lat; gpsLng = userLocation.lng;
-        console.log('✅ 自動定位成功:', userLocation);
-        if (map && mapInitialized) {
-          map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
-          addUserMarker(userLocation.lat, userLocation.lng);
-          updateMapMarkers(); 
-          updateMapList(); 
-          // ensureStoresVisible();  // 可以註解掉，避免干擾
-        } else {
-          console.log('📍 定位成功，等待地圖初始化');
-          // 如果地圖還沒初始化，等待一會再試
-          setTimeout(() => {
-            if (map && mapInitialized && userLocation) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            gpsLat = userLocation.lat; gpsLng = userLocation.lng;
+            console.log('✅ 自動定位成功:', userLocation);
+            if (map && mapInitialized) {
               map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
               addUserMarker(userLocation.lat, userLocation.lng);
-              updateMapMarkers();
-              updateMapList();
+              updateMapMarkers(); 
+              updateMapList(); 
+            } else {
+              console.log('📍 定位成功，等待地圖初始化');
+              setTimeout(() => {
+                if (map && mapInitialized && userLocation) {
+                  map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
+                  addUserMarker(userLocation.lat, userLocation.lng);
+                  updateMapMarkers();
+                  updateMapList();
+                }
+              }, 1000);
             }
-          }, 1000);
-        }
-      },
-      (err) => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
-    );
-  } else { 
-    console.log('⚠️ 此裝置不支援 GPS 定位'); 
-  }
+          },
+          (err) => { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+        );
+      } else { 
+        console.log('⚠️ 此裝置不支援 GPS 定位'); 
+      }
 
-  if ('serviceWorker' in navigator) {
-    try {
-      const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
-      navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" })));
-      console.log('✅ Service Worker 已註冊');
-    } catch (e) { console.log('⚠️ Service Worker 註冊失敗:', e.message); }
-  }
-  console.log('🚀 爪爪情報站啟動完成！');
-})();
+      if ('serviceWorker' in navigator) {
+        try {
+          const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",()=>{});`;
+          navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: "text/javascript" })));
+          console.log('✅ Service Worker 已註冊');
+        } catch (e) { console.log('⚠️ Service Worker 註冊失敗:', e.message); }
+      }
+      console.log('🚀 爪爪情報站啟動完成！');
+    })();
 
     (function injectManifest() {
       const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
