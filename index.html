@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-HK" class="bg-black">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/vconsole"></script>
+<script>
+  var vConsole = new VConsole();
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>爪爪情報站 | 香港夾娃娃實時情報</title>
@@ -1114,11 +1118,21 @@ async function submitReport(targetType, targetId) {
     
     if (CLOUD_ON) {
         try {
-            await sbFetch('reports', {
+            // ✅ 直接使用 fetch，不用 sbFetch
+            var response = await fetch(SUPABASE_URL + "/rest/v1/reports", {
                 method: 'POST',
-                headers: { Prefer: 'return=minimal' },
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
                 body: JSON.stringify([reportData])
             });
+            
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
             
             STATE._reportCount = (STATE._reportCount || 0) + 1;
             save();
