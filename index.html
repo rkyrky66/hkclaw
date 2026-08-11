@@ -2280,19 +2280,99 @@ function backToMall() {
   });
 }
 function openMachineForm(sid) {
-  // ===== 修改後的相機結構（複製 nt 的結構） =====
-  openModal('\n        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">\n          <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>\n          <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>\n        </div>\n        <label class="mt-4 block text-xs font-bold text-gold">📷 強制現場現拍機台照</label>\n        <div class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="mf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="mf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>\n        <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">' + FEATURE_TAGS.map(function(t) { return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; }).join('') + '</div>\n        <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>\n        <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">' + PLAY_TAGS.map(function(t) { return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; }).join('') + '</div>\n        <button onclick="submitMachine(\'' + sid + '\')" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交機台情報</button>\n      ');
-  
-  // ===== 在彈窗顯示後啟用相機按鈕 =====
-  setTimeout(function() {
-    var camBtn = document.getElementById('mf-camera-btn');
-    if (camBtn) {
-      camBtn.disabled = false;
-      camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
-      camBtn.innerHTML = '📸 開啟相機拍照';
-      camBtn.onclick = function() { openCamera('mf'); };
+    // 先開啟 Modal
+    openModal(`
+        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
+            <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>
+            <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+            <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
+                <p class="text-xs text-white/40">📸 現場拍攝機台照片，確保資訊真實性</p>
+                <p class="text-xs text-neongreen mt-1">✅ 拍照後自動獲取 GPS 位置</p>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gold">📷 強制現場現拍機台照 <span class="text-neonpink">（必填）</span></label>
+                <div id="mf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">
+                    <button id="mf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>
+                    <img id="mf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>
+                <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">
+                    <span id="mf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>
+                </div>
+            </div>
+            <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>
+            <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">` + FEATURE_TAGS.map(function(t) { 
+                return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
+            }).join('') + `</div>
+            <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>
+            <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">` + PLAY_TAGS.map(function(t) { 
+                return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
+            }).join('') + `</div>
+        </div>
+        <button onclick="submitMachine('` + sid + `')" id="mf-submit-btn" 
+            class="mt-5 w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed">
+            📷 請先拍照
+        </button>
+    `);
+    
+    // ===== 穩定的按鈕啟用邏輯 =====
+    function enableCameraButton() {
+        var camBtn = document.getElementById('mf-camera-btn');
+        console.log('🔍 尋找 mf-camera-btn:', camBtn);
+        
+        if (camBtn) {
+            camBtn.disabled = false;
+            camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
+            camBtn.innerHTML = '📸 開啟相機拍照';
+            camBtn.onclick = function() { 
+                console.log('📸 點擊開啟相機 (mf)');
+                openCamera('mf'); 
+            };
+            console.log('✅ 相機按鈕已啟用');
+        } else {
+            console.log('⚠️ 未找到 mf-camera-btn，重試中...');
+            setTimeout(enableCameraButton, 200);
+        }
     }
-  }, 100);
+    
+    // 延遲執行，確保 DOM 已渲染
+    setTimeout(enableCameraButton, 300);
+    
+    // ===== 監聽照片狀態，更新提交按鈕 =====
+    var checkInterval = setInterval(function() {
+        var photoReady = window._camPreview && window._camPreview.mf;
+        var btn = document.getElementById('mf-submit-btn');
+        var gpsEl = document.getElementById('mf-gps');
+        
+        if (btn) {
+            if (photoReady) {
+                btn.className = 'w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green hover:scale-[1.02] active:scale-[0.98] transition-all';
+                btn.disabled = false;
+                btn.innerHTML = '✅ 提交機台情報';
+            } else {
+                btn.className = 'w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed';
+                btn.disabled = true;
+                btn.innerHTML = '📷 請先拍照';
+            }
+        }
+        
+        // 更新 GPS 狀態
+        if (gpsEl) {
+            if (gpsLat && gpsLng) {
+                gpsEl.textContent = '📍 定位成功：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+                gpsEl.className = 'text-neongreen text-xs';
+            } else {
+                gpsEl.textContent = '⏳ 請點擊「開啟相機拍照」獲取位置';
+                gpsEl.className = 'text-yellow-400 text-xs';
+            }
+        }
+    }, 500);
+    
+    setTimeout(function() { return clearInterval(checkInterval); }, 60000);
 }
 // ===== 修改 submitMachine（加入 GPS 硬限制 200 米） =====
 async function submitMachine(sid) {
