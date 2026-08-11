@@ -1029,7 +1029,115 @@ const SmartNotification = {
     }
 };
 
+// ============================================================
+// 檢舉系統 (Report System)
+// ============================================================
 
+const REPORT_CATEGORIES = [
+    { value: 'store_not_exist', label: '🏪 店鋪不存在' },
+    { value: 'location_wrong', label: '📍 位置錯誤' },
+    { value: 'photo_fake', label: '📸 照片造假' },
+    { value: 'machine_not_exist', label: '🎰 機台不存在' },
+    { value: 'tag_wrong', label: '🏷️ 標籤錯誤' },
+    { value: 'other', label: '💬 其他' }
+];
+
+const DAILY_REPORT_LIMIT = 3;
+
+function canUserReport() {
+    var today = new Date().toISOString().slice(0, 10);
+    
+    if (!STATE._reportDate) {
+        STATE._reportDate = today;
+        STATE._reportCount = 0;
+        save();
+    }
+    
+    if (STATE._reportDate !== today) {
+        STATE._reportDate = today;
+        STATE._reportCount = 0;
+        save();
+    }
+    
+    if (STATE._reportCount >= DAILY_REPORT_LIMIT) {
+        toast('⚠️ 今日檢舉次數已達上限 (3次)，明日再來', 'pink');
+        return false;
+    }
+    
+    return true;
+}
+
+function openReportForm(targetType, targetId, targetName) {
+    if (!canUserReport()) return;
+    
+    var categoriesHtml = REPORT_CATEGORIES.map(function(cat) {
+        return '<option value="' + cat.value + '">' + cat.label + '</option>';
+    }).join('');
+    
+    openModal('\n        <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n            <h2 class="font-black text-gold neon-gold">🚨 檢舉</h2>\n            <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n        </div>\n        <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n            <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n                <p class="text-sm font-bold text-gold">' + targetName + '</p>\n                <p class="text-xs text-white/40">你確定要檢舉這個內容嗎？</p>\n                <p class="text-xs text-yellow-400 mt-1">⚠️ 每日僅能檢舉 3 次，請謹慎使用</p>\n            </div>\n            \n            <div>\n                <label class="text-xs font-bold text-gold">檢舉類別 <span class="text-neonpink">（必填）</span></label>\n                <select id="report-category" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold">\n                    <option value="">請選擇類別</option>\n                    ' + categoriesHtml + '\n                </select>\n            </div>\n            \n            <div>\n                <label class="text-xs font-bold text-gold">補充說明 <span class="text-white/40">（選填）</span></label>\n                <textarea id="report-reason" placeholder="請詳細說明檢舉原因..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="3"></textarea>\n            </div>\n        </div>\n        <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n            <button onclick="submitReport(\'' + targetType + '\', \'' + targetId + '\')" \n                id="report-submit-btn" \n                class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">\n                請選擇檢舉類別\n            </button>\n        </div>\n    ');
+    
+    var categorySelect = document.getElementById('report-category');
+    var submitBtn = document.getElementById('report-submit-btn');
+    
+    categorySelect.addEventListener('change', function() {
+        if (this.value) {
+            submitBtn.className = 'w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold transition-all hover:scale-[1.02] active:scale-[0.98]';
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🚨 提交檢舉';
+        } else {
+            submitBtn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            submitBtn.disabled = true;
+            submitBtn.textContent = '請選擇檢舉類別';
+        }
+    });
+}
+
+async function submitReport(targetType, targetId) {
+    var category = document.getElementById('report-category')?.value;
+    var reason = document.getElementById('report-reason')?.value.trim() || '';
+    
+    if (!category) {
+        toast('請選擇檢舉類別', 'pink');
+        return;
+    }
+    
+    var reportData = {
+        target_type: targetType,
+        target_id: targetId,
+        reporter_device: STATE.user.device,
+        reporter_user_id: STATE.user.user_id || null,
+        category: category,
+        reason: reason,
+        status: 'pending',
+        created_at: new Date().toISOString()
+    };
+    
+    if (CLOUD_ON) {
+        try {
+            await sbFetch('reports', {
+                method: 'POST',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify([reportData])
+            });
+            
+            STATE._reportCount = (STATE._reportCount || 0) + 1;
+            save();
+            
+            toast('✅ 檢舉已提交，感謝你的回報！', 'green');
+            closeModal();
+        } catch (e) {
+            console.error('❌ 檢舉提交失敗:', e);
+            toast('⚠️ 檢舉提交失敗，請稍後重試', 'pink');
+        }
+    } else {
+        if (!STATE._offlineReports) STATE._offlineReports = [];
+        STATE._offlineReports.push(reportData);
+        STATE._reportCount = (STATE._reportCount || 0) + 1;
+        save();
+        toast('✅ 檢舉已記錄（離線），連網後將自動提交', 'green');
+        closeModal();
+    }
+}
 function addPoints(n, why) {
   STATE.points = Math.max(0, STATE.points + n);
   save();
@@ -1803,7 +1911,7 @@ function buildStoreContent(s, _a) {
   var isVerified = s.verified === "verified";
   var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + (s.verification_count || 0) + '/2)</span>';
   var photoHtml = buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel);
-  return '\n        <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n          <div>\n            <div class="flex items-center gap-2 flex-wrap">\n              ' + backBtn + '\n              <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n              ' + mallInfo + '\n            </div>\n            <div class="flex items-center gap-2 mt-0.5">\n              <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n              ' + statusBadge + '\n            </div>\n          </div>\n          <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n        </div>\n        ' + photoHtml + '\n        <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n          ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n          ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n          <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n          ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n          ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n          <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n          <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n        </div>\n        <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n          ' + (s.size && s.size !== '中' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n          ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n          ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n          ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n        </div>\n        <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n          ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n          ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n        </div>\n        <div class="mt-4 flex-1 overflow-y-auto">\n          <div class="flex items-center justify-between">\n            <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n            <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n          </div>\n          <div class="mt-3 grid grid-cols-2 gap-3">\n            ' + (s.machines.length ? s.machines.map(function(m) {
+  return '\n        <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n          <div>\n            <div class="flex items-center gap-2 flex-wrap">\n              ' + backBtn + '\n              <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n              ' + mallInfo + '\n            </div>\n            <div class="flex items-center gap-2 mt-0.5">\n              <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n              ' + statusBadge + '\n            </div>\n          </div>\n          <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n        </div>\n        ' + photoHtml + '\n        <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n          ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n          ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n          <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n          ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n          ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n          <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n          <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n          <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n        </div>\n        <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n          ' + (s.size && s.size !== '中' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n          ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n          ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n          ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n        </div>\n        <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n          ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n          ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n        </div>\n        <div class="mt-4 flex-1 overflow-y-auto">\n          <div class="flex items-center justify-between">\n            <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n            <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n          </div>\n          <div class="mt-3 grid grid-cols-2 gap-3">\n            ' + (s.machines.length ? s.machines.map(function(m) {
     return '\n              <div class="rounded-xl border ' + ((now() - m.updated < 2 * DAY) ? 'border-neongreen/70 glow-green' : 'border-white/20 stale') + ' bg-zinc-950 p-2 text-left">\n                ' + (m.photo ? '<img src="' + m.photo + '" class="h-24 w-full rounded-lg object-cover" alt="機台 ' + m.no + '" />' : '<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>') + '\n                <div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ' + m.no + '</b>' + ((now() - m.updated < 2 * DAY) ? '' : '<span class="text-[9px] text-white/40">[存疑]</span>') + '</div>\n                <div class="mt-1 flex flex-wrap gap-1">' + m.feats.slice(0, 2).map(function(f) { return '<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">' + f + '</span>'; }).join('') + '</div>\n                <p class="mt-1 truncate text-[10px] text-white/50">🎁 <span class="text-gold">' + m.prize + '</span></p>\n                <p class="text-[9px] text-white/40">' + timeAgo(m.updated) + '</p>\n              </div>\n            ';
   }).join('') : '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>') + '\n          </div>\n          <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n        </div>\n      ';
 }
@@ -2160,35 +2268,57 @@ function backToMall() {
 function openMachineForm(sid) {
   openModal('\n        <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">\n          <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>\n          <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>\n        </div>\n        <label class="mt-4 block text-xs font-bold text-gold">📷 強制現場現拍機台照</label>\n        <div class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'mf\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="mf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>\n        <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">' + FEATURE_TAGS.map(function(t) { return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; }).join('') + '</div>\n        <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>\n        <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">' + PLAY_TAGS.map(function(t) { return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; }).join('') + '</div>\n        <button onclick="submitMachine(\'' + sid + '\')" class="mt-5 w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green">提交機台情報</button>\n      ');
 }
+// ===== 修改 submitMachine（加入 GPS 硬限制 200 米） =====
 async function submitMachine(sid) {
-  var photoBlob = window._cam?.mf;
-  if (!photoBlob) return toast("請先拍照", "pink");
-  var photoUrl = window._camPreview?.mf || '';
-  if (CLOUD_ON) {
-    try {
-      var file = new File([photoBlob], Date.now() + ".jpg", { type: 'image/jpeg' });
-      photoUrl = await uploadImage(file, 'machines');
-    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-  }
-  var feats = document.querySelectorAll('#mf-feats .chip-active-green');
-  var featsArray = [];
-  feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
-  if (!featsArray.length) return toast("請至少選一個台性標籤", "pink");
-  var s = STORES.find(function(x) { return x.id === sid; });
-  var playsArray = [];
-  document.querySelectorAll('#mf-plays .chip-active-green').forEach(function(b) { return playsArray.push(b.dataset.tag); });
-  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats: featsArray, plays: playsArray, prize: "台主自報", updated: now(), photo: photoUrl });
-  cloudInsert("claw_machines", { store_id: sid, feats: featsArray, photo: photoUrl });
-  toast("機台已上架", "green");
-  var followers = STATE.favStores.filter(function(storeId) { return storeId === sid; });
-  if (followers.length > 0) {
-    if (!STATE.notifications) STATE.notifications = [];
-    STATE.notifications.unshift({ id: 'n' + Date.now(), type: 'machine_update', store_id: sid, store_name: s.name, message: '📢 ' + s.name + ' 有新的機台上架！', read: false, created_at: now() });
-    save();
-    toast('📢 已通知 ' + followers.length + ' 位收藏者', 'gold');
-  }
-  closeModal();
-  openStore(sid);
+    var photoBlob = window._cam?.mf;
+    if (!photoBlob) return toast("請先拍照", "pink");
+    
+    // ✅ 檢查 GPS 是否已取得
+    if (!gpsLat || !gpsLng) {
+        toast('📍 請先點擊「開啟相機拍照」以獲取位置', 'pink');
+        return;
+    }
+    
+    var photoUrl = window._camPreview?.mf || '';
+    if (CLOUD_ON) {
+        try {
+            var file = new File([photoBlob], Date.now() + ".jpg", { type: 'image/jpeg' });
+            photoUrl = await uploadImage(file, 'machines');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+    }
+    
+    // ✅ 檢查是否在店鋪 200 米內
+    var s = STORES.find(function(x) { return x.id === sid; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    
+    if (s.lat && s.lng) {
+        var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+        if (distance > 0.2) {
+            toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內上架機台', 'pink');
+            return;
+        }
+    }
+    
+    var feats = document.querySelectorAll('#mf-feats .chip-active-green');
+    var featsArray = [];
+    feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
+    if (!featsArray.length) return toast("請至少選一個台性標籤", "pink");
+    
+    var playsArray = [];
+    document.querySelectorAll('#mf-plays .chip-active-green').forEach(function(b) { return playsArray.push(b.dataset.tag); });
+    s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats: featsArray, plays: playsArray, prize: "台主自報", updated: now(), photo: photoUrl });
+    cloudInsert("claw_machines", { store_id: sid, feats: featsArray, photo: photoUrl });
+    toast("機台已上架", "green");
+    
+    var followers = STATE.favStores.filter(function(storeId) { return storeId === sid; });
+    if (followers.length > 0) {
+        if (!STATE.notifications) STATE.notifications = [];
+        STATE.notifications.unshift({ id: 'n' + Date.now(), type: 'machine_update', store_id: sid, store_name: s.name, message: '📢 ' + s.name + ' 有新的機台上架！', read: false, created_at: now() });
+        save();
+        toast('📢 已通知 ' + followers.length + ' 位收藏者', 'gold');
+    }
+    closeModal();
+    openStore(sid);
 }
 // ===== 修改 toggleFav（收藏時提示通知） =====
 function toggleFav(type, id) {
@@ -2317,6 +2447,21 @@ async function submitVerification(storeId) {
     s.verification_count = (s.verification_count || 0) + 1;
     save();
     
+    // ✅ 冷門區域認證計數（在本地更新後檢查）
+    function isColdRegion(region) {
+        var regionStores = STORES.filter(function(s) { return s.region === region; });
+        return regionStores.length < 5;
+    }
+    
+    if (s.region && isColdRegion(s.region)) {
+        var state = getAchievementState();
+        if (!state.stats.cold_region_verify) state.stats.cold_region_verify = 0;
+        state.stats.cold_region_verify += 1;
+        save();
+        // 檢查是否解鎖成就
+        checkAchievements();
+    }
+    
     // 2. 同步到雲端（等待完成）
     if (CLOUD_ON) {
         try {
@@ -2328,7 +2473,7 @@ async function submitVerification(storeId) {
         }
     }
     
-    // 3. 檢查是否達到 2 個認證（使用本地計數，但建議後續從雲端讀取確認）
+    // 3. 檢查是否達到 2 個認證
     if (s.verification_count >= 2) {
         s.verified = 'verified';
         s.is_verified = true;
@@ -3473,7 +3618,16 @@ var ACHIEVEMENT_DEFS = {
   streak_30: { key: 'streak_30', name: '連續 30 天貢獻', category: 'streak', icon: '🔥🔥', description: '連續 30 天有提交或認證', condition: { type: 'streak', count: 30 }, reward: { points: 80, title: null } },
   streak_100: { key: 'streak_100', name: '連續 100 天貢獻', category: 'streak', icon: '🔥🔥🔥', description: '連續 100 天有提交或認證', condition: { type: 'streak', count: 100 }, reward: { points: 300, title: null } },
   weekly_perfect: { key: 'weekly_perfect', name: '一週全勤', category: 'streak', icon: '⭐', description: '一週 7 天都有貢獻', condition: { type: 'weekly_perfect', count: 1 }, reward: { points: 30, title: null } },
-  monthly_perfect: { key: 'monthly_perfect', name: '月度全勤', category: 'streak', icon: '⭐', description: '一個月 30 天都有貢獻', condition: { type: 'monthly_perfect', count: 1 }, reward: { points: 100, title: null } }
+  monthly_perfect: { key: 'monthly_perfect', name: '月度全勤', category: 'streak', icon: '⭐', description: '一個月 30 天都有貢獻', condition: { type: 'monthly_perfect', count: 1 }, reward: { points: 100, title: null } },
+  cold_region_explorer: {
+        key: 'cold_region_explorer',
+        name: '秘境探索者',
+        category: 'region',
+        icon: '🗺️',
+        description: '認證 3 間冷門區域的店鋪（該區少於 5 間店）',
+        condition: { type: 'cold_region_verify', count: 3 },
+        reward: { points: 40, title: '秘境探索者' }
+    }
 };
 function getAchievementState() {
   if (!STATE.achievements) {
@@ -3537,67 +3691,72 @@ function updateStreak() {
   save();
   checkAchievements();
 }
+// ===== 修改 checkAchievements（加入秘境探索者） =====
 function checkAchievements() {
-  var state = getAchievementState();
-  var unlocked = state.unlocked || [];
-  Object.keys(ACHIEVEMENT_DEFS).forEach(function(key) {
-    if (unlocked.includes(key)) return;
-    var def = ACHIEVEMENT_DEFS[key];
-    var stats = state.stats;
-    var isUnlocked = false;
-    switch (def.condition.type) {
-      case 'submit_store':
-        if (stats.submit_store >= def.condition.count) isUnlocked = true;
-        break;
-      case 'verify_store':
-        if (stats.verify_store >= def.condition.count) isUnlocked = true;
-        break;
-      case 'store_complete':
-        if (stats.store_complete >= def.condition.count) isUnlocked = true;
-        break;
-      case 'region_hk_island':
-        if (stats.region_hk_island >= def.condition.count) isUnlocked = true;
-        break;
-      case 'region_kowloon':
-        if (stats.region_kowloon >= def.condition.count) isUnlocked = true;
-        break;
-      case 'region_nt':
-        if (stats.region_nt >= def.condition.count) isUnlocked = true;
-        break;
-      case 'region_all':
-        if (unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt')) isUnlocked = true;
-        break;
-      case 'supplement':
-        if (stats.supplement >= def.condition.count) isUnlocked = true;
-        break;
-      case 'perfect_file':
-        if (stats.perfect_file >= def.condition.count) isUnlocked = true;
-        break;
-      case 'streak':
-        if (stats.streak_days >= def.condition.count) isUnlocked = true;
-        break;
-      case 'weekly_perfect':
-        if (stats.weekly_perfect >= def.condition.count) isUnlocked = true;
-        break;
-      case 'monthly_perfect':
-        if (stats.monthly_perfect >= def.condition.count) isUnlocked = true;
-        break;
-      default:
-        break;
-    }
-    if (isUnlocked) {
-      unlocked.push(key);
-      if (def.reward.points > 0) addPoints(def.reward.points, '解鎖成就：' + def.name);
-      if (def.reward.title) {
-        if (!STATE.titles) STATE.titles = [];
-        if (!STATE.titles.includes(def.reward.title)) STATE.titles.push(def.reward.title);
-      }
-      if (CLOUD_ON) cloudInsert('user_achievements', { user_id: STATE.user.device, achievement_key: key, achievement_name: def.name });
-      showAchievementUnlock(def);
-    }
-  });
-  STATE.achievements.unlocked = unlocked;
-  save();
+    var state = getAchievementState();
+    var unlocked = state.unlocked || [];
+    Object.keys(ACHIEVEMENT_DEFS).forEach(function(key) {
+        if (unlocked.includes(key)) return;
+        var def = ACHIEVEMENT_DEFS[key];
+        var stats = state.stats;
+        var isUnlocked = false;
+        switch (def.condition.type) {
+            case 'submit_store':
+                if (stats.submit_store >= def.condition.count) isUnlocked = true;
+                break;
+            case 'verify_store':
+                if (stats.verify_store >= def.condition.count) isUnlocked = true;
+                break;
+            case 'store_complete':
+                if (stats.store_complete >= def.condition.count) isUnlocked = true;
+                break;
+            case 'region_hk_island':
+                if (stats.region_hk_island >= def.condition.count) isUnlocked = true;
+                break;
+            case 'region_kowloon':
+                if (stats.region_kowloon >= def.condition.count) isUnlocked = true;
+                break;
+            case 'region_nt':
+                if (stats.region_nt >= def.condition.count) isUnlocked = true;
+                break;
+            case 'region_all':
+                if (unlocked.includes('hk_island') && unlocked.includes('kowloon') && unlocked.includes('nt')) isUnlocked = true;
+                break;
+            case 'supplement':
+                if (stats.supplement >= def.condition.count) isUnlocked = true;
+                break;
+            case 'perfect_file':
+                if (stats.perfect_file >= def.condition.count) isUnlocked = true;
+                break;
+            case 'streak':
+                if (stats.streak_days >= def.condition.count) isUnlocked = true;
+                break;
+            case 'weekly_perfect':
+                if (stats.weekly_perfect >= def.condition.count) isUnlocked = true;
+                break;
+            case 'monthly_perfect':
+                if (stats.monthly_perfect >= def.condition.count) isUnlocked = true;
+                break;
+            // ✅ 新增：冷門區域驗證
+            case 'cold_region_verify':
+                if (stats.cold_region_verify >= def.condition.count) isUnlocked = true;
+                break;
+            default:
+                break;
+        }
+        if (isUnlocked) {
+            unlocked.push(key);
+            if (def.reward.points > 0) addPoints(def.reward.points, '解鎖成就：' + def.name);
+            if (def.reward.title) {
+                if (!STATE.titles) STATE.titles = [];
+                if (!STATE.titles.includes(def.reward.title)) STATE.titles.push(def.reward.title);
+            }
+            if (CLOUD_ON) cloudInsert('user_achievements', { user_id: STATE.user.device, achievement_key: key, achievement_name: def.name });
+            showAchievementUnlock(def);
+        }
+    });
+    STATE.achievements.unlocked = unlocked;
+    save();
 }
 function showAchievementUnlock(def) {
   var root = document.getElementById('toast-root');
@@ -4313,7 +4472,35 @@ function retryGPS() {
   if (retryBtn) retryBtn.classList.add('hidden');
   grabGPS('nt-gps');
 }
+// ===== 在 submitIntel 函數開頭加入每日限額檢查 =====
+function checkDailySubmitLimit() {
+    var today = new Date().toISOString().slice(0, 10);
+    
+    if (!STATE._submitDate) {
+        STATE._submitDate = today;
+        STATE._submitCount = 0;
+        save();
+    }
+    
+    if (STATE._submitDate !== today) {
+        STATE._submitDate = today;
+        STATE._submitCount = 0;
+        save();
+    }
+    
+    if (STATE._submitCount >= 3) {
+        toast('⚠️ 每日僅能提交 3 間店鋪，明日再來！', 'pink');
+        return false;
+    }
+    
+    return true;
+}
+
 function submitIntel() {
+  // ✅ 加入每日限額檢查
+    if (!checkDailySubmitLimit()) {
+        return;
+    }
   if (!isFormComplete()) { toast('請完成所有必填欄位', 'pink'); return; }
   var name = document.getElementById('nt-name')?.value.trim();
   if (!name) { toast('請輸入店名', 'pink'); return; }
@@ -4421,9 +4608,12 @@ function submitIntel() {
     if (regionStat) setTimeout(function() { return updateAchievementStat(regionStat); }, 200);
   }
   updateStreak();
-  toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
-  addPoints(10, '提交店鋪情報');
-  closeModal();
+  STATE._submitCount = (STATE._submitCount || 0) + 1;
+    save();
+    
+    toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
+    addPoints(10, '提交店鋪情報');
+    closeModal();
 }
 function renderRegionSelector() {
   var container = document.querySelector('.region-selector-container');
