@@ -307,26 +307,33 @@ async function sbFetch(path, opts) {
   if (!res.ok) throw new Error("Supabase " + res.status);
   return res.status === 204 ? null : res.json();
 }
+// ===== 修改 cloudInsert 函數（移除自動添加 device） =====
 async function cloudInsert(table, row) {
-  if (!CLOUD_ON) return;
-  try {
-    var processedRow = Object.assign({}, row);
-    if (table === 'claw_stores' && processedRow.id) {
-      processedRow.id = String(processedRow.id);
+    if (!CLOUD_ON) return;
+    try {
+        let processedRow = { ...row };
+        
+        // 特殊處理：claw_stores 的 id 轉為字串
+        if (table === 'claw_stores' && processedRow.id) {
+            processedRow.id = String(processedRow.id);
+        }
+        
+        // 特殊處理：user_achievements 的 user_id 若為 device_id 則設為 null
+        if (table === 'user_achievements' && processedRow.user_id) {
+            if (typeof processedRow.user_id === 'string' && !processedRow.user_id.includes('-')) {
+                processedRow.user_id = null;
+            }
+        }
+        
+        // ✅ 只傳 processedRow，不添加任何額外欄位
+        await sbFetch(table, {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify([processedRow])
+        });
+    } catch (e) { 
+        console.log("[v0] cloudInsert 失敗:", e.message); 
     }
-    if (table === 'user_achievements' && processedRow.user_id) {
-      if (typeof processedRow.user_id === 'string' && !processedRow.user_id.includes('-')) {
-        processedRow.user_id = null;
-      }
-    }
-    await sbFetch(table, {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify([Object.assign({}, processedRow, { device: STATE.user.device, created_at: new Date().toISOString() })])
-    });
-  } catch (e) {
-    console.log("[v0] cloudInsert 失敗:", e.message);
-  }
 }
 async function uploadImage(file, folder) {
   if (folder === void 0) folder = 'stores';
@@ -462,6 +469,567 @@ function addXP(amount, actionType) {
   STATE.total_xp += amount;
   save();
 }
+
+// ============================================================
+// 簽到管理模組（CheckinManager）
+// ============================================================
+const CheckinManager = {
+    // ----- 本地儲存（備份） -----
+    getTodayKey() {
+        return new Date().toISOString().slice(0, 10);
+    },
+    getReminderKey() {
+        return 'claw_reminder_' + this.getTodayKey();
+    },
+    hasShownToday() {
+        return localStorage.getItem(this.getReminderKey()) === 'true';
+    },
+    markShownToday() {
+        localStorage.setItem(this.getReminderKey(), 'true');
+    },
+    
+    // ----- 雲端操作 -----
+    // 檢查今日是否已簽到（雲端優先）
+    async isCheckedInToday() {
+        const today = this.getTodayKey();
+        const deviceId = STATE.user.device;
+        
+        if (!CLOUD_ON) {
+            // 離線模式：使用本地
+            const progress = getWeeklyCheckinProgress();
+            return progress.isTodaySigned;
+        }
+        
+        try {
+            const response = await fetch(
+                `${SUPABASE_URL}/rest/v1/user_checkins?select=id&device_id=eq.${deviceId}&checkin_date=eq.${today}&limit=1`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (!response.ok) return false;
+            const data = await response.json();
+            return data.length > 0;
+        } catch (e) {
+            console.warn('⚠️ 檢查簽到失敗，使用本地:', e.message);
+            const progress = getWeeklyCheckinProgress();
+            return progress.isTodaySigned;
+        }
+    },
+    
+    // 執行簽到（雲端 + 本地）
+    async doCheckin() {
+        const today = this.getTodayKey();
+        const deviceId = STATE.user.device;
+        const userId = STATE.user.user_id || null;
+        
+        // 1. 檢查是否已簽到
+        const alreadyChecked = await this.isCheckedInToday();
+        if (alreadyChecked) {
+            toast('今日已簽到，明天再來吧！', 'gold');
+            return false;
+        }
+        
+        // 2. 計算獎勵（本地計算）
+        const progress = getWeeklyCheckinProgress();
+        const daysSigned = progress.count + 1;
+        let bonus = 5;
+        let bonusMsg = '基礎簽到 +5 分';
+        if (daysSigned === 3) {
+            bonus += 5;
+            bonusMsg = '連續 3 天！額外 +5 分 🎉';
+        } else if (daysSigned === 5) {
+            bonus += 5;
+            bonusMsg = '連續 5 天！額外 +5 分 🎉🎉';
+        } else if (daysSigned === 7) {
+            bonus += 15;
+            bonusMsg = '🎊 本週全勤！額外 +15 分 🎊';
+        }
+        
+        // 3. 儲存到 Supabase
+        if (CLOUD_ON) {
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/user_checkins`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify([{
+                        device_id: deviceId,
+                        user_id: userId,
+                        checkin_date: today,
+                        created_at: new Date().toISOString()
+                    }])
+                });
+                if (!response.ok) {
+                    // 可能因為唯一約束衝突（已簽到）
+                    if (response.status === 409) {
+                        toast('今日已簽到', 'gold');
+                        return false;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                console.log('✅ 簽到已同步到雲端');
+            } catch (e) {
+                console.warn('⚠️ 雲端同步失敗，儲存到本地:', e.message);
+                this._saveLocal(today);
+            }
+        } else {
+            // 離線模式：儲存到本地
+            this._saveLocal(today);
+        }
+        
+        // 4. 更新本地 STATE
+        this._updateLocalState(today);
+        
+        // 5. 發放獎勵
+        addPoints(bonus, `簽到 (第 ${daysSigned} 天)`);
+        updateAchievementStat('checkin', 1);
+        updateStreak();
+        
+        // 6. 標記提醒已顯示
+        this.markShownToday();
+        
+        toast(`✅ 簽到成功！獲得 ${bonus} 分（${bonusMsg}）`, 'green');
+        showView('task');
+        return true;
+    },
+    
+    // ----- 私有方法 -----
+    _saveLocal(today) {
+        const weekStart = getWeekStartDate(new Date());
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+        if (!STATE.weeklyCheckin[weekKey]) {
+            STATE.weeklyCheckin[weekKey] = { days: [], claimed: false };
+        }
+        const dayOfWeek = new Date().getDay();
+        const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+        if (!STATE.weeklyCheckin[weekKey].days.includes(todayNum)) {
+            STATE.weeklyCheckin[weekKey].days.push(todayNum);
+        }
+        save();
+    },
+    
+    _updateLocalState(today) {
+        const weekStart = getWeekStartDate(new Date());
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        const dayOfWeek = new Date().getDay();
+        const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+        if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+        if (!STATE.weeklyCheckin[weekKey]) {
+            STATE.weeklyCheckin[weekKey] = { days: [], claimed: false };
+        }
+        if (!STATE.weeklyCheckin[weekKey].days.includes(todayNum)) {
+            STATE.weeklyCheckin[weekKey].days.push(todayNum);
+        }
+        save();
+    },
+    
+    // ----- 提醒顯示 -----
+    async checkAndShowReminder() {
+        // 1. 今天已顯示過 → 跳過
+        if (this.hasShownToday()) {
+            console.log('📅 今日已顯示過簽到提醒，跳過');
+            return;
+        }
+        
+        // 2. 檢查雲端是否已簽到
+        const checkedIn = await this.isCheckedInToday();
+        if (checkedIn) {
+            this.markShownToday();
+            console.log('📅 今日已簽到，標記為已顯示');
+            return;
+        }
+        
+        // 3. 還沒簽到 → 顯示提醒
+        console.log('📅 今日尚未簽到，顯示提醒');
+        setTimeout(() => {
+            showCheckinReminder();
+            this.markShownToday();
+        }, 2000);
+    },
+    
+    // 同步雲端簽到狀態到本地（啟動時呼叫）
+    async syncFromCloud() {
+        const deviceId = STATE.user.device;
+        const today = new Date();
+        const weekStart = getWeekStartDate(today);
+        const weekStartStr = weekStart.toISOString().slice(0, 10);
+        const todayStr = today.toISOString().slice(0, 10);
+        
+        if (!CLOUD_ON) return;
+        
+        try {
+            const response = await fetch(
+                `${SUPABASE_URL}/rest/v1/user_checkins?select=checkin_date&device_id=eq.${deviceId}&checkin_date=gte.${weekStartStr}&checkin_date=lte.${todayStr}`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const days = data.map(item => {
+                const date = new Date(item.checkin_date);
+                const day = date.getDay();
+                return day === 0 ? 7 : day;
+            });
+            
+            // 更新本地 STATE
+            const weekKey = weekStartStr;
+            if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+            STATE.weeklyCheckin[weekKey] = {
+                days: days,
+                claimed: days.length >= 7
+            };
+            
+            // 如果今天已簽到，標記提醒已顯示
+            const todayNum = today.getDay() === 0 ? 7 : today.getDay();
+            if (days.includes(todayNum)) {
+                this.markShownToday();
+            }
+            
+            save();
+            console.log('📅 簽到狀態已同步，本週簽到:', days.length, '天');
+        } catch (e) {
+            console.warn('⚠️ 同步簽到失敗:', e.message);
+        }
+    }
+};
+
+// ============================================================
+// 店鋪快取管理（StoreManager）
+// ============================================================
+const StoreManager = {
+    _cache: null,
+    _cacheTime: 0,
+    _cacheDuration: 3 * 60 * 1000, // 3 分鐘
+    _isLoading: false,
+    _subscription: null,
+    _needsRefresh: false,
+    
+    // 初始化（啟動時呼叫）
+    async init() {
+        await this.load();
+        this.subscribeRealtime();
+        return this._cache;
+    },
+    
+    // 載入店鋪（自動判斷快取）
+    async load(force = false) {
+        if (this._isLoading) {
+            return new Promise(resolve => {
+                const check = setInterval(() => {
+                    if (!this._isLoading) {
+                        clearInterval(check);
+                        resolve(this._cache);
+                    }
+                }, 100);
+            });
+        }
+        
+        // 檢查快取
+        if (!force && this._cache && (Date.now() - this._cacheTime < this._cacheDuration)) {
+            console.log('📦 使用快取店鋪資料');
+            return this._cache;
+        }
+        
+        this._isLoading = true;
+        console.log('📡 讀取雲端店鋪資料');
+        
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/claw_stores?select=*`, {
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const stores = await response.json();
+            
+            this._cache = stores;
+            this._cacheTime = Date.now();
+            
+            // 更新全域 STORES（映射）
+            STORES = stores.map(s => ({
+                id: String(s.id),
+                name: s.name || "未命名店鋪",
+                region: s.region || "旺角",
+                addr: s.addr || "（未填地址）",
+                ig: s.ig || "",
+                fb: s.fb || "",
+                verified: s.status === "verified" ? "verified" : "pending",
+                size: s.size || "中",
+                token: s.token || false,
+                hour24: s.hour24 || false,
+                staff: s.staff || false,
+                machines: s.machines || [],
+                photo: s.photo || "",
+                lat: s.lat || null,
+                lng: s.lng || null,
+                mall: s.mall || null,
+                floor: s.floor || null,
+                submitted_by: s.submitted_by || null,
+                verification_count: s.verification_count || 0,
+                is_verified: s.is_verified || false,
+                address_detail: s.address_detail || '',
+                has_staff: s.has_staff !== undefined ? s.has_staff : null,
+                has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
+                supplement_count: s.supplement_count || 0,
+            }));
+            
+            console.log(`✅ 已載入 ${stores.length} 家店鋪`);
+            return stores;
+        } catch (e) {
+            console.error('❌ 載入店鋪失敗:', e);
+            return this._cache || [];
+        } finally {
+            this._isLoading = false;
+        }
+    },
+    
+    // 訂閱 Realtime 更新
+    subscribeRealtime() {
+        if (this._subscription) {
+            this._subscription.unsubscribe();
+        }
+        if (!supabaseClientInstance) return;
+        
+        this._subscription = supabaseClientInstance
+            .channel('claw_stores_changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'claw_stores' },
+                (payload) => {
+                    console.log('📡 店鋪更新:', payload.eventType);
+                    // 清除快取
+                    this._cache = null;
+                    this._cacheTime = 0;
+                    
+                    // 由 SmartNotification 決定是否通知和刷新
+                    if (window.SmartNotification) {
+                        SmartNotification.handleStoreUpdate(payload);
+                    } else {
+                        // 如果沒有 SmartNotification，簡單處理
+                        if (CURRENT === 'map') {
+                            this.load(true).then(() => {
+                                updateMapMarkers();
+                                updateMapList();
+                            });
+                        }
+                    }
+                }
+            )
+            .subscribe();
+    },
+    
+    // 強制刷新
+    async forceRefresh() {
+        return await this.load(true);
+    },
+    
+    // 清除快取
+    clear() {
+        this._cache = null;
+        this._cacheTime = 0;
+    }
+};
+
+// ============================================================
+// 用戶關注（UserFocus）
+// ============================================================
+const UserFocus = {
+    getFavorites() {
+        return STATE.favStores || [];
+    },
+    getCurrentViewing() {
+        return STATE._currentViewingStore || null;
+    },
+    getFavoriteMachines() {
+        return STATE.favMachines || [];
+    },
+    setCurrentViewing(storeId) {
+        STATE._currentViewingStore = storeId;
+        save();
+    },
+    clearCurrentViewing() {
+        STATE._currentViewingStore = null;
+        save();
+    },
+    isInterested(storeId) {
+        const favorites = this.getFavorites();
+        const current = this.getCurrentViewing();
+        return favorites.includes(storeId) || current === storeId;
+    }
+};
+
+// ============================================================
+// 智能通知（SmartNotification）
+// ============================================================
+const SmartNotification = {
+    _pendingUpdates: [],
+    _timer: null,
+    _notifyFavorites: true,  // 預設開啟
+    
+    // 初始化（訂閱 Realtime）
+    init() {
+        if (!supabaseClientInstance) return;
+        
+        // 訂閱店鋪更新
+        supabaseClientInstance
+            .channel('claw_stores_notify')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'claw_stores' },
+                (payload) => {
+                    this.handleStoreUpdate(payload);
+                }
+            )
+            .subscribe();
+        
+        // 訂閱機台更新
+        supabaseClientInstance
+            .channel('claw_machines_notify')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'claw_machines' },
+                (payload) => {
+                    this.handleMachineUpdate(payload);
+                }
+            )
+            .subscribe();
+    },
+    
+    // 處理店鋪更新
+    handleStoreUpdate(payload) {
+        const storeId = payload.new?.id || payload.old?.id;
+        if (!storeId) return;
+        
+        const isFavorite = UserFocus.getFavorites().includes(storeId);
+        const isViewing = UserFocus.getCurrentViewing() === storeId;
+        
+        // 🔴 收藏的店鋪 → 立即通知
+        if (isFavorite && this._notifyFavorites) {
+            this._notifyFavorite(payload);
+            return;
+        }
+        
+        // 🟡 正在查看的店鋪 → 安靜更新
+        if (isViewing) {
+            this._updateCurrentView(payload);
+            return;
+        }
+        
+        // 🟢 其他 → 合併處理
+        this._queueUpdate(payload);
+    },
+    
+    // 處理機台更新
+    handleMachineUpdate(payload) {
+        const storeId = payload.new?.store_id || payload.old?.store_id;
+        if (!storeId) return;
+        const machineId = payload.new?.id || payload.old?.id;
+        
+        const isFavoriteStore = UserFocus.getFavorites().includes(storeId);
+        const isFavoriteMachine = UserFocus.getFavoriteMachines().includes(machineId);
+        
+        if ((isFavoriteStore || isFavoriteMachine) && this._notifyFavorites) {
+            this._notifyMachine(payload, storeId);
+        }
+    },
+    
+    // ----- 私有方法 -----
+    _notifyFavorite(payload) {
+        const store = payload.new || payload.old;
+        const storeName = store?.name || '店鋪';
+        
+        if (payload.eventType === 'UPDATE') {
+            const oldCount = payload.old?.verification_count || 0;
+            const newCount = payload.new?.verification_count || 0;
+            if (newCount > oldCount) {
+                toast(`⭐ 「${storeName}」認證進度：${newCount}/2`, 'green');
+                this._refreshMap();
+            }
+            if (payload.new?.status === 'verified' && payload.old?.status !== 'verified') {
+                toast(`🎉 你收藏的「${storeName}」已通過認證！`, 'gold');
+                this._refreshMap();
+            }
+        } else if (payload.eventType === 'INSERT') {
+            // 不太可能，但以防萬一
+            toast(`🏪 新店鋪「${storeName}」已加入！`, 'gold');
+            this._refreshMap();
+        }
+    },
+    
+    _updateCurrentView(payload) {
+        const store = payload.new || payload.old;
+        const storeName = store?.name || '店鋪';
+        console.log(`📝 正在查看的「${storeName}」已更新，無聲刷新`);
+        // 如果店鋪頁面打開，更新內容
+        const container = document.getElementById('store-modal-container');
+        if (container) {
+            const currentStore = STORES.find(s => s.id === payload.new?.id);
+            if (currentStore) {
+                setTimeout(() => {
+                    updateStoreContent(currentStore.id);
+                    // 可以顯示一個小提示，但不干擾
+                    // toast(`📝 「${currentStore.name}」已更新`, 'gold');
+                }, 300);
+            }
+        }
+    },
+    
+    _queueUpdate(payload) {
+        this._pendingUpdates.push(payload);
+        if (this._timer) clearTimeout(this._timer);
+        this._timer = setTimeout(() => {
+            this._processQueue();
+        }, 5000);
+    },
+    
+    _processQueue() {
+        if (this._pendingUpdates.length === 0) return;
+        const hasVerification = this._pendingUpdates.some(u => {
+            if (u.eventType !== 'UPDATE') return false;
+            const oldCount = u.old?.verification_count || 0;
+            const newCount = u.new?.verification_count || 0;
+            return newCount > oldCount;
+        });
+        if (hasVerification) {
+            toast(`🔍 ${this._pendingUpdates.length} 個店鋪有更新`, 'gold');
+            this._refreshMap();
+        }
+        this._pendingUpdates = [];
+    },
+    
+    _notifyMachine(payload, storeId) {
+        const store = STORES.find(s => s.id === storeId);
+        const storeName = store?.name || '店鋪';
+        toast(`📢 「${storeName}」的機台已更新`, 'green');
+        this._refreshMap();
+    },
+    
+    _refreshMap() {
+        if (CURRENT === 'map') {
+            setTimeout(() => {
+                StoreManager.load(true).then(() => {
+                    updateMapMarkers();
+                    updateMapList();
+                });
+            }, 500);
+        }
+    }
+};
+
+
 function addPoints(n, why) {
   STATE.points = Math.max(0, STATE.points + n);
   save();
@@ -1169,12 +1737,13 @@ function openStoreFromMap(id) {
   if (map) map.closePopup();
   openStore(id);
 }
-function openStore(id, isSwitch) {
-  if (isSwitch === void 0) isSwitch = false;
-  var s = STORES.find(function(x) { return x.id === id; });
-  if (!s) return;
-  if (isSwitch) { updateStoreContent(id); return; }
-  createStoreModal(id);
+function openStore(id, isSwitch = false) {
+    const s = STORES.find(x => x.id === id);
+    if (!s) return;
+    // ✅ 記錄正在查看
+    UserFocus.setCurrentViewing(id);
+    if (isSwitch) { updateStoreContent(id); return; }
+    createStoreModal(id);
 }
 function createStoreModal(id) {
   var s = STORES.find(function(x) { return x.id === id; });
@@ -1276,21 +1845,183 @@ function setRegion(r) {
 }
 function toggleRegionGroup(group) { showView("find"); }
 function toggleMoreRegions(group) { showView("find"); }
+
+// ============================================================
+// 定位引導（LocationGuide）
+// ============================================================
+function openSettings() {
+    window.location.href = 'app-settings:';
+    setTimeout(() => {
+        toast('📍 請找到「Safari 瀏覽器」開啟定位', 'gold');
+    }, 1000);
+}
+
+function openAndroidSettings() {
+    window.location.href = `intent://settings/#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;end`;
+    setTimeout(() => {
+        toast('📍 請在設定中允許定位權限', 'gold');
+    }, 500);
+}
+
+function showIOSLocationGuide() {
+    openModal(`
+        <div class="flex flex-col items-center py-3">
+            <div class="text-5xl mb-2">🔒</div>
+            <h2 class="text-xl font-black text-gold">定位權限已關閉</h2>
+            <p class="text-sm text-white/60 text-center mt-1 px-4">
+                您之前可能選擇了「永不」，需要在 iPhone 設定中重新開啟：
+            </p>
+            <div class="mt-3 w-full text-left text-sm space-y-1.5 px-2">
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">1.</span>
+                    <span class="text-xs">打開 <b class="text-white">設定</b> App</span>
+                </div>
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">2.</span>
+                    <span class="text-xs">點選 <b class="text-white">隱私與安全性</b></span>
+                </div>
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">3.</span>
+                    <span class="text-xs">點選 <b class="text-white">定位服務</b></span>
+                </div>
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">4.</span>
+                    <span class="text-xs">找到 <b class="text-white">Safari 瀏覽器</b></span>
+                </div>
+                <div class="flex items-start gap-3 bg-neongreen/10 rounded-lg p-2 border border-neongreen/20">
+                    <span class="text-neongreen font-bold text-xs">5.</span>
+                    <span class="text-xs text-neongreen">選擇 <b>「使用 App 期間」</b> ✅</span>
+                </div>
+            </div>
+            <div class="mt-3 w-full flex gap-2">
+                <button onclick="openSettings()" 
+                    class="flex-1 rounded-xl bg-gold py-2.5 text-sm text-black font-black">
+                    ⚙️ 跳轉到設定
+                </button>
+                <button onclick="closeModal(); setTimeout(refreshGPS, 500);" 
+                    class="flex-1 rounded-xl border border-neongreen/40 py-2.5 text-sm text-neongreen font-black">
+                    🔄 已設定好
+                </button>
+            </div>
+            <button onclick="closeModal()" 
+                class="mt-2 text-[10px] text-white/30 hover:text-white/60">
+                暫時跳過
+            </button>
+        </div>
+    `);
+}
+
+function showAndroidLocationGuide() {
+    openModal(`
+        <div class="flex flex-col items-center py-3">
+            <div class="text-5xl mb-2">🔒</div>
+            <h2 class="text-xl font-black text-gold">需要定位權限</h2>
+            <p class="text-sm text-white/60 text-center mt-1 px-4">請允許使用位置資訊：</p>
+            <div class="mt-3 w-full text-left text-sm space-y-1.5 px-2">
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">1.</span>
+                    <span class="text-xs">點擊下方「前往設定」</span>
+                </div>
+                <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+                    <span class="text-gold font-bold text-xs">2.</span>
+                    <span class="text-xs">找到 <b class="text-white">位置</b> 權限</span>
+                </div>
+                <div class="flex items-start gap-3 bg-neongreen/10 rounded-lg p-2 border border-neongreen/20">
+                    <span class="text-neongreen font-bold text-xs">3.</span>
+                    <span class="text-xs text-neongreen">選擇 <b>「允許」</b> ✅</span>
+                </div>
+            </div>
+            <div class="mt-3 w-full flex gap-2">
+                <button onclick="openAndroidSettings()" 
+                    class="flex-1 rounded-xl bg-gold py-2.5 text-sm text-black font-black">
+                    ⚙️ 前往設定
+                </button>
+                <button onclick="closeModal(); setTimeout(refreshGPS, 500);" 
+                    class="flex-1 rounded-xl border border-neongreen/40 py-2.5 text-sm text-neongreen font-black">
+                    🔄 已設定好
+                </button>
+            </div>
+            <button onclick="closeModal()" 
+                class="mt-2 text-[10px] text-white/30 hover:text-white/60">
+                暫時跳過
+            </button>
+        </div>
+    `);
+}
+
+// ===== 修改 refreshGPS（整合定位引導） =====
 function refreshGPS() {
-  toast("定位中…", "green");
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      gpsLat = userLocation.lat;
-      gpsLng = userLocation.lng;
-      toast("已更新附近店舖", "green");
-      var region = getRegionFromCoords(userLocation.lat, userLocation.lng);
-      if (region) findState.region = region;
-      showView("find");
-    }, function() { toast("無法定位", "pink");
-      showView("find"); });
-  } else { toast("此裝置不支援定位", "pink");
-    showView("find"); }
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+    toast("定位中…", "green");
+    
+    if (!navigator.geolocation) {
+        toast("此裝置不支援定位", "pink");
+        showView("find");
+        return;
+    }
+    
+    // 先檢查權限（iOS 用 permissions API）
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+            if (result.state === 'denied') {
+                // 權限被拒絕
+                if (isIOS) {
+                    showIOSLocationGuide();
+                } else {
+                    showAndroidLocationGuide();
+                }
+                return;
+            } else if (result.state === 'prompt') {
+                // 未決定，正常請求
+                doLocationRequest();
+            } else if (result.state === 'granted') {
+                doLocationRequest();
+            }
+        }).catch(function() {
+            // 無法檢查權限，直接請求
+            doLocationRequest();
+        });
+    } else {
+        doLocationRequest();
+    }
+}
+
+function doLocationRequest() {
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            gpsLat = userLocation.lat;
+            gpsLng = userLocation.lng;
+            toast("✅ 定位成功！已更新附近店舖", "green");
+            const region = getRegionFromCoords(userLocation.lat, userLocation.lng);
+            if (region) findState.region = region;
+            if (map && mapInitialized) {
+                map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1 });
+                addUserMarker(userLocation.lat, userLocation.lng);
+                updateMapMarkers();
+                updateMapList();
+            }
+            showView("find");
+        },
+        function(err) {
+            const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (err.code === 1) {
+                if (isIOS) {
+                    showIOSLocationGuide();
+                } else {
+                    showAndroidLocationGuide();
+                }
+            } else if (err.code === 2) {
+                toast("📡 GPS 訊號弱，請到室外", "pink");
+            } else if (err.code === 3) {
+                toast("⏱️ 定位超時，請重試", "pink");
+            } else {
+                toast("❌ 定位失敗: " + err.message, "pink");
+            }
+            showView("find");
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
 }
 function getRegionFromCoords(lat, lng) {
   if (lat >= 22.24 && lat <= 22.29 && lng >= 114.14 && lng <= 114.25) {
@@ -1388,21 +2119,24 @@ function loadMoreStores() {
   }
 }
 function closeStoreModal() {
-  var isFromMall = _storeContext && _storeContext.from === 'mall';
-  closeModal();
-  if (isFromMall) {
-    var ctx = _storeContext;
-    requestAnimationFrame(function() {
-      setTimeout(function() {
-        if (ctx && ctx.mallName) {
-          openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
-        }
+    // ✅ 清除正在查看
+    UserFocus.clearCurrentViewing();
+    // 原有的關閉邏輯
+    const isFromMall = _storeContext && _storeContext.from === 'mall';
+    closeModal();
+    if (isFromMall) {
+        const ctx = _storeContext;
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                if (ctx && ctx.mallName) {
+                    openMallModal(ctx.mallName, ctx.highlightId, ctx.floor);
+                }
+                _storeContext = null;
+            }, 50);
+        });
+    } else {
         _storeContext = null;
-      }, 50);
-    });
-  } else {
-    _storeContext = null;
-  }
+    }
 }
 function backToMall() {
   var ctx = _storeContext;
@@ -1456,14 +2190,21 @@ async function submitMachine(sid) {
   closeModal();
   openStore(sid);
 }
+// ===== 修改 toggleFav（收藏時提示通知） =====
 function toggleFav(type, id) {
-  var key = type === "store" ? "favStores" : "favMachines";
-  var arr = STATE[key], i = arr.indexOf(id);
-  if (i >= 0) arr.splice(i, 1);
-  else arr.push(id);
-  save();
-  toast(i >= 0 ? "已取消收藏" : "已收藏", "green");
-  if (type === "store") openStore(id);
+    const key = type === "store" ? "favStores" : "favMachines";
+    const arr = STATE[key];
+    const i = arr.indexOf(id);
+    if (i >= 0) {
+        arr.splice(i, 1);
+        toast("已取消收藏", "pink");
+    } else {
+        arr.push(id);
+        toast("⭐ 已收藏！有更新時會通知你", "green");
+        // 收藏後，如果有更新會透過 SmartNotification 通知
+    }
+    save();
+    if (type === "store") openStore(id);
 }
 function openVerifyForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
@@ -1535,58 +2276,77 @@ function retryVerifyGPS() {
   if (retryBtn) retryBtn.classList.add('hidden');
   grabVerifyGPS();
 }
+// ===== 修改 submitVerification（優化雲端同步） =====
 async function submitVerification(storeId) {
-  var s = STORES.find(function(x) { return x.id === storeId; });
-  if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  var photoBlob = window._cam?.vf;
-  if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
-  if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { toast('請等待 GPS 定位完成', 'pink'); return; }
-  if (s.lat && s.lng) {
-    var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
-    if (distance > 0.2) {
-      toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內認證', 'pink');
-      return;
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    var photoBlob = window._cam?.vf;
+    if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
+    if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { toast('請等待 GPS 定位完成', 'pink'); return; }
+    if (s.lat && s.lng) {
+        var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
+        if (distance > 0.2) {
+            toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內認證', 'pink');
+            return;
+        }
     }
-  }
-  var photoUrl = window._camPreview?.vf || '';
-  if (CLOUD_ON) {
-    try {
-      var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-      photoUrl = await uploadImage(file, 'verifications');
-    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-  }
-  var verification = {
-    store_id: storeId,
-    verifier_id: STATE.user.user_id || STATE.user.device,
-    photo_url: photoUrl,
-    lat: _vfGpsLat,
-    lng: _vfGpsLng,
-    note: document.getElementById('vf-note')?.value.trim() || '',
-    status: 'pending',
-    created_at: new Date().toISOString()
-  };
-  if (!STATE.verifications) STATE.verifications = {};
-  STATE.verifications[storeId] = verification;
-  save();
-  if (CLOUD_ON) cloudInsert('store_verifications', verification);
-  s.verification_count = (s.verification_count || 0) + 1;
-  if (s.verification_count >= 2) {
-    s.verified = 'verified';
-    s.is_verified = true;
-    if (s.submitted_by) {
-      addPoints(35, '認證通過追加獎勵');
-      toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+    var photoUrl = window._camPreview?.vf || '';
+    if (CLOUD_ON) {
+        try {
+            var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+            photoUrl = await uploadImage(file, 'verifications');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
     }
-    updateAchievementStat('store_complete');
-    var regionStat = getRegionStat(s.region);
-    if (regionStat) updateAchievementStat(regionStat);
-  }
-  addPoints(15, '認證店鋪');
-  updateAchievementStat('verify_store');
-  updateStreak();
-  toast('✅ 認證提交成功！獲得 15 積分', 'green');
-  closeModal();
-  openStore(storeId);
+    
+    // ✅ 新增 verifier_device 欄位（方便追蹤）
+    var verification = {
+        store_id: storeId,
+        verifier_id: STATE.user.user_id || STATE.user.device,
+        verifier_device: STATE.user.device,
+        photo_url: photoUrl,
+        lat: _vfGpsLat,
+        lng: _vfGpsLng,
+        note: document.getElementById('vf-note')?.value.trim() || '',
+        status: 'pending',
+        created_at: new Date().toISOString()
+    };
+    
+    // 1. 先更新本地
+    if (!STATE.verifications) STATE.verifications = {};
+    STATE.verifications[storeId] = verification;
+    s.verification_count = (s.verification_count || 0) + 1;
+    save();
+    
+    // 2. 同步到雲端（等待完成）
+    if (CLOUD_ON) {
+        try {
+            await cloudInsert('store_verifications', verification);
+            console.log('✅ 雲端同步成功');
+        } catch (e) {
+            console.warn('⚠️ 雲端同步失敗:', e.message);
+            toast('⚠️ 認證已記錄，但雲端同步失敗，請稍後重試', 'gold');
+        }
+    }
+    
+    // 3. 檢查是否達到 2 個認證（使用本地計數，但建議後續從雲端讀取確認）
+    if (s.verification_count >= 2) {
+        s.verified = 'verified';
+        s.is_verified = true;
+        if (s.submitted_by) {
+            addPoints(35, '認證通過追加獎勵');
+            toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+        }
+        updateAchievementStat('store_complete');
+        var regionStat = getRegionStat(s.region);
+        if (regionStat) updateAchievementStat(regionStat);
+    }
+    
+    addPoints(15, '認證店鋪');
+    updateAchievementStat('verify_store');
+    updateStreak();
+    toast('✅ 認證提交成功！獲得 15 積分', 'green');
+    closeModal();
+    openStore(storeId);
 }
 function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
@@ -2972,44 +3732,7 @@ function updateCheckinStreak() {
   save();
 }
 function doCheckin() {
-  var today = new Date();
-  var dayOfWeek = today.getDay();
-  var weekStart = getWeekStartDate(today);
-  var weekKey = weekStart.toISOString().slice(0, 10);
-  if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
-  if (!STATE.weeklyCheckin[weekKey]) {
-    STATE.weeklyCheckin[weekKey] = {
-      days: [],
-      claimed: false
-    };
-  }
-  var weekData = STATE.weeklyCheckin[weekKey];
-  var todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
-  if (weekData.days.includes(todayNum)) {
-    toast('今日已簽到，明天再來吧！', 'gold');
-    return;
-  }
-  weekData.days.push(todayNum);
-  var daysSigned = weekData.days.length;
-  var bonus = 5;
-  var bonusMsg = '基礎簽到 +5 分';
-  if (daysSigned === 3) {
-    bonus += 5;
-    bonusMsg = '連續 3 天！額外 +5 分 🎉';
-  } else if (daysSigned === 5) {
-    bonus += 5;
-    bonusMsg = '連續 5 天！額外 +5 分 🎉🎉';
-  } else if (daysSigned === 7) {
-    bonus += 15;
-    bonusMsg = '🎊 本週全勤！額外 +15 分 🎊';
-  }
-  STATE.weeklyCheckin[weekKey] = weekData;
-  save();
-  addPoints(bonus, '簽到 (第 ' + daysSigned + ' 天)');
-  updateAchievementStat('checkin', 1);
-  updateStreak();
-  toast('✅ 簽到成功！獲得 ' + bonus + ' 分（' + bonusMsg + '）', 'green');
-  showView('task');
+    CheckinManager.doCheckin();
 }
 function getWeekStartDate(date) {
   var d = new Date(date);
@@ -3028,20 +3751,52 @@ function checkDailyCheckinReminder() {
   }
 }
 function showCheckinReminder() {
-  var progress = getWeeklyCheckinProgress();
-  var dayNames = ['一', '二', '三', '四', '五', '六', '日'];
-  var daysHtml = progress.days.map(function(d) {
-    return '<span class="inline-block w-8 h-8 rounded-full bg-neongreen text-black text-xs font-bold leading-8 text-center mx-0.5">' + dayNames[d - 1] + '</span>';
-  }).join('');
-  var emptyDays = 7 - progress.days.length;
-  for (var i = 0; i < emptyDays; i++) {
-    daysHtml += '<span class="inline-block w-8 h-8 rounded-full bg-white/10 text-white/30 text-xs leading-8 text-center mx-0.5">' + (i + 1) + '</span>';
-  }
-  openModal('\n    <div class="flex flex-col items-center py-4">\n      <div class="text-6xl mb-3">📅</div>\n      <h2 class="text-xl font-black text-gold">今日簽到</h2>\n      <p class="text-xs text-white/40 mt-1">每天簽到累積獎勵</p>\n      \n      <div class="mt-4 flex gap-1">\n        ' + daysHtml + '\n      </div>\n      <p class="text-xs text-white/30 mt-2">本週簽到 ' + progress.days.length + '/7 天</p>\n      \n      <div class="mt-4 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-xs text-white/40">📌 獎勵規則</p>\n        <div class="mt-1 text-[10px] text-white/30 space-y-0.5">\n          <p>✅ 每日簽到：<span class="text-neongreen">+5 分</span></p>\n          <p>🔥 連續 3 天：<span class="text-gold">+5 分</span></p>\n          <p>🔥 連續 5 天：<span class="text-gold">+5 分</span></p>\n          <p>🎊 全勤 7 天：<span class="text-gold">+15 分</span></p>\n        </div>\n      </div>\n      \n      <button onclick="doCheckinFromReminder()" \n        class="mt-4 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold">\n        📝 立即簽到\n      </button>\n      <button onclick="closeModal()" \n        class="mt-2 text-xs text-white/30 hover:text-white/60 transition-colors">\n        稍後再說\n      </button>\n    </div>\n  ');
+    // 從雲端獲取簽到進度（或使用本地）
+    const progress = getWeeklyCheckinProgress(); // 暫時使用本地
+    const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
+    
+    let daysHtml = progress.days.map(d => {
+        return `<span class="inline-block w-8 h-8 rounded-full bg-neongreen text-black text-xs font-bold leading-8 text-center mx-0.5">${dayNames[d-1]}</span>`;
+    }).join('');
+    
+    const emptyDays = 7 - progress.days.length;
+    for (let i = 0; i < emptyDays; i++) {
+        daysHtml += `<span class="inline-block w-8 h-8 rounded-full bg-white/10 text-white/30 text-xs leading-8 text-center mx-0.5">${i+1}</span>`;
+    }
+    
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-6xl mb-3">📅</div>
+            <h2 class="text-xl font-black text-gold">今日簽到</h2>
+            <p class="text-xs text-white/40 mt-1">每天簽到累積獎勵</p>
+            <div class="mt-4 flex gap-1">
+                ${daysHtml}
+            </div>
+            <p class="text-xs text-white/30 mt-2">本週簽到 ${progress.count}/7 天</p>
+            <div class="mt-4 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">
+                <p class="text-xs text-white/40">📌 獎勵規則</p>
+                <div class="mt-1 text-[10px] text-white/30 space-y-0.5">
+                    <p>✅ 每日簽到：<span class="text-neongreen">+5 分</span></p>
+                    <p>🔥 連續 3 天：<span class="text-gold">+5 分</span></p>
+                    <p>🔥 連續 5 天：<span class="text-gold">+5 分</span></p>
+                    <p>🎊 全勤 7 天：<span class="text-gold">+15 分</span></p>
+                </div>
+            </div>
+            <button onclick="doCheckinFromReminder()" 
+                class="mt-4 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold">
+                📝 立即簽到
+            </button>
+            <button onclick="closeModal()" 
+                class="mt-2 text-xs text-white/30 hover:text-white/60 transition-colors">
+                稍後再說
+            </button>
+        </div>
+    `);
 }
+
 function doCheckinFromReminder() {
-  closeModal();
-  doCheckin();
+    closeModal();
+    CheckinManager.doCheckin();
 }
 renderPoints();
 function initPullToRefresh() {
@@ -3774,46 +4529,72 @@ function doReview() { var d = daily(); if (d.review >= 3) return toast("已滿 3
   addPoints(10, "審核");
   if (d.review === 3) addPoints(30, "滿3追加");
   showView("task"); }
+// ===== 修改 initApp（加入管理器初始化） =====
 (async function initApp() {
-  console.log('🚀 爪爪情報站啟動中...');
-  await loadCloud();
-  await loadMalls();
-  var mapPage = document.getElementById('map-page-container');
-  var overlay = document.getElementById('page-overlay');
-  if (mapPage) mapPage.style.display = 'flex';
-  if (overlay) overlay.style.display = 'none';
-  setTimeout(function() { initMap(); }, 300);
-  setTimeout(function() { updateMapList(); }, 500);
-  setTimeout(initPullToRefresh, 500);
-  setTimeout(checkDailyCheckinReminder, 2000);
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      gpsLat = userLocation.lat;
-      gpsLng = userLocation.lng;
-      console.log('✅ 自動定位成功:', userLocation);
-      if (map && mapInitialized) {
-        map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
-        addUserMarker(userLocation.lat, userLocation.lng);
-        updateMapMarkers();
-        updateMapList();
-      } else {
-        console.log('📍 定位成功，等待地圖初始化');
-        setTimeout(function() {
-          if (map && mapInitialized && userLocation) {
-            map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
-            addUserMarker(userLocation.lat, userLocation.lng);
-            updateMapMarkers();
-            updateMapList();
-          }
-        }, 1000);
-      }
-    }, function(err) { console.log('⚠️ 自動定位失敗，使用預設香港中心點'); }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
-  } else {
-    console.log('⚠️ 此裝置不支援 GPS 定位');
-  }
-  console.log('🚀 爪爪情報站啟動完成！');
+    console.log('🚀 爪爪情報站啟動中...');
+    await loadCloud();
+    await loadMalls();
+    
+    // ✅ 初始化店鋪快取
+    await StoreManager.init();
+    
+    // ✅ 初始化智能通知
+    SmartNotification.init();
+    
+    // ✅ 同步簽到狀態
+    await CheckinManager.syncFromCloud();
+    
+    // ✅ 檢查簽到提醒（延遲）
+    setTimeout(() => {
+        CheckinManager.checkAndShowReminder();
+    }, 2000);
+    
+    // ... 原有地圖初始化等 ...
+    const mapPage = document.getElementById('map-page-container');
+    const overlay = document.getElementById('page-overlay');
+    if (mapPage) mapPage.style.display = 'flex';
+    if (overlay) overlay.style.display = 'none';
+    
+    setTimeout(() => { initMap(); }, 300);
+    setTimeout(() => { updateMapList(); }, 500);
+    setTimeout(initPullToRefresh, 500);
+    
+    // 定位
+    if (navigator.geolocation) {
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            console.log('📱 iOS 裝置：定位需要用戶點擊觸發');
+            setTimeout(() => {
+                toast('📍 請點擊「重新定位」按鈕獲取位置', 'gold');
+            }, 1500);
+        } else {
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    gpsLat = userLocation.lat;
+                    gpsLng = userLocation.lng;
+                    console.log('✅ 自動定位成功:', userLocation);
+                    if (map && mapInitialized) {
+                        map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
+                        addUserMarker(userLocation.lat, userLocation.lng);
+                        updateMapMarkers();
+                        updateMapList();
+                    }
+                },
+                function(err) {
+                    console.log('⚠️ 自動定位失敗:', err.message);
+                    toast('📍 請點擊「重新定位」按鈕獲取位置', 'gold');
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+            );
+        }
+    } else {
+        console.log('⚠️ 此裝置不支援 GPS 定位');
+    }
+    
+    console.log('🚀 爪爪情報站啟動完成！');
 })();
+
 function injectManifest() {
   var icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' rx='96' fill='%23000000'/%3E%3Ctext x='50%25' y='55%25' font-size='260' text-anchor='middle' dominant-baseline='middle'%3E🕹️%3C/text%3E%3C/svg%3E";
   var manifest = { name: "爪爪情報站", short_name: "爪爪情報", description: "香港夾娃娃店實時情報", start_url: ".", display: "standalone", background_color: "#000000", theme_color: "#000000", orientation: "portrait", icons: [{ src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" }, { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }] };
