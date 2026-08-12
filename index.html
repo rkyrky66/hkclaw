@@ -2738,85 +2738,98 @@ function retryVerifyGPS() {
   grabVerifyGPS();
 }
 
+// ============================================================
+// 認證店鋪 (提交認證到 store_verifications)
+// ============================================================
 async function submitVerification(storeId) {
-  var s = STORES.find(function(x) { return x.id === storeId; });
-  if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  var photoBlob = window._cam?.vf;
-  if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
-  if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { toast('請等待 GPS 定位完成', 'pink'); return; }
-  if (s.lat && s.lng) {
-    var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
-    if (distance > 0.2) {
-      toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內認證', 'pink');
-      return;
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    var photoBlob = window._cam?.vf;
+    if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
+    if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { toast('請等待 GPS 定位完成', 'pink'); return; }
+    if (s.lat && s.lng) {
+        var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
+        if (distance > 0.2) {
+            toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內認證', 'pink');
+            return;
+        }
     }
-  }
-  var photoUrl = window._camPreview?.vf || '';
-  if (CLOUD_ON) {
-    try {
-      var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-      photoUrl = await uploadImage(file, 'verifications');
-    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-  }
-  
-  var verification = {
-    store_id: storeId,
-    verifier_id: STATE.user.user_id || STATE.user.device,
-    verifier_device: STATE.user.device,
-    photo_url: photoUrl,
-    lat: _vfGpsLat,
-    lng: _vfGpsLng,
-    note: document.getElementById('vf-note')?.value.trim() || '',
-    status: 'pending',
-    created_at: new Date().toISOString()
-  };
-  
-  if (!STATE.verifications) STATE.verifications = {};
-  STATE.verifications[storeId] = verification;
-  s.verification_count = (s.verification_count || 0) + 1;
-  save();
-  
-  function isColdRegion(region) {
-    var regionStores = STORES.filter(function(s) { return s.region === region; });
-    return regionStores.length < 5;
-  }
-  
-  if (s.region && isColdRegion(s.region)) {
-    var state = getAchievementState();
-    if (!state.stats.cold_region_verify) state.stats.cold_region_verify = 0;
-    state.stats.cold_region_verify += 1;
+    var photoUrl = window._camPreview?.vf || '';
+    if (CLOUD_ON) {
+        try {
+            var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+            photoUrl = await uploadImage(file, 'verifications');
+        } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+    }
+    
+    // ✅ 儲存認證到 store_verifications 表
+    var verification = {
+        store_id: storeId,
+        verifier_device: STATE.user.device,
+        verifier_user_id: STATE.user.user_id || null,
+        verifier_name: STATE.user.name || '匿名用戶',
+        photo_url: photoUrl,
+        lat: _vfGpsLat,
+        lng: _vfGpsLng,
+        note: document.getElementById('vf-note')?.value.trim() || '',
+        status: 'pending',
+        created_at: new Date().toISOString()
+    };
+    
+    // 1. 儲存到本地
+    if (!STATE.verifications) STATE.verifications = {};
+    STATE.verifications[storeId] = verification;
+    s.verification_count = (s.verification_count || 0) + 1;
     save();
-    checkAchievements();
-  }
-  
-  if (CLOUD_ON) {
-    try {
-      await cloudInsert('store_verifications', verification);
-      console.log('✅ 雲端同步成功');
-    } catch (e) {
-      console.warn('⚠️ 雲端同步失敗:', e.message);
-      toast('⚠️ 認證已記錄，但雲端同步失敗，請稍後重試', 'gold');
+    
+    // 2. 同步到雲端
+    if (CLOUD_ON) {
+        try {
+            await cloudInsert('store_verifications', verification);
+            console.log('✅ 認證已同步到雲端');
+            
+            // 檢查是否達到 2 人認證 (觸發器會自動建立 verification_reviews)
+            // 但我們也在這裡檢查並通知
+            const { data: countData } = await fetch(
+                `${SUPABASE_URL}/rest/v1/store_verifications?select=id&store_id=eq.${storeId}&status=eq.pending&count=exact`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                }
+            );
+            
+            // 如果 count 達到 2，通知管理員
+            if (countData && countData.length >= 2) {
+                toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
+            }
+            
+        } catch (e) {
+            console.warn('⚠️ 認證雲端同步失敗:', e.message);
+            toast('⚠️ 認證已記錄，但雲端同步失敗，請稍後重試', 'gold');
+        }
     }
-  }
-  
-  if (s.verification_count >= 2) {
-    s.verified = 'verified';
-    s.is_verified = true;
-    if (s.submitted_by) {
-      await addPoints(35, '認證通過追加獎勵');
-      toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+    
+    // 3. 檢查是否達到 2 個認證 (本地邏輯)
+    if (s.verification_count >= 2) {
+        s.verified = 'verified';
+        s.is_verified = true;
+        if (s.submitted_by) {
+            await addPoints(35, '認證通過追加獎勵');
+            toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+        }
+        updateAchievementStat('store_complete');
+        var regionStat = getRegionStat(s.region);
+        if (regionStat) updateAchievementStat(regionStat);
     }
-    updateAchievementStat('store_complete');
-    var regionStat = getRegionStat(s.region);
-    if (regionStat) updateAchievementStat(regionStat);
-  }
-  
-  await addPoints(15, '認證店鋪');
-  updateAchievementStat('verify_store');
-  updateStreak();
-  toast('✅ 認證提交成功！獲得 15 積分', 'green');
-  closeModal();
-  openStore(storeId);
+    
+    await addPoints(15, '認證店鋪');
+    updateAchievementStat('verify_store');
+    updateStreak();
+    toast('✅ 認證提交成功！獲得 15 積分', 'green');
+    closeModal();
+    openStore(storeId);
 }
 
 function getRegionStat(region) {

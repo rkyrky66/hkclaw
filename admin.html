@@ -344,6 +344,7 @@
         .status-badge.rejected { background: rgba(255,0,127,0.15); color: var(--danger); }
         .status-badge.field-suspicious { background: rgba(255,184,0,0.25); color: var(--warning); border: 1px solid var(--warning); }
         .status-badge.field-confirmed { background: rgba(0,255,0,0.15); color: var(--success); border: 1px solid var(--success); }
+        .status-badge.missing { background: rgba(255,0,127,0.15); color: var(--danger); border: 1px dashed var(--danger); }
         
         .btn-sm {
             padding: 4px 12px;
@@ -388,7 +389,7 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 24px;
-            max-width: 700px;
+            max-width: 800px;
             width: 95%;
             max-height: 85vh;
             overflow-y: auto;
@@ -475,9 +476,9 @@
             margin-bottom: 4px;
             background: rgba(255,255,255,0.02);
         }
-        .field-item .field-name { font-weight: 600; font-size: 13px; }
+        .field-item .field-name { font-weight: 600; font-size: 13px; min-width: 80px; }
         .field-item .field-value { font-size: 13px; color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .field-item .field-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .field-item .field-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap; }
         .field-item .field-status {
             font-size: 11px;
             padding: 2px 10px;
@@ -487,15 +488,68 @@
         .field-item .field-status.status-pending { background: rgba(255,255,255,0.05); color: var(--text-muted); }
         .field-item .field-status.status-confirmed { background: rgba(0,255,0,0.15); color: var(--success); }
         .field-item .field-status.status-suspicious { background: rgba(255,184,0,0.2); color: var(--warning); }
-        .field-item .field-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+        .field-item .field-status.status-missing { background: rgba(255,0,127,0.15); color: var(--danger); }
+        .field-item .field-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--warning); }
         .field-item.border-suspicious { border-color: var(--warning); background: rgba(255,184,0,0.05); }
         .field-item.border-confirmed { border-color: var(--success); background: rgba(0,255,0,0.03); }
+        .field-item.border-missing { border-color: var(--danger); background: rgba(255,0,127,0.03); border-style: dashed; }
         
-        .field-group-label {
+        .section-header {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 16px 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .verification-compare {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 12px 0;
+        }
+        .verification-compare .compare-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 12px;
+            text-align: center;
+        }
+        .verification-compare .compare-card .label {
             font-size: 12px;
             color: var(--text-muted);
-            margin: 12px 0 6px 0;
-            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .verification-compare .compare-card .photo {
+            width: 100%;
+            max-height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 4px 0;
+        }
+        .verification-compare .compare-card .gps {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .verification-compare .compare-card .flag-checkbox {
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .verification-compare .compare-card .flag-checkbox input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--danger);
+        }
+        .verification-compare .compare-card.border-suspicious {
+            border-color: var(--danger);
+            background: rgba(255,0,127,0.05);
         }
         
         .sidebar-overlay {
@@ -518,6 +572,7 @@
             .login-box { padding: 32px 20px; margin: 16px; }
             .field-item { flex-wrap: wrap; gap: 4px; }
             .field-item .field-value { max-width: 100px; }
+            .verification-compare { grid-template-columns: 1fr; }
         }
         @media (max-width: 480px) {
             .field-item .field-value { max-width: 60px; }
@@ -590,6 +645,10 @@
                     <i class="fas fa-store"></i><span>新店審核</span>
                     <span class="badge badge-warning" id="badge-stores">0</span>
                 </li>
+                <li class="nav-item" data-tab="verifications" onclick="switchTab('verifications')">
+                    <i class="fas fa-check-double"></i><span>認證審核</span>
+                    <span class="badge badge-warning" id="badge-verifications">0</span>
+                </li>
                 <li class="nav-item" data-tab="flagged" onclick="switchTab('flagged')">
                     <i class="fas fa-exclamation-triangle"></i><span>⚠️ 存疑清單</span>
                     <span class="badge badge-danger" id="badge-flagged">0</span>
@@ -655,19 +714,17 @@
 
 <script>
 // ============================================================
-// ✅ 修復：Supabase 初始化 (使用正確的語法)
+// Supabase 初始化
 // ============================================================
 var SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
 var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-// 檢查 supabase 是否已載入
 var sb = null;
 if (typeof supabase !== 'undefined' && supabase.createClient) {
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 } else if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 } else {
-    // 如果還是沒有，顯示錯誤
     document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;color:#fff;font-family:sans-serif;text-align:center;padding:20px;"><div><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h2 style="color:#D4AF37;">Supabase SDK 載入失敗</h2><p style="color:#a0a0a0;margin-top:8px;">請檢查網路連線後重新整理頁面</p><button onclick="location.reload()" style="margin-top:16px;padding:10px 30px;background:#D4AF37;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;">重新整理</button></div></div>';
     throw new Error('Supabase SDK 載入失敗');
 }
@@ -680,7 +737,6 @@ var currentTab = 'dashboard';
 var modalCallback = null;
 var isLoggingIn = false;
 var currentViewStoreId = null;
-var currentFieldFlags = {};
 
 // ============================================================
 // 工具函數
@@ -730,7 +786,6 @@ function closeSidebar() {
     overlay.classList.remove('show');
 }
 
-// 點擊其他地方關閉側邊欄
 document.addEventListener('click', function(e) {
     var sidebar = document.getElementById('sidebar');
     var toggleBtn = document.querySelector('.btn-toggle-sidebar');
@@ -745,11 +800,7 @@ document.addEventListener('click', function(e) {
 
 function showLoading(show) {
     var el = document.getElementById('login-loading');
-    if (show) {
-        el.classList.add('show');
-    } else {
-        el.classList.remove('show');
-    }
+    if (show) { el.classList.add('show'); } else { el.classList.remove('show'); }
 }
 
 function showLoginError(message) {
@@ -763,14 +814,11 @@ function hideLoginError() {
 }
 
 // ============================================================
-// Google OAuth 登入
+// 認證
 // ============================================================
 function handleGoogleLogin() {
     if (isLoggingIn) return;
-    if (!sb) {
-        showLoginError('Supabase 服務尚未初始化，請重新整理頁面');
-        return;
-    }
+    if (!sb) { showLoginError('Supabase 服務尚未初始化'); return; }
     isLoggingIn = true;
     hideLoginError();
     showLoading(true);
@@ -790,18 +838,12 @@ function handleGoogleLogin() {
     });
 }
 
-// ============================================================
-// 密碼登入
-// ============================================================
 function handlePasswordLogin(e) {
     e.preventDefault();
     hideLoginError();
     var email = document.getElementById('login-email').value.trim();
     var password = document.getElementById('login-password').value.trim();
-    if (!email || !password) {
-        showLoginError('請輸入電子郵件和密碼');
-        return;
-    }
+    if (!email || !password) { showLoginError('請輸入電子郵件和密碼'); return; }
     showLoading(true);
     sb.auth.signInWithPassword({ email: email, password: password })
         .then(function(result) {
@@ -814,9 +856,6 @@ function handlePasswordLogin(e) {
         });
 }
 
-// ============================================================
-// 登入成功處理
-// ============================================================
 function handleSuccessfulLogin(user) {
     return sb
         .from('user_profiles')
@@ -825,7 +864,6 @@ function handleSuccessfulLogin(user) {
         .single()
         .then(function(result) {
             if (result.error) {
-                // 如果找不到 profile，嘗試建立
                 return sb
                     .from('user_profiles')
                     .insert({
@@ -886,9 +924,6 @@ function handleLogout() {
         });
 }
 
-// ============================================================
-// OAuth 回調處理
-// ============================================================
 function handleOAuthCallback() {
     var hash = window.location.hash;
     if (hash && hash.indexOf('access_token') !== -1) {
@@ -953,11 +988,25 @@ function switchTab(tab) {
             el.classList.remove('active');
         }
     }
-    var titles = { dashboard: '儀表板', stores: '新店審核', flagged: '⚠️ 存疑清單', users: '用戶管理', audit: '審計日誌' };
+    var titles = {
+        dashboard: '儀表板',
+        stores: '新店審核',
+        verifications: '認證審核',
+        flagged: '⚠️ 存疑清單',
+        users: '用戶管理',
+        audit: '審計日誌'
+    };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
     
-    var loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
+    var loaders = {
+        dashboard: loadDashboard,
+        stores: loadStores,
+        verifications: loadVerifications,
+        flagged: loadFlagged,
+        users: loadUsers,
+        audit: loadAudit
+    };
     if (loaders[tab]) loaders[tab]();
 }
 
@@ -971,25 +1020,28 @@ function loadDashboard() {
     Promise.all([
         sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
         sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
-        sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
+        sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed'),
+        sb.from('verification_reviews').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending')
     ])
     .then(function(results) {
         var storesCount = results[0];
         var flaggedCount = results[1];
         var confirmedCount = results[2];
+        var verificationsCount = results[3];
         
         document.getElementById('stat-pending').textContent = storesCount.count || 0;
         document.getElementById('stat-flagged').textContent = flaggedCount.count || 0;
         document.getElementById('stat-confirmed').textContent = confirmedCount.count || 0;
         document.getElementById('badge-stores').textContent = storesCount.count || 0;
         document.getElementById('badge-flagged').textContent = flaggedCount.count || 0;
+        document.getElementById('badge-verifications').textContent = verificationsCount.count || 0;
         
         container.innerHTML = 
             '<div class="dashboard-grid">' +
                 '<div class="stat-card"><div class="number gold">' + (storesCount.count || 0) + '</div><div class="label">🏪 待審核店鋪</div></div>' +
+                '<div class="stat-card"><div class="number yellow">' + (verificationsCount.count || 0) + '</div><div class="label">🔍 待審核認證</div></div>' +
                 '<div class="stat-card"><div class="number red">' + (flaggedCount.count || 0) + '</div><div class="label">⚠️ 存疑項目</div></div>' +
                 '<div class="stat-card"><div class="number green">' + (confirmedCount.count || 0) + '</div><div class="label">✅ 已確認</div></div>' +
-                '<div class="stat-card"><div class="number">' + ((storesCount.count || 0) + (confirmedCount.count || 0)) + '</div><div class="label">🏪 總店鋪</div></div>' +
             '</div>' +
             '<div class="table-container">' +
                 '<table><thead><tr><th>店鋪名稱</th><th>地區</th><th>狀態</th><th>操作</th></tr></thead>' +
@@ -1027,7 +1079,7 @@ function loadDashboard() {
 }
 
 // ============================================================
-// 新店審核
+// 新店審核清單
 // ============================================================
 function loadStores() {
     var container = document.getElementById('tab-content');
@@ -1041,6 +1093,34 @@ function loadStores() {
         .then(function(result) {
             if (result.error) throw result.error;
             var data = result.data || [];
+            
+            // 獲取每個店鋪的欄位狀態
+            var promises = data.map(function(s) {
+                return sb
+                    .from('field_status')
+                    .select('status')
+                    .eq('table_name', 'claw_stores')
+                    .eq('record_id', s.id)
+                    .then(function(fsResult) {
+                        var statuses = fsResult.data || [];
+                        var hasSuspicious = false;
+                        var hasPending = false;
+                        var hasMissing = false;
+                        for (var i = 0; i < statuses.length; i++) {
+                            if (statuses[i].status === 'suspicious') hasSuspicious = true;
+                            if (statuses[i].status === 'pending') hasPending = true;
+                            if (statuses[i].status === 'missing') hasMissing = true;
+                        }
+                        s._hasSuspicious = hasSuspicious;
+                        s._hasPending = hasPending;
+                        s._hasMissing = hasMissing;
+                        return s;
+                    });
+            });
+            
+            return Promise.all(promises);
+        })
+        .then(function(data) {
             var html = 
                 '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
                     '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + data.length + ' 間待審核店鋪</span>' +
@@ -1048,20 +1128,31 @@ function loadStores() {
                 '</div>' +
                 '<div class="table-container">' +
                     '<table>' +
-                        '<thead><tr><th>店名</th><th>地區</th><th>提交者</th><th>狀態</th><th>欄位狀態</th><th>操作</th></tr></thead>' +
+                        '<thead><tr><th>店名</th><th>地區</th><th>首發者</th><th>狀態</th><th>操作</th></tr></thead>' +
                         '<tbody>';
             
             if (data.length === 0) {
-                html += '<tr><td colspan="6" class="empty-state">🎉 沒有待審核的店鋪</td></tr>';
+                html += '<tr><td colspan="5" class="empty-state">🎉 沒有待審核的店鋪</td></tr>';
             } else {
                 for (var i = 0; i < data.length; i++) {
                     var s = data[i];
+                    var statusText = '⏳ 待查閱';
+                    var statusClass = 'pending';
+                    if (s._hasSuspicious) {
+                        statusText = '⚠️ 部分存疑';
+                        statusClass = 'suspicious';
+                    } else if (s._hasMissing && !s._hasPending) {
+                        statusText = '❓ 待補充';
+                        statusClass = 'missing';
+                    } else if (!s._hasPending && !s._hasSuspicious && !s._hasMissing) {
+                        statusText = '✅ 已確認';
+                        statusClass = 'confirmed';
+                    }
                     html += '<tr>' +
                         '<td><strong>' + s.name + '</strong></td>' +
                         '<td>' + (s.region || '未設定') + '</td>' +
                         '<td>' + (s.submitted_by || '未知') + '</td>' +
-                        '<td><span class="status-badge ' + (s.admin_overall_status || 'pending') + '">' + (s.admin_overall_status || '待審核') + '</span></td>' +
-                        '<td><span class="status-badge ' + (s.admin_overall_status === 'suspicious' ? 'field-suspicious' : 'pending') + '">' + (s.admin_overall_status === 'suspicious' ? '⚠️ 有欄位存疑' : '待檢查') + '</span></td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
                         '<td><button class="btn-sm primary" onclick="viewStoreDetail(\'' + s.id + '\')">📋 詳細檢視</button></td>' +
                     '</tr>';
                 }
@@ -1075,7 +1166,7 @@ function loadStores() {
 }
 
 // ============================================================
-// 完整店鋪檢視 (含欄位級存疑)
+// 詳細檢視 (新店審核)
 // ============================================================
 function viewStoreDetail(storeId) {
     currentViewStoreId = storeId;
@@ -1097,58 +1188,88 @@ function viewStoreDetail(storeId) {
                 .then(function(fsResult) {
                     var fieldStatuses = fsResult.data || [];
                     var fieldStatusMap = {};
+                    var missingFields = [];
                     for (var i = 0; i < fieldStatuses.length; i++) {
                         fieldStatusMap[fieldStatuses[i].field_name] = fieldStatuses[i].status;
+                        if (fieldStatuses[i].status === 'missing') {
+                            missingFields.push(fieldStatuses[i].field_name);
+                        }
                     }
                     
-                    var fields = [
+                    // 定義欄位 (分為首發者必填和補充者選填)
+                    var firstSubmitFields = [
                         { key: 'name', label: '店名', value: store.name || '未填' },
                         { key: 'region', label: '地區', value: store.region || '未填' },
+                        { key: 'photo', label: '照片', value: store.photo || '無照片' }
+                    ];
+                    
+                    var supplementFields = [
                         { key: 'addr', label: '地址', value: store.addr || '未填' },
                         { key: 'address_detail', label: '詳細地址', value: store.address_detail || '未填' },
                         { key: 'size', label: '規模', value: store.size || '未填' },
                         { key: 'has_staff', label: '有場務', value: store.has_staff !== undefined ? (store.has_staff ? '有' : '無') : '未填' },
                         { key: 'has_e_coin', label: '電子兌幣', value: store.has_e_coin !== undefined ? (store.has_e_coin ? '有' : '無') : '未填' },
-                        { key: 'photo', label: '照片', value: store.photo || '無照片' },
                         { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' }
                     ];
                     
-                    var hasSuspicious = false;
-                    var allConfirmed = true;
-                    var statusKeys = Object.keys(fieldStatusMap);
-                    for (var i = 0; i < statusKeys.length; i++) {
-                        if (fieldStatusMap[statusKeys[i]] === 'suspicious') hasSuspicious = true;
-                        if (fieldStatusMap[statusKeys[i]] !== 'confirmed') allConfirmed = false;
-                    }
-                    if (statusKeys.length === 0) allConfirmed = false;
-                    var overallStatus = hasSuspicious ? 'suspicious' : (allConfirmed ? 'confirmed' : 'pending');
+                    // 判斷首發者和補充者
+                    var firstSubmitter = store.submitted_by || '未知';
+                    var supplementer = store.supplemented_by || '無';
                     
-                    var fieldsHtml = '';
-                    for (var i = 0; i < fields.length; i++) {
-                        var f = fields[i];
-                        var status = fieldStatusMap[f.key] || 'pending';
-                        var statusLabels = {
-                            'pending': '<span class="field-status status-pending">⏳ 待查閱</span>',
-                            'confirmed': '<span class="field-status status-confirmed">✅ 已確認</span>',
-                            'suspicious': '<span class="field-status status-suspicious">⚠️ 存疑</span>'
-                        };
-                        var borderClass = status === 'suspicious' ? 'border-suspicious' : (status === 'confirmed' ? 'border-confirmed' : '');
-                        var isPhoto = f.key === 'photo';
-                        var displayValue = isPhoto && f.value !== '無照片' && f.value !== '未填' ? 
-                            '<img src="' + f.value + '" style="max-height:60px;border-radius:4px;object-fit:cover;" />' : 
-                            f.value;
-                        
-                        fieldsHtml += 
-                            '<div class="field-item ' + borderClass + '" data-field="' + f.key + '">' +
-                                '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' +
-                                    '<input type="checkbox" class="field-checkbox" id="field-' + f.key + '" data-field="' + f.key + '" ' + (status === 'suspicious' ? 'checked' : '') + '>' +
-                                    '<span class="field-name">' + f.label + '</span>' +
-                                    '<span class="field-value">' + displayValue + '</span>' +
-                                '</div>' +
-                                '<div class="field-actions">' +
-                                    statusLabels[status] +
-                                '</div>' +
-                            '</div>';
+                    // 計算整體狀態
+                    var hasSuspicious = false;
+                    var hasPending = false;
+                    var hasMissing = false;
+                    for (var key in fieldStatusMap) {
+                        if (fieldStatusMap[key] === 'suspicious') hasSuspicious = true;
+                        if (fieldStatusMap[key] === 'pending') hasPending = true;
+                        if (fieldStatusMap[key] === 'missing') hasMissing = true;
+                    }
+                    
+                    var statusText = '⏳ 待查閱';
+                    var statusClass = 'pending';
+                    if (hasSuspicious) {
+                        statusText = '⚠️ 部分存疑';
+                        statusClass = 'suspicious';
+                    } else if (hasMissing && !hasPending) {
+                        statusText = '❓ 待補充';
+                        statusClass = 'missing';
+                    } else if (!hasPending && !hasSuspicious && !hasMissing) {
+                        statusText = '✅ 已完整確認';
+                        statusClass = 'confirmed';
+                    }
+                    
+                    function renderFields(fields, label, statusMap) {
+                        var html = '<div class="section-header">' + label + '</div>';
+                        for (var i = 0; i < fields.length; i++) {
+                            var f = fields[i];
+                            var status = statusMap[f.key] || 'pending';
+                            var statusLabels = {
+                                'pending': '<span class="field-status status-pending">⏳ 待查閱</span>',
+                                'confirmed': '<span class="field-status status-confirmed">✅ 已確認</span>',
+                                'suspicious': '<span class="field-status status-suspicious">⚠️ 存疑</span>',
+                                'missing': '<span class="field-status status-missing">❓ 待填</span>'
+                            };
+                            var borderClass = status === 'suspicious' ? 'border-suspicious' : (status === 'confirmed' ? 'border-confirmed' : (status === 'missing' ? 'border-missing' : ''));
+                            var isPhoto = f.key === 'photo';
+                            var displayValue = isPhoto && f.value !== '無照片' && f.value !== '未填' ? 
+                                '<img src="' + f.value + '" style="max-height:60px;border-radius:4px;object-fit:cover;" />' : 
+                                f.value;
+                            var isChecked = status === 'suspicious' ? 'checked' : '';
+                            
+                            html += 
+                                '<div class="field-item ' + borderClass + '" data-field="' + f.key + '">' +
+                                    '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' +
+                                        '<input type="checkbox" class="field-checkbox" id="field-' + f.key + '" data-field="' + f.key + '" ' + isChecked + '>' +
+                                        '<span class="field-name">' + f.label + '</span>' +
+                                        '<span class="field-value">' + displayValue + '</span>' +
+                                    '</div>' +
+                                    '<div class="field-actions">' +
+                                        statusLabels[status] +
+                                    '</div>' +
+                                '</div>';
+                        }
+                        return html;
                     }
                     
                     var modalHtml = 
@@ -1156,23 +1277,27 @@ function viewStoreDetail(storeId) {
                             '<div>' +
                                 '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
                                 '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
-                                    '<span class="status-badge ' + overallStatus + '">' + (overallStatus === 'suspicious' ? '⚠️ 有存疑欄位' : (overallStatus === 'confirmed' ? '✅ 已完整確認' : '⏳ 待審核')) + '</span>' +
+                                    '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
                                     '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
                                 '</div>' +
                             '</div>' +
                             '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-                                '<button class="btn-sm primary" onclick="confirmAllFields(\'' + storeId + '\')">✅ 全部確認</button>' +
-                                '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中欄位為存疑</button>' +
+                                '<button class="btn-sm primary" onclick="confirmReviewed(\'' + storeId + '\')">✅ 已查閱</button>' +
+                                '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中為存疑</button>' +
                             '</div>' +
                         '</div>' +
+                        '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
+                            '<span>📌 首發者: ' + firstSubmitter + '</span>' +
+                            '<span>📌 補充者: ' + supplementer + '</span>' +
+                            '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
+                        '</div>' +
                         '<div style="margin-top:12px;">' +
-                            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中欄位為存疑」 | 綠色=已確認 | 黃色=存疑 | 灰色=待查閱</div>' +
-                            fieldsHtml +
+                            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +
+                            renderFields(firstSubmitFields, '📌 首發者提交', fieldStatusMap) +
+                            renderFields(supplementFields, '📌 補充者提交', fieldStatusMap) +
                         '</div>' +
                         '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
                             '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
-                                '<span style="font-size:12px;color:var(--text-muted);">📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
-                                '<span style="font-size:12px;color:var(--text-muted);">| 提交者: ' + (store.submitted_by || '未知') + '</span>' +
                                 (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
                             '</div>' +
                         '</div>';
@@ -1186,37 +1311,105 @@ function viewStoreDetail(storeId) {
 }
 
 // ============================================================
-// 全部確認
+// 已查閱 - 確認所有待查閱欄位
 // ============================================================
-function confirmAllFields(storeId) {
-    if (!confirm('確定要確認此店鋪的所有欄位嗎？')) return;
+function confirmReviewed(storeId) {
+    if (!confirm('確定要將所有「待查閱」欄位標記為「已確認」嗎？\n(被勾選存疑的欄位將保持存疑)')) return;
     
-    var fields = ['name', 'region', 'addr', 'address_detail', 'size', 'has_staff', 'has_e_coin', 'photo', 'submitted_by'];
-    var promises = [];
-    
-    // 更新店鋪整體狀態
-    promises.push(
-        sb.from('claw_stores').update({ admin_overall_status: 'confirmed' }).eq('id', storeId)
-    );
-    
-    // 更新所有欄位狀態
-    for (var i = 0; i < fields.length; i++) {
-        promises.push(
-            sb.from('field_status').upsert({
-                table_name: 'claw_stores',
-                record_id: storeId,
-                field_name: fields[i],
-                status: 'confirmed',
-                flagged_by: currentUser ? currentUser.display_name : 'admin',
-                resolved: true,
-                resolved_at: new Date().toISOString()
-            }, { onConflict: 'table_name, record_id, field_name' })
-        );
+    // 獲取所有欄位的當前狀態和勾選狀態
+    var checkboxes = document.querySelectorAll('.field-checkbox');
+    var flaggedFields = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            flaggedFields.push(checkboxes[i].dataset.field);
+        }
     }
     
-    Promise.all(promises)
+    sb
+        .from('field_status')
+        .select('field_name, status')
+        .eq('table_name', 'claw_stores')
+        .eq('record_id', storeId)
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var fields = result.data || [];
+            
+            var promises = [];
+            for (var i = 0; i < fields.length; i++) {
+                var field = fields[i];
+                var newStatus = field.status;
+                
+                // 如果是待查閱且未被勾選存疑，改為已確認
+                if (field.status === 'pending') {
+                    if (flaggedFields.indexOf(field.field_name) === -1) {
+                        newStatus = 'confirmed';
+                    } else {
+                        newStatus = 'suspicious';
+                    }
+                }
+                // 如果已被勾選且是 confirmed，改為 suspicious
+                if (field.status === 'confirmed' && flaggedFields.indexOf(field.field_name) !== -1) {
+                    newStatus = 'suspicious';
+                }
+                // 如果是 missing，保持不變
+                if (field.status === 'missing') {
+                    newStatus = 'missing';
+                }
+                // 如果是 suspicious，保持不變
+                if (field.status === 'suspicious') {
+                    newStatus = 'suspicious';
+                }
+                
+                if (newStatus !== field.status) {
+                    promises.push(
+                        sb.from('field_status').upsert({
+                            table_name: 'claw_stores',
+                            record_id: storeId,
+                            field_name: field.field_name,
+                            status: newStatus,
+                            flagged_by: currentUser ? currentUser.display_name : 'admin',
+                            resolved: (newStatus === 'confirmed'),
+                            resolved_at: (newStatus === 'confirmed') ? new Date().toISOString() : null,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'table_name, record_id, field_name' })
+                    );
+                }
+            }
+            
+            // 檢查是否還有 pending 或 suspicious 欄位
+            var hasPendingOrSuspicious = false;
+            for (var i = 0; i < fields.length; i++) {
+                if (fields[i].status === 'pending' || fields[i].status === 'suspicious') {
+                    hasPendingOrSuspicious = true;
+                    break;
+                }
+            }
+            
+            // 更新店鋪整體狀態
+            var overallStatus = 'confirmed';
+            if (hasPendingOrSuspicious) {
+                overallStatus = 'suspicious';
+            }
+            // 檢查是否有 missing
+            var hasMissing = false;
+            for (var i = 0; i < fields.length; i++) {
+                if (fields[i].status === 'missing') {
+                    hasMissing = true;
+                    break;
+                }
+            }
+            if (hasMissing && !hasPendingOrSuspicious) {
+                overallStatus = 'partial';
+            }
+            
+            promises.push(
+                sb.from('claw_stores').update({ admin_overall_status: overallStatus }).eq('id', storeId)
+            );
+            
+            return Promise.all(promises);
+        })
         .then(function() {
-            toast('✅ 已完整確認此店鋪所有欄位');
+            toast('✅ 已查閱完成');
             closeModal();
             loadStores();
             loadDashboard();
@@ -1267,8 +1460,171 @@ function applyFieldFlags(storeId) {
     Promise.all(promises)
         .then(function() {
             toast('⚠️ 已將 ' + selectedFields.length + ' 個欄位標記為存疑');
-            closeModal();
+            // 重新整理詳細檢視
+            viewStoreDetail(storeId);
             loadStores();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
+}
+
+// ============================================================
+// 認證審核清單
+// ============================================================
+function loadVerifications() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb
+        .from('verification_reviews')
+        .select('*')
+        .eq('admin_status', 'pending')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            
+            // 獲取店鋪名稱
+            var storeIds = [];
+            for (var i = 0; i < data.length; i++) {
+                if (storeIds.indexOf(data[i].store_id) === -1) {
+                    storeIds.push(data[i].store_id);
+                }
+            }
+            
+            if (storeIds.length === 0) {
+                var html = 
+                    '<div style="margin-bottom:12px;">' +
+                        '<span style="font-size:13px;color:var(--text-muted);">🔍 共 0 間店鋪待認證審核</span>' +
+                    '</div>' +
+                    '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的認證</p></div>';
+                container.innerHTML = html;
+                return;
+            }
+            
+            return sb
+                .from('claw_stores')
+                .select('id, name, region')
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    var stores = {};
+                    var storeData = storeResult.data || [];
+                    for (var i = 0; i < storeData.length; i++) {
+                        stores[storeData[i].id] = storeData[i];
+                    }
+                    
+                    var html = 
+                        '<div style="margin-bottom:12px;">' +
+                            '<span style="font-size:13px;color:var(--text-muted);">🔍 共 ' + data.length + ' 間店鋪待認證審核</span>' +
+                            '<button class="btn-sm" onclick="loadVerifications()" style="margin-left:12px;">🔄 重新整理</button>' +
+                        '</div>';
+                    
+                    for (var i = 0; i < data.length; i++) {
+                        var v = data[i];
+                        var store = stores[v.store_id] || { name: '未知店鋪', region: '' };
+                        
+                        // 解析 GPS
+                        var gps1 = v.verifier_1_gps || { lat: 'N/A', lng: 'N/A' };
+                        var gps2 = v.verifier_2_gps || { lat: 'N/A', lng: 'N/A' };
+                        var gpsFirst = v.first_submitter_gps || { lat: 'N/A', lng: 'N/A' };
+                        
+                        html += 
+                            '<div class="verification-compare" style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
+                                    '<div><strong style="font-size:16px;">🏪 ' + store.name + '</strong><span style="font-size:12px;color:var(--text-muted);margin-left:8px;">' + (store.region || '') + '</span></div>' +
+                                    '<div><button class="btn-sm primary" onclick="confirmVerification(\'' + v.id + '\')">✅ 已查閱</button></div>' +
+                                '</div>' +
+                                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+                                    '<div class="compare-card">' +
+                                        '<div class="label">📌 首發者</div>' +
+                                        '<div style="font-size:11px;color:var(--text-muted);">' + (v.first_submitter_name || v.first_submitter_device || '未知') + '</div>' +
+                                        (v.first_submitter_photo ? '<img src="' + v.first_submitter_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
+                                        '<div class="gps">📍 ' + (gpsFirst.lat || 'N/A') + ', ' + (gpsFirst.lng || 'N/A') + '</div>' +
+                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-first-' + v.id + '" data-review="' + v.id + '" data-target="first"> 標記存疑</div>' +
+                                    '</div>' +
+                                    '<div class="compare-card">' +
+                                        '<div class="label">🔍 認證者 1</div>' +
+                                        '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_1_name || v.verifier_1_device || '未知') + '</div>' +
+                                        (v.verifier_1_photo ? '<img src="' + v.verifier_1_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
+                                        '<div class="gps">📍 ' + (gps1.lat || 'N/A') + ', ' + (gps1.lng || 'N/A') + '</div>' +
+                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v1-' + v.id + '" data-review="' + v.id + '" data-target="v1"> 標記存疑</div>' +
+                                    '</div>' +
+                                    '<div class="compare-card">' +
+                                        '<div class="label">🔍 認證者 2</div>' +
+                                        '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_2_name || v.verifier_2_device || '未知') + '</div>' +
+                                        (v.verifier_2_photo ? '<img src="' + v.verifier_2_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
+                                        '<div class="gps">📍 ' + (gps2.lat || 'N/A') + ', ' + (gps2.lng || 'N/A') + '</div>' +
+                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v2-' + v.id + '" data-review="' + v.id + '" data-target="v2"> 標記存疑</div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>';
+                    }
+                    
+                    container.innerHTML = html;
+                });
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+// ============================================================
+// 確認認證審核
+// ============================================================
+function confirmVerification(reviewId) {
+    // 檢查是否有勾選存疑
+    var flagFirst = document.getElementById('flag-first-' + reviewId);
+    var flagV1 = document.getElementById('flag-v1-' + reviewId);
+    var flagV2 = document.getElementById('flag-v2-' + reviewId);
+    
+    var hasFlag = (flagFirst && flagFirst.checked) || (flagV1 && flagV1.checked) || (flagV2 && flagV2.checked);
+    
+    if (hasFlag) {
+        if (!confirm('有認證者被標記存疑，確定要提交審核結果嗎？\n被標記存疑的認證將被視為無效。')) return;
+    } else {
+        if (!confirm('確定此店鋪的所有認證資料正確無誤？')) return;
+    }
+    
+    var updates = {
+        admin_status: 'reviewed',
+        admin_reviewed_at: new Date().toISOString(),
+        flag_first_submitter: flagFirst ? flagFirst.checked : false,
+        flag_verifier_1: flagV1 ? flagV1.checked : false,
+        flag_verifier_2: flagV2 ? flagV2.checked : false
+    };
+    
+    sb
+        .from('verification_reviews')
+        .update(updates)
+        .eq('id', reviewId)
+        .then(function(result) {
+            if (result.error) throw result.error;
+            
+            // 如果有認證者被標記存疑，更新認證記錄狀態
+            var storeId = result.data ? result.data.store_id : null;
+            if (flagV1 && flagV1.checked) {
+                // 標記認證1為存疑
+                sb.from('store_verifications')
+                    .update({ status: 'suspicious' })
+                    .eq('store_id', storeId)
+                    .order('created_at', { ascending: true })
+                    .limit(1)
+                    .then(function() {});
+            }
+            if (flagV2 && flagV2.checked) {
+                // 標記認證2為存疑
+                sb.from('store_verifications')
+                    .update({ status: 'suspicious' })
+                    .eq('store_id', storeId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .then(function() {});
+            }
+            
+            toast('✅ 認證審核完成');
+            loadVerifications();
             loadDashboard();
         })
         .catch(function(error) {
@@ -1293,12 +1649,16 @@ function loadFlagged() {
             if (result.error) throw result.error;
             var data = result.data || [];
             
-            // 獲取店鋪名稱
             var storeIds = [];
             for (var i = 0; i < data.length; i++) {
                 if (storeIds.indexOf(data[i].record_id) === -1) {
                     storeIds.push(data[i].record_id);
                 }
+            }
+            
+            if (storeIds.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有存疑項目</p></div>';
+                return;
             }
             
             return sb
@@ -1322,24 +1682,21 @@ function loadFlagged() {
                                 '<thead><tr><th>店鋪</th><th>欄位</th><th>標記者</th><th>原因</th><th>時間</th><th>操作</th></tr></thead>' +
                                 '<tbody>';
                     
-                    if (data.length === 0) {
-                        html += '<tr><td colspan="6" class="empty-state">🎉 沒有存疑項目</td></tr>';
-                    } else {
-                        for (var i = 0; i < data.length; i++) {
-                            var f = data[i];
-                            html += '<tr>' +
-                                '<td><strong>' + (storeNames[f.record_id] || f.record_id) + '</strong></td>' +
-                                '<td><span class="status-badge field-suspicious">' + f.field_name + '</span></td>' +
-                                '<td>' + (f.flagged_by || '未知') + '</td>' +
-                                '<td>' + (f.note || '無說明') + '</td>' +
-                                '<td>' + new Date(f.flagged_at).toLocaleDateString() + '</td>' +
-                                '<td>' +
-                                    '<button class="btn-sm success" onclick="resolveFieldFlag(\'' + f.id + '\')">✅ 解決</button>' +
-                                    '<button class="btn-sm" onclick="viewStoreDetail(\'' + f.record_id + '\')">📋 查看</button>' +
-                                '</td>' +
-                            '</tr>';
-                        }
+                    for (var i = 0; i < data.length; i++) {
+                        var f = data[i];
+                        html += '<tr>' +
+                            '<td><strong>' + (storeNames[f.record_id] || f.record_id) + '</strong></td>' +
+                            '<td><span class="status-badge field-suspicious">' + f.field_name + '</span></td>' +
+                            '<td>' + (f.flagged_by || '未知') + '</td>' +
+                            '<td>' + (f.note || '無說明') + '</td>' +
+                            '<td>' + new Date(f.flagged_at).toLocaleDateString() + '</td>' +
+                            '<td>' +
+                                '<button class="btn-sm success" onclick="resolveFieldFlag(\'' + f.id + '\')">✅ 解決</button>' +
+                                '<button class="btn-sm" onclick="viewStoreDetail(\'' + f.record_id + '\')">📋 查看</button>' +
+                            '</td>' +
+                        '</tr>';
                     }
+                    
                     html += '</tbody></table></div>';
                     container.innerHTML = html;
                 });
@@ -1349,9 +1706,6 @@ function loadFlagged() {
         });
 }
 
-// ============================================================
-// 解決單一欄位存疑
-// ============================================================
 function resolveFieldFlag(flagId) {
     if (!confirm('確定要解決此存疑項目嗎？')) return;
     
@@ -1485,7 +1839,14 @@ function loadAudit() {
 // ============================================================
 function refreshAll() {
     toast('🔄 重新整理中...');
-    var loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
+    var loaders = {
+        dashboard: loadDashboard,
+        stores: loadStores,
+        verifications: loadVerifications,
+        flagged: loadFlagged,
+        users: loadUsers,
+        audit: loadAudit
+    };
     if (loaders[currentTab]) loaders[currentTab]();
 }
 
