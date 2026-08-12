@@ -2767,13 +2767,12 @@ function checkGpsDistance(store, userLat, userLng, limitKm, storeTypeLabel) {
         message: '✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內'
     };
 }
-
 // 使用範例：
 // var result = checkGpsDistance(store, gpsLat, gpsLng, 0.5, '店鋪');
 // if (!result.valid) { toast(result.message, 'pink'); return; }
 // toast(result.message, 'green');
 // ============================================================
-// 認證店鋪 (區分地鋪/商場鋪)
+// 認證店鋪 (完整版 - 支援後台撤銷)
 // ============================================================
 async function submitVerification(storeId) {
     var s = STORES.find(function(x) { return x.id === storeId; });
@@ -2788,14 +2787,12 @@ async function submitVerification(storeId) {
     }
     
     // ============================================================
-    // ✅ GPS 限區檢查 (區分地鋪/商場鋪)
+    // GPS 限區檢查 (區分地鋪/商場鋪)
     // ============================================================
     var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-    var limitDistance = isMallStore ? 0.5 : 0.3; // 商場鋪 500米，地鋪 300米
+    var limitDistance = isMallStore ? 0.5 : 0.3;
     var storeTypeLabel = isMallStore ? '商場鋪 (GPS 可能不準確)' : '地鋪';
-    var storeDisplayName = isMallStore ? (s.mall || '商場') : s.name;
     
-    // 檢查店鋪是否有 GPS
     if (s.lat && s.lng) {
         var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
         var distanceMeters = Math.round(distance * 1000);
@@ -2805,12 +2802,7 @@ async function submitVerification(storeId) {
             toast('⚠️ 你距離該' + storeTypeLabel + ' ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內認證', 'pink');
             return;
         }
-        
-        // ✅ 顯示成功訊息，告知距離
         toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內 (' + storeTypeLabel + ')', 'green');
-    } else {
-        // 店鋪沒有 GPS 時，記錄用戶 GPS 但不限區
-        toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的認證位置', 'gold');
     }
     
     // ============================================================
@@ -2828,7 +2820,7 @@ async function submitVerification(storeId) {
     }
     
     // ============================================================
-    // 儲存認證到 store_verifications 表
+    // ✅ 儲存認證到 store_verifications 表 (新系統)
     // ============================================================
     var verification = {
         store_id: storeId,
@@ -2843,44 +2835,28 @@ async function submitVerification(storeId) {
         created_at: new Date().toISOString()
     };
     
-    // 1. 儲存到本地
-    if (!STATE.verifications) STATE.verifications = {};
-    STATE.verifications[storeId] = verification;
-    s.verification_count = (s.verification_count || 0) + 1;
-    save();
-    
-    // 2. 同步到雲端
     if (CLOUD_ON) {
         try {
             await cloudInsert('store_verifications', verification);
             console.log('✅ 認證已同步到雲端');
-            
-            // 檢查是否達到 2 人認證
-            var response = await fetch(
-                SUPABASE_URL + "/rest/v1/store_verifications?select=id&store_id=eq." + storeId + "&status=eq.pending",
-                {
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_KEY
-                    }
-                }
-            );
-            if (response.ok) {
-                var data = await response.json();
-                if (data && data.length >= 2) {
-                    toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
-                }
-            }
         } catch (e) {
             console.warn('⚠️ 認證雲端同步失敗:', e.message);
-            toast('⚠️ 認證已記錄，但雲端同步失敗，請稍後重試', 'gold');
+            toast('⚠️ 認證記錄失敗，請稍後重試', 'pink');
+            return;
         }
     }
     
-    // 3. 檢查是否達到 2 個認證 (本地邏輯)
+    // ============================================================
+    // ✅ 更新前台認證計數 (舊系統)
+    // ============================================================
+    s.verification_count = (s.verification_count || 0) + 1;
+    
+    // 檢查是否達到 2 人認證
     if (s.verification_count >= 2) {
         s.verified = 'verified';
         s.is_verified = true;
+        
+        // 獎勵提交者
         if (s.submitted_by) {
             await addPoints(35, '認證通過追加獎勵');
             toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
@@ -2888,12 +2864,67 @@ async function submitVerification(storeId) {
         updateAchievementStat('store_complete');
         var regionStat = getRegionStat(s.region);
         if (regionStat) updateAchievementStat(regionStat);
+        
+        // ✅ 通知管理員有新的認證審核
+        if (CLOUD_ON) {
+            try {
+                // 檢查是否已建立審核記錄
+                var checkResponse = await fetch(
+                    SUPABASE_URL + "/rest/v1/verification_reviews?select=id&store_id=eq." + storeId + "&admin_status=eq.pending",
+                    {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY
+                        }
+                    }
+                );
+                var checkData = await checkResponse.json();
+                if (!checkData || checkData.length === 0) {
+                    // 觸發器會自動建立，但以防萬一
+                    toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
+                }
+            } catch (e) {
+                console.warn('⚠️ 檢查審核記錄失敗:', e.message);
+            }
+        }
+    } else {
+        toast('✅ 認證提交成功！目前 ' + s.verification_count + '/2 人認證', 'green');
+    }
+    
+    // ============================================================
+    // 更新本地和雲端
+    // ============================================================
+    save();
+    
+    // 同步到雲端 (更新 verification_count)
+    if (CLOUD_ON) {
+        try {
+            await fetch(
+                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        verification_count: s.verification_count,
+                        verified: s.verified,
+                        is_verified: s.is_verified
+                    })
+                }
+            );
+            console.log('✅ 前台認證計數已同步');
+        } catch (e) {
+            console.warn('⚠️ 同步認證計數失敗:', e.message);
+        }
     }
     
     await addPoints(15, '認證店鋪');
     updateAchievementStat('verify_store');
     updateStreak();
-    toast('✅ 認證提交成功！獲得 15 積分', 'green');
+    
     closeModal();
     openStore(storeId);
 }

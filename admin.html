@@ -345,6 +345,7 @@
         .status-badge.field-suspicious { background: rgba(255,184,0,0.25); color: var(--warning); border: 1px solid var(--warning); }
         .status-badge.field-confirmed { background: rgba(0,255,0,0.15); color: var(--success); border: 1px solid var(--success); }
         .status-badge.missing { background: rgba(255,0,127,0.15); color: var(--danger); border: 1px dashed var(--danger); }
+        .status-badge.hidden { background: rgba(0,0,0,0.3); color: var(--text-muted); border: 1px solid var(--text-muted); }
         
         .btn-sm {
             padding: 4px 12px;
@@ -389,7 +390,7 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 24px;
-            max-width: 800px;
+            max-width: 900px;
             width: 95%;
             max-height: 85vh;
             overflow-y: auto;
@@ -502,6 +503,10 @@
             padding-bottom: 4px;
             border-bottom: 1px solid var(--border-color);
         }
+        .section-header.danger {
+            color: var(--danger);
+            border-color: var(--danger);
+        }
         
         .verification-compare {
             display: grid;
@@ -540,6 +545,7 @@
             gap: 6px;
             font-size: 12px;
             color: var(--text-muted);
+            flex-wrap: wrap;
         }
         .verification-compare .compare-card .flag-checkbox input {
             width: 16px;
@@ -561,6 +567,25 @@
         }
         .sidebar-overlay.show { display: block; }
         
+        .admin-actions-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 12px;
+            background: rgba(255,0,127,0.05);
+            border-radius: var(--radius);
+            border: 1px solid rgba(255,0,127,0.2);
+            margin-top: 12px;
+        }
+        .admin-actions-bar .action-label {
+            font-size: 12px;
+            color: var(--danger);
+            font-weight: 600;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
         @media (max-width: 768px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.open { transform: translateX(0); }
@@ -573,6 +598,7 @@
             .field-item { flex-wrap: wrap; gap: 4px; }
             .field-item .field-value { max-width: 100px; }
             .verification-compare { grid-template-columns: 1fr; }
+            .modal-box { max-width: 98%; padding: 16px; }
         }
         @media (max-width: 480px) {
             .field-item .field-value { max-width: 60px; }
@@ -658,6 +684,9 @@
                 </li>
                 <li class="nav-item" data-tab="audit" onclick="switchTab('audit')">
                     <i class="fas fa-history"></i><span>審計日誌</span>
+                </li>
+                <li class="nav-item" data-tab="admin-actions" onclick="switchTab('admin-actions')">
+                    <i class="fas fa-gavel"></i><span>操作記錄</span>
                 </li>
             </ul>
         </nav>
@@ -994,7 +1023,8 @@ function switchTab(tab) {
         verifications: '認證審核',
         flagged: '⚠️ 存疑清單',
         users: '用戶管理',
-        audit: '審計日誌'
+        audit: '審計日誌',
+        'admin-actions': '操作記錄'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
@@ -1005,7 +1035,8 @@ function switchTab(tab) {
         verifications: loadVerifications,
         flagged: loadFlagged,
         users: loadUsers,
-        audit: loadAudit
+        audit: loadAudit,
+        'admin-actions': loadAdminActions
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -1050,7 +1081,7 @@ function loadDashboard() {
         
         return sb
             .from('claw_stores')
-            .select('id, name, region, admin_overall_status')
+            .select('id, name, region, status, admin_overall_status')
             .order('created_at', { ascending: false })
             .limit(10);
     })
@@ -1063,10 +1094,11 @@ function loadDashboard() {
             var html = '';
             for (var i = 0; i < recent.length; i++) {
                 var s = recent[i];
+                var displayStatus = s.admin_overall_status || s.status || 'pending';
                 html += '<tr>' +
                     '<td>' + s.name + '</td>' +
                     '<td>' + (s.region || '未設定') + '</td>' +
-                    '<td><span class="status-badge ' + (s.admin_overall_status || 'pending') + '">' + (s.admin_overall_status || '待審核') + '</span></td>' +
+                    '<td><span class="status-badge ' + displayStatus + '">' + displayStatus + '</span></td>' +
                     '<td><button class="btn-sm" onclick="viewStoreDetail(\'' + s.id + '\')">查看</button></td>' +
                 '</tr>';
             }
@@ -1094,7 +1126,6 @@ function loadStores() {
             if (result.error) throw result.error;
             var data = result.data || [];
             
-            // 獲取每個店鋪的欄位狀態
             var promises = data.map(function(s) {
                 return sb
                     .from('field_status')
@@ -1128,11 +1159,11 @@ function loadStores() {
                 '</div>' +
                 '<div class="table-container">' +
                     '<table>' +
-                        '<thead><tr><th>店名</th><th>地區</th><th>首發者</th><th>狀態</th><th>操作</th></tr></thead>' +
+                        '<thead><tr><th>店名</th><th>地區</th><th>狀態</th><th>操作</th></tr></thead>' +
                         '<tbody>';
             
             if (data.length === 0) {
-                html += '<tr><td colspan="5" class="empty-state">🎉 沒有待審核的店鋪</td></tr>';
+                html += '<tr><td colspan="4" class="empty-state">🎉 沒有待審核的店鋪</td></tr>';
             } else {
                 for (var i = 0; i < data.length; i++) {
                     var s = data[i];
@@ -1151,7 +1182,6 @@ function loadStores() {
                     html += '<tr>' +
                         '<td><strong>' + s.name + '</strong></td>' +
                         '<td>' + (s.region || '未設定') + '</td>' +
-                        '<td>' + (s.submitted_by || '未知') + '</td>' +
                         '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
                         '<td><button class="btn-sm primary" onclick="viewStoreDetail(\'' + s.id + '\')">📋 詳細檢視</button></td>' +
                     '</tr>';
@@ -1166,7 +1196,7 @@ function loadStores() {
 }
 
 // ============================================================
-// 詳細檢視 (新店審核) - 修正版
+// 詳細檢視 (新店審核)
 // ============================================================
 function viewStoreDetail(storeId) {
     currentViewStoreId = storeId;
@@ -1192,10 +1222,16 @@ function viewStoreDetail(storeId) {
                         fieldStatusMap[fieldStatuses[i].field_name] = fieldStatuses[i].status;
                     }
                     
-                    // ============================================================
-                    // ✅ 判斷欄位是否已被補充
-                    // ============================================================
-                    var hasSupplement = store.supplemented_by && store.supplemented_by !== '' && store.supplemented_by !== '無' && store.supplemented_by !== null;
+                    // 判斷是否有補充者 (從 field_status 中找 submitted_type = 'supplement')
+                    var hasSupplement = false;
+                    var supplementerDevice = null;
+                    for (var i = 0; i < fieldStatuses.length; i++) {
+                        if (fieldStatuses[i].submitted_type === 'supplement') {
+                            hasSupplement = true;
+                            supplementerDevice = fieldStatuses[i].submitted_by;
+                            break;
+                        }
+                    }
                     
                     // 定義欄位
                     var firstSubmitFields = [
@@ -1213,47 +1249,31 @@ function viewStoreDetail(storeId) {
                         { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' }
                     ];
                     
-                    // ============================================================
-                    // ✅ 取得欄位狀態的邏輯
-                    // ============================================================
                     function getFieldStatus(fieldKey, fieldValue, isFirstSubmit) {
-                        // 1. 如果已經有 field_status 記錄，使用它
                         if (fieldStatusMap[fieldKey]) {
                             return fieldStatusMap[fieldKey];
                         }
-                        
-                        // 2. 如果是首發者欄位 (name, region, photo)
                         if (isFirstSubmit) {
                             if (fieldValue && fieldValue !== '未填' && fieldValue !== '無照片') {
                                 return 'pending';
                             }
                             return 'missing';
                         }
-                        
-                        // 3. 如果是補充者欄位
                         if (hasSupplement) {
-                            // 有補充者：該欄位如果有值，設為 pending
                             if (fieldValue && fieldValue !== '未填' && fieldValue !== '無' && fieldValue !== '未知' && fieldValue !== '') {
                                 return 'pending';
                             }
                             return 'missing';
                         } else {
-                            // 沒有補充者：所有欄位都是 missing
                             return 'missing';
                         }
                     }
                     
-                    // ============================================================
-                    // 渲染欄位
-                    // ============================================================
                     function renderFields(fields, label, isFirstSubmit) {
                         var html = '<div class="section-header">' + label + '</div>';
-                        
                         for (var i = 0; i < fields.length; i++) {
                             var f = fields[i];
                             var status = getFieldStatus(f.key, f.value, isFirstSubmit);
-                            
-                            // 如果有 field_status 記錄，優先使用記錄中的狀態
                             if (fieldStatusMap[f.key]) {
                                 status = fieldStatusMap[f.key];
                             }
@@ -1286,7 +1306,6 @@ function viewStoreDetail(storeId) {
                                     '</div>' +
                                 '</div>';
                         }
-                        
                         return html;
                     }
                     
@@ -1295,7 +1314,6 @@ function viewStoreDetail(storeId) {
                     var hasPending = false;
                     var hasMissing = false;
                     var allFields = firstSubmitFields.concat(supplementFields);
-                    
                     for (var i = 0; i < allFields.length; i++) {
                         var f = allFields[i];
                         var isFirst = i < firstSubmitFields.length;
@@ -1321,40 +1339,70 @@ function viewStoreDetail(storeId) {
                         statusClass = 'confirmed';
                     }
                     
-                    var firstSubmitter = store.submitted_by || '未知';
-                    var supplementer = store.supplemented_by || '無';
-                    
-                    var modalHtml = 
-                        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-                            '<div>' +
-                                '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
-                                '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
-                                    '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-                                    '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
+                    // 獲取認證者資訊
+                    var verifierHtml = '';
+                    sb
+                        .from('store_verifications')
+                        .select('verifier_device, verifier_name')
+                        .eq('store_id', storeId)
+                        .eq('status', 'pending')
+                        .then(function(verResult) {
+                            var verifications = verResult.data || [];
+                            if (verifications.length > 0) {
+                                verifierHtml = '<div class="section-header">📌 認證記錄</div>';
+                                for (var i = 0; i < verifications.length; i++) {
+                                    var v = verifications[i];
+                                    var label = i === 0 ? '認證1' : '認證2';
+                                    verifierHtml += 
+                                        '<div class="field-item">' +
+                                            '<span class="field-name">' + label + '</span>' +
+                                            '<span class="field-value">' + (v.verifier_name || v.verifier_device) + '</span>' +
+                                            '<div class="field-actions">' +
+                                                '<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_name || v.verifier_device) + '\')">🗑️ 撤銷</button>' +
+                                            '</div>' +
+                                        '</div>';
+                                }
+                            }
+                            
+                            // 組裝 modal
+                            var modalHtml = 
+                                '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                                    '<div>' +
+                                        '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
+                                        '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
+                                            '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+                                            '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
+                                            '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
+                                        '</div>' +
+                                    '</div>' +
+                                    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                                        '<button class="btn-sm primary" onclick="confirmReviewed(\'' + storeId + '\')">✅ 已查閱</button>' +
+                                        '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中為存疑</button>' +
+                                    '</div>' +
                                 '</div>' +
-                            '</div>' +
-                            '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-                                '<button class="btn-sm primary" onclick="confirmReviewed(\'' + storeId + '\')">✅ 已查閱</button>' +
-                                '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中為存疑</button>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
-                            '<span>📌 首發者: ' + firstSubmitter + '</span>' +
-                            '<span>📌 補充者: ' + supplementer + '</span>' +
-                            '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
-                        '</div>' +
-                        '<div style="margin-top:12px;">' +
-                            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +
-                            renderFields(firstSubmitFields, '📌 首發者提交', true) +
-                            renderFields(supplementFields, '📌 補充者提交', false) +
-                        '</div>' +
-                        '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
-                            '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
-                                (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
-                            '</div>' +
-                        '</div>';
-                    
-                    openModal('📋 店鋪詳情', modalHtml, '關閉');
+                                '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
+                                    '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
+                                '</div>' +
+                                '<div style="margin-top:12px;">' +
+                                    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +
+                                    renderFields(firstSubmitFields, '📌 首發者提交', true) +
+                                    renderFields(supplementFields, '📌 補充者提交', false) +
+                                    verifierHtml +
+                                '</div>' +
+                                '<div class="admin-actions-bar">' +
+                                    '<span class="action-label">⚠️ 管理員操作</span>' +
+                                    (hasSupplement ? '<button class="btn-sm danger" onclick="revokeSupplement(\'' + storeId + '\', \'' + supplementerDevice + '\', \'補充者\')">🗑️ 撤銷補充</button>' : '') +
+                                    '<button class="btn-sm danger" onclick="if(confirm(\'確定要隱藏此店鋪嗎？\')) hideStore(\'' + storeId + '\')">🚫 隱藏店鋪</button>' +
+                                    '<button class="btn-sm danger" onclick="if(confirm(\'確定要標記此店鋪為可疑嗎？\')) markStoreSuspicious(\'' + storeId + '\')">⚠️ 標記可疑</button>' +
+                                '</div>' +
+                                '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
+                                    '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
+                                        (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
+                                    '</div>' +
+                                '</div>';
+                            
+                            openModal('📋 店鋪詳情', modalHtml, '關閉');
+                        });
                 });
         })
         .catch(function(error) {
@@ -1363,12 +1411,11 @@ function viewStoreDetail(storeId) {
 }
 
 // ============================================================
-// 已查閱 - 確認所有待查閱欄位 (修正版)
+// 已查閱
 // ============================================================
 function confirmReviewed(storeId) {
     if (!confirm('確定要將所有「待查閱」欄位標記為「已確認」嗎？\n(被勾選存疑的欄位將保持存疑，待填欄位保持待填)')) return;
     
-    // 獲取所有欄位的勾選狀態
     var checkboxes = document.querySelectorAll('.field-checkbox');
     var flaggedFields = [];
     for (var i = 0; i < checkboxes.length; i++) {
@@ -1397,7 +1444,6 @@ function confirmReviewed(storeId) {
                 var newStatus = field.status;
                 var isFlagged = (flaggedFields.indexOf(field.field_name) !== -1);
                 
-                // ✅ 核心邏輯
                 if (field.status === 'pending') {
                     pendingCount++;
                     if (isFlagged) {
@@ -1436,7 +1482,6 @@ function confirmReviewed(storeId) {
                 }
             }
             
-            // 更新店鋪整體狀態
             var overallStatus = 'confirmed';
             if (suspiciousCount > 0) {
                 overallStatus = 'suspicious';
@@ -1504,7 +1549,6 @@ function applyFieldFlags(storeId) {
         );
     }
     
-    // 更新店鋪整體狀態
     promises.push(
         sb.from('claw_stores').update({ admin_overall_status: 'suspicious' }).eq('id', storeId)
     );
@@ -1512,7 +1556,6 @@ function applyFieldFlags(storeId) {
     Promise.all(promises)
         .then(function() {
             toast('⚠️ 已將 ' + selectedFields.length + ' 個欄位標記為存疑');
-            // 重新整理詳細檢視
             viewStoreDetail(storeId);
             loadStores();
             loadDashboard();
@@ -1520,6 +1563,280 @@ function applyFieldFlags(storeId) {
         .catch(function(error) {
             toast('操作失敗: ' + error.message, 'error');
         });
+}
+
+// ============================================================
+// ⭐ 撤銷認證 (管理員操作)
+// ============================================================
+async function revokeVerification(storeId, verifierDevice, verifierName) {
+    if (!confirm('確定要撤銷 ' + (verifierName || verifierDevice) + ' 的認證嗎？\n\n此操作將：\n1. 認證數減少 1\n2. 如果少於 2 人認證，店鋪回到「未審核」狀態\n3. 該認證記錄被標記為「已撤銷」')) {
+        return;
+    }
+    
+    var reason = prompt('請輸入撤銷原因 (可選)：');
+    
+    try {
+        var { data: store } = await sb
+            .from('claw_stores')
+            .select('verification_count, status, is_verified')
+            .eq('id', storeId)
+            .single();
+        
+        if (!store) { toast('找不到該店鋪', 'error'); return; }
+        
+        var newCount = Math.max(0, (store.verification_count || 0) - 1);
+        var newStatus = newCount >= 2 ? 'verified' : 'pending';
+        var newIsVerified = newCount >= 2 ? true : false;
+        
+        await sb
+            .from('store_verifications')
+            .update({
+                status: 'revoked',
+                revoked_by: currentUser.display_name,
+                revoked_at: new Date().toISOString(),
+                revoke_reason: reason || '管理員撤銷'
+            })
+            .eq('store_id', storeId)
+            .eq('verifier_device', verifierDevice)
+            .eq('status', 'pending');
+        
+        await sb
+            .from('claw_stores')
+            .update({
+                verification_count: newCount,
+                status: newStatus,
+                is_verified: newIsVerified
+            })
+            .eq('id', storeId);
+        
+        var { data: review } = await sb
+            .from('verification_reviews')
+            .select('*')
+            .eq('store_id', storeId)
+            .eq('admin_status', 'pending')
+            .maybeSingle();
+        
+        if (review) {
+            var updates = {};
+            if (review.verifier_1_device === verifierDevice) {
+                updates.flag_verifier_1 = true;
+                updates.verifier_1_status = 'revoked';
+            } else if (review.verifier_2_device === verifierDevice) {
+                updates.flag_verifier_2 = true;
+                updates.verifier_2_status = 'revoked';
+            }
+            
+            if ((review.flag_verifier_1 || updates.flag_verifier_1) && 
+                (review.flag_verifier_2 || updates.flag_verifier_2)) {
+                updates.admin_status = 'rejected';
+            }
+            
+            await sb
+                .from('verification_reviews')
+                .update(updates)
+                .eq('id', review.id);
+        }
+        
+        await sb
+            .from('admin_actions')
+            .insert({
+                store_id: storeId,
+                action_type: 'revoke_verification',
+                target_type: 'verification',
+                target_id: verifierDevice,
+                reason: reason || '管理員撤銷認證',
+                performed_by: currentUser.display_name,
+                metadata: {
+                    new_count: newCount,
+                    old_count: store.verification_count
+                }
+            });
+        
+        toast('✅ 已撤銷 ' + (verifierName || verifierDevice) + ' 的認證 (目前 ' + newCount + '/2 人認證)');
+        
+        if (currentTab === 'verifications') {
+            loadVerifications();
+        } else if (currentTab === 'stores') {
+            loadStores();
+        }
+        loadDashboard();
+        
+    } catch (error) {
+        toast('操作失敗: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// ⭐ 撤銷補充 (管理員操作)
+// ============================================================
+async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
+    if (!confirm('確定要撤銷 ' + (supplementerName || supplementerDevice) + ' 的補充資料嗎？\n\n此操作將：\n1. 抹去該用戶補充的所有欄位資料\n2. 相關欄位回到「待填」狀態')) {
+        return;
+    }
+    
+    var reason = prompt('請輸入撤銷原因 (可選)：');
+    
+    try {
+        var { data: fields } = await sb
+            .from('field_status')
+            .select('field_name')
+            .eq('table_name', 'claw_stores')
+            .eq('record_id', storeId)
+            .eq('submitted_by', supplementerDevice)
+            .eq('submitted_type', 'supplement');
+        
+        if (!fields || fields.length === 0) {
+            toast('該用戶沒有補充記錄', 'warning');
+            return;
+        }
+        
+        var { data: store } = await sb
+            .from('claw_stores')
+            .select('*')
+            .eq('id', storeId)
+            .single();
+        
+        var updates = {};
+        var oldValues = {};
+        for (var i = 0; i < fields.length; i++) {
+            var field = fields[i].field_name;
+            oldValues[field] = store[field];
+            
+            switch(field) {
+                case 'address_detail': updates[field] = ''; break;
+                case 'size': updates[field] = '中'; break;
+                case 'has_staff': case 'has_e_coin': updates[field] = null; break;
+                case 'addr': updates[field] = ''; break;
+                default: updates[field] = '';
+            }
+        }
+        
+        await sb
+            .from('claw_stores')
+            .update(updates)
+            .eq('id', storeId);
+        
+        for (var i = 0; i < fields.length; i++) {
+            await sb
+                .from('field_status')
+                .upsert({
+                    table_name: 'claw_stores',
+                    record_id: storeId,
+                    field_name: fields[i].field_name,
+                    status: 'missing',
+                    submitted_by: null,
+                    submitted_type: null,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'table_name, record_id, field_name' });
+        }
+        
+        await sb
+            .from('admin_actions')
+            .insert({
+                store_id: storeId,
+                action_type: 'revoke_supplement',
+                target_type: 'supplement',
+                target_id: supplementerDevice,
+                reason: reason || '管理員撤銷補充資料',
+                performed_by: currentUser.display_name,
+                metadata: {
+                    revoked_fields: fields.map(function(f) { return f.field_name; }),
+                    old_values: oldValues
+                }
+            });
+        
+        toast('✅ 已撤銷 ' + (supplementerName || supplementerDevice) + ' 的補充資料 (' + fields.length + ' 個欄位)');
+        
+        if (currentTab === 'stores') {
+            loadStores();
+        }
+        loadDashboard();
+        
+    } catch (error) {
+        toast('操作失敗: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// ⭐ 隱藏店鋪 (管理員操作)
+// ============================================================
+async function hideStore(storeId) {
+    var reason = prompt('請輸入隱藏原因 (例如：店鋪不存在)：');
+    if (!reason) { return; }
+    
+    if (!confirm('確定要隱藏此店鋪嗎？\n\n前台將不再顯示此店鋪。\n原因：' + reason)) {
+        return;
+    }
+    
+    try {
+        await sb
+            .from('claw_stores')
+            .update({
+                admin_overall_status: 'hidden',
+                locked_at: new Date().toISOString(),
+                locked_by: currentUser.display_name
+            })
+            .eq('id', storeId);
+        
+        await sb
+            .from('admin_actions')
+            .insert({
+                store_id: storeId,
+                action_type: 'hide_store',
+                target_type: 'store',
+                target_id: storeId,
+                reason: reason,
+                performed_by: currentUser.display_name
+            });
+        
+        toast('✅ 已隱藏店鋪');
+        closeModal();
+        loadStores();
+        loadDashboard();
+    } catch (error) {
+        toast('操作失敗: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// ⭐ 標記可疑 (管理員操作)
+// ============================================================
+async function markStoreSuspicious(storeId) {
+    var reason = prompt('請輸入可疑原因：');
+    if (!reason) { return; }
+    
+    if (!confirm('確定要標記此店鋪為可疑嗎？\n原因：' + reason)) {
+        return;
+    }
+    
+    try {
+        await sb
+            .from('claw_stores')
+            .update({
+                admin_overall_status: 'suspicious',
+                locked_at: new Date().toISOString(),
+                locked_by: currentUser.display_name
+            })
+            .eq('id', storeId);
+        
+        await sb
+            .from('admin_actions')
+            .insert({
+                store_id: storeId,
+                action_type: 'mark_suspicious',
+                target_type: 'store',
+                target_id: storeId,
+                reason: reason,
+                performed_by: currentUser.display_name
+            });
+        
+        toast('⚠️ 已標記店鋪為可疑');
+        closeModal();
+        loadStores();
+        loadDashboard();
+    } catch (error) {
+        toast('操作失敗: ' + error.message, 'error');
+    }
 }
 
 // ============================================================
@@ -1546,12 +1863,7 @@ function loadVerifications() {
             }
             
             if (storeIds.length === 0) {
-                var html = 
-                    '<div style="margin-bottom:12px;">' +
-                        '<span style="font-size:13px;color:var(--text-muted);">🔍 共 0 間店鋪待認證審核</span>' +
-                    '</div>' +
-                    '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的認證</p></div>';
-                container.innerHTML = html;
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的認證</p></div>';
                 return;
             }
             
@@ -1581,7 +1893,7 @@ function loadVerifications() {
                         var gpsFirst = v.first_submitter_gps || { lat: 'N/A', lng: 'N/A' };
                         
                         html += 
-                            '<div class="verification-compare" style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                            '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
                                 '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
                                     '<div><strong style="font-size:16px;">🏪 ' + store.name + '</strong><span style="font-size:12px;color:var(--text-muted);margin-left:8px;">' + (store.region || '') + '</span></div>' +
                                     '<div><button class="btn-sm primary" onclick="confirmVerification(\'' + v.id + '\')">✅ 已查閱</button></div>' +
@@ -1599,14 +1911,14 @@ function loadVerifications() {
                                         '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_1_name || v.verifier_1_device || '未知') + '</div>' +
                                         (v.verifier_1_photo ? '<img src="' + v.verifier_1_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
                                         '<div class="gps">📍 ' + (gps1.lat || 'N/A') + ', ' + (gps1.lng || 'N/A') + '</div>' +
-                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v1-' + v.id + '" data-review="' + v.id + '" data-target="v1"> 標記存疑</div>' +
+                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v1-' + v.id + '" data-review="' + v.id + '" data-target="v1"> 標記存疑 <button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + v.verifier_1_device + '\', \'' + (v.verifier_1_name || v.verifier_1_device) + '\')" style="font-size:9px;padding:2px 6px;">🗑️</button></div>' +
                                     '</div>' +
                                     '<div class="compare-card">' +
                                         '<div class="label">🔍 認證者 2</div>' +
                                         '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_2_name || v.verifier_2_device || '未知') + '</div>' +
                                         (v.verifier_2_photo ? '<img src="' + v.verifier_2_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
                                         '<div class="gps">📍 ' + (gps2.lat || 'N/A') + ', ' + (gps2.lng || 'N/A') + '</div>' +
-                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v2-' + v.id + '" data-review="' + v.id + '" data-target="v2"> 標記存疑</div>' +
+                                        '<div class="flag-checkbox"><input type="checkbox" id="flag-v2-' + v.id + '" data-review="' + v.id + '" data-target="v2"> 標記存疑 <button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + v.verifier_2_device + '\', \'' + (v.verifier_2_name || v.verifier_2_device) + '\')" style="font-size:9px;padding:2px 6px;">🗑️</button></div>' +
                                     '</div>' +
                                 '</div>' +
                             '</div>';
@@ -1881,6 +2193,104 @@ function loadAudit() {
 }
 
 // ============================================================
+// 操作記錄 (admin_actions)
+// ============================================================
+function loadAdminActions() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb
+        .from('admin_actions')
+        .select('*')
+        .order('performed_at', { ascending: false })
+        .limit(100)
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            
+            // 獲取店鋪名稱
+            var storeIds = [];
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].store_id && storeIds.indexOf(data[i].store_id) === -1) {
+                    storeIds.push(data[i].store_id);
+                }
+            }
+            
+            var storeNames = {};
+            if (storeIds.length > 0) {
+                sb
+                    .from('claw_stores')
+                    .select('id, name')
+                    .in('id', storeIds)
+                    .then(function(storeResult) {
+                        var stores = storeResult.data || [];
+                        for (var i = 0; i < stores.length; i++) {
+                            storeNames[stores[i].id] = stores[i].name;
+                        }
+                        
+                        renderActions(data, storeNames);
+                    });
+            } else {
+                renderActions(data, {});
+            }
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+function renderActions(data, storeNames) {
+    var container = document.getElementById('tab-content');
+    var actionLabels = {
+        'revoke_verification': '撤銷認證',
+        'revoke_supplement': '撤銷補充',
+        'hide_store': '隱藏店鋪',
+        'mark_suspicious': '標記可疑',
+        'batch_process': '批量處理'
+    };
+    var actionColors = {
+        'revoke_verification': 'warning',
+        'revoke_supplement': 'warning',
+        'hide_store': 'danger',
+        'mark_suspicious': 'danger',
+        'batch_process': 'danger'
+    };
+    
+    var html = 
+        '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+            '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + data.length + ' 筆操作記錄</span>' +
+            '<button class="btn-sm" onclick="loadAdminActions()" style="margin-left:auto;">🔄 重新整理</button>' +
+        '</div>' +
+        '<div class="table-container">' +
+            '<table>' +
+                '<thead><tr><th>時間</th><th>操作者</th><th>操作類型</th><th>目標</th><th>原因</th><th>已還原</th></tr></thead>' +
+                '<tbody>';
+    
+    if (data.length === 0) {
+        html += '<tr><td colspan="6" class="empty-state">暫無操作記錄</td></tr>';
+    } else {
+        for (var i = 0; i < data.length; i++) {
+            var a = data[i];
+            var storeName = storeNames[a.store_id] || a.store_id || 'N/A';
+            var label = actionLabels[a.action_type] || a.action_type;
+            var color = actionColors[a.action_type] || 'pending';
+            var restored = a.restored ? '✅ 已還原' : '❌ 未還原';
+            
+            html += '<tr>' +
+                '<td style="font-size:12px;">' + new Date(a.performed_at).toLocaleString() + '</td>' +
+                '<td>' + a.performed_by + '</td>' +
+                '<td><span class="status-badge ' + color + '">' + label + '</span></td>' +
+                '<td>' + storeName + '</td>' +
+                '<td style="font-size:12px;color:var(--text-muted);">' + (a.reason || '-') + '</td>' +
+                '<td>' + restored + '</td>' +
+            '</tr>';
+        }
+    }
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// ============================================================
 // 刷新
 // ============================================================
 function refreshAll() {
@@ -1891,7 +2301,8 @@ function refreshAll() {
         verifications: loadVerifications,
         flagged: loadFlagged,
         users: loadUsers,
-        audit: loadAudit
+        audit: loadAudit,
+        'admin-actions': loadAdminActions
     };
     if (loaders[currentTab]) loaders[currentTab]();
 }
