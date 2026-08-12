@@ -1196,7 +1196,7 @@ function loadStores() {
 }
 
 // ============================================================
-// 詳細檢視 (新店審核)
+// 詳細檢視 (新店審核) - 修正版
 // ============================================================
 function viewStoreDetail(storeId) {
     currentViewStoreId = storeId;
@@ -1222,18 +1222,53 @@ function viewStoreDetail(storeId) {
                         fieldStatusMap[fieldStatuses[i].field_name] = fieldStatuses[i].status;
                     }
                     
-                    // 判斷是否有補充者 (從 field_status 中找 submitted_type = 'supplement')
+                    // ============================================================
+                    // ✅ 修正：判斷是否有補充者 (從多個來源)
+                    // ============================================================
                     var hasSupplement = false;
                     var supplementerDevice = null;
-                    for (var i = 0; i < fieldStatuses.length; i++) {
-                        if (fieldStatuses[i].submitted_type === 'supplement') {
-                            hasSupplement = true;
-                            supplementerDevice = fieldStatuses[i].submitted_by;
-                            break;
+                    
+                    // 方法 1：從 claw_stores 表的 supplemented_by 欄位讀取
+                    if (store.supplemented_by && store.supplemented_by !== '' && store.supplemented_by !== '無' && store.supplemented_by !== null) {
+                        hasSupplement = true;
+                        supplementerDevice = store.supplemented_by;
+                    }
+                    
+                    // 方法 2：如果沒有 supplemented_by，從 field_status 查詢
+                    if (!hasSupplement) {
+                        for (var i = 0; i < fieldStatuses.length; i++) {
+                            if (fieldStatuses[i].submitted_type === 'supplement') {
+                                hasSupplement = true;
+                                supplementerDevice = fieldStatuses[i].submitted_by;
+                                break;
+                            }
                         }
                     }
                     
+                    // 方法 3：檢查補充欄位是否有值 (address_detail, size, has_staff, has_e_coin)
+                    if (!hasSupplement) {
+                        var supplementCheckFields = ['address_detail', 'size', 'has_staff', 'has_e_coin'];
+                        for (var i = 0; i < supplementCheckFields.length; i++) {
+                            var field = supplementCheckFields[i];
+                            var value = store[field];
+                            // 檢查是否有值 (不是空字串、null、undefined、或預設值)
+                            if (value !== undefined && value !== null && value !== '' && value !== '中') {
+                                hasSupplement = true;
+                                // 嘗試從 field_status 找到提交者
+                                for (var j = 0; j < fieldStatuses.length; j++) {
+                                    if (fieldStatuses[j].field_name === field && fieldStatuses[j].submitted_by) {
+                                        supplementerDevice = fieldStatuses[j].submitted_by;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // ============================================================
                     // 定義欄位
+                    // ============================================================
                     var firstSubmitFields = [
                         { key: 'name', label: '店名', value: store.name || '未填' },
                         { key: 'region', label: '地區', value: store.region || '未填' },
@@ -1249,31 +1284,45 @@ function viewStoreDetail(storeId) {
                         { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' }
                     ];
                     
+                    // ============================================================
+                    // 取得欄位狀態的邏輯 (修正版)
+                    // ============================================================
                     function getFieldStatus(fieldKey, fieldValue, isFirstSubmit) {
+                        // 1. 如果已經有 field_status 記錄，使用它
                         if (fieldStatusMap[fieldKey]) {
                             return fieldStatusMap[fieldKey];
                         }
+                        
+                        // 2. 如果是首發者欄位 (name, region, photo)
                         if (isFirstSubmit) {
                             if (fieldValue && fieldValue !== '未填' && fieldValue !== '無照片') {
                                 return 'pending';
                             }
                             return 'missing';
                         }
+                        
+                        // 3. 如果是補充者欄位
                         if (hasSupplement) {
+                            // 有補充者：該欄位如果有值，設為 pending
                             if (fieldValue && fieldValue !== '未填' && fieldValue !== '無' && fieldValue !== '未知' && fieldValue !== '') {
                                 return 'pending';
                             }
                             return 'missing';
                         } else {
+                            // 沒有補充者：所有欄位都是 missing
                             return 'missing';
                         }
                     }
                     
+                    // ============================================================
+                    // 渲染欄位
+                    // ============================================================
                     function renderFields(fields, label, isFirstSubmit) {
                         var html = '<div class="section-header">' + label + '</div>';
                         for (var i = 0; i < fields.length; i++) {
                             var f = fields[i];
                             var status = getFieldStatus(f.key, f.value, isFirstSubmit);
+                            
                             if (fieldStatusMap[f.key]) {
                                 status = fieldStatusMap[f.key];
                             }
@@ -1309,7 +1358,9 @@ function viewStoreDetail(storeId) {
                         return html;
                     }
                     
+                    // ============================================================
                     // 判斷整體狀態
+                    // ============================================================
                     var hasSuspicious = false;
                     var hasPending = false;
                     var hasMissing = false;
@@ -1339,7 +1390,9 @@ function viewStoreDetail(storeId) {
                         statusClass = 'confirmed';
                     }
                     
+                    // ============================================================
                     // 獲取認證者資訊
+                    // ============================================================
                     var verifierHtml = '';
                     sb
                         .from('store_verifications')
@@ -1364,7 +1417,9 @@ function viewStoreDetail(storeId) {
                                 }
                             }
                             
+                            // ============================================================
                             // 組裝 modal
+                            // ============================================================
                             var modalHtml = 
                                 '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
                                     '<div>' +
@@ -1372,7 +1427,7 @@ function viewStoreDetail(storeId) {
                                         '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
                                             '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
                                             '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
-                                            '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
+                                            '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || store.verified || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
                                         '</div>' +
                                     '</div>' +
                                     '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
@@ -1382,6 +1437,7 @@ function viewStoreDetail(storeId) {
                                 '</div>' +
                                 '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
                                     '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
+                                    (supplementerDevice ? '<span>📌 補充者: ' + supplementerDevice + '</span>' : '') +
                                 '</div>' +
                                 '<div style="margin-top:12px;">' +
                                     '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +

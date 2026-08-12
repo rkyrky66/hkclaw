@@ -1888,7 +1888,7 @@ async function logoutGoogle() {
 document.addEventListener('DOMContentLoaded', checkOAuthCallback);
 
 // ============================================================
-// 地圖與店鋪載入
+// 載入店鋪資料 (修正版)
 // ============================================================
 async function loadCloud() {
   console.log("[v0] 直接從 Supabase 讀取資料...");
@@ -1899,7 +1899,12 @@ async function loadCloud() {
     if (!response.ok) throw new Error("HTTP " + response.status);
     var stores = await response.json();
     console.log("✅ 成功載入 " + stores.length + " 筆資料");
+    
+    // ✅ 修正：同時保留 status 和 verified (向後相容)
     STORES = stores.map(function(s) {
+      // 判斷是否已認證：status === 'verified' 或 verified === 'verified'
+      var isVerified = s.status === "verified" || s.verified === "verified";
+      
       return {
         id: String(s.id),
         name: s.name || "未命名店鋪",
@@ -1907,7 +1912,10 @@ async function loadCloud() {
         addr: s.addr || "（未填地址）",
         ig: s.ig || "",
         fb: s.fb || "",
-        verified: s.status === "verified" ? "verified" : "pending",
+        // ✅ 主要使用 status 欄位
+        status: s.status || "pending",
+        // ✅ 保留 verified 向後相容
+        verified: isVerified ? "verified" : "pending",
         size: s.size || "中",
         token: s.token || false,
         hour24: s.hour24 || false,
@@ -1925,7 +1933,11 @@ async function loadCloud() {
         address_detail: s.address_detail || '',
         has_staff: s.has_staff !== undefined ? s.has_staff : null,
         has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
-        supplement_count: s.supplement_count || 0
+        supplement_count: s.supplement_count || 0,
+        supplemented_by: s.supplemented_by || null,  // ✅ 新增
+        is_hidden: s.is_hidden || false,            // ✅ 新增
+        // 保留類型資訊
+        type: s.mall && s.mall.trim() !== '' ? 'mall' : 'street'
       };
     });
     console.log("✅ 已更新 STORES 陣列，共 " + STORES.length + " 家店鋪");
@@ -2767,12 +2779,32 @@ function checkGpsDistance(store, userLat, userLng, limitKm, storeTypeLabel) {
         message: '✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內'
     };
 }
-// 使用範例：
-// var result = checkGpsDistance(store, gpsLat, gpsLng, 0.5, '店鋪');
-// if (!result.valid) { toast(result.message, 'pink'); return; }
-// toast(result.message, 'green');
+function getRegionStat(region) {
+  var regionMap = {
+    '銅鑼灣': 'region_hk_island', '天后': 'region_hk_island', '北角': 'region_hk_island',
+    '中環': 'region_hk_island', '金鐘': 'region_hk_island', '上環': 'region_hk_island',
+    '灣仔': 'region_hk_island', '鰂魚涌': 'region_hk_island', '太古': 'region_hk_island',
+    '筲箕灣': 'region_hk_island', '香港仔': 'region_hk_island', '杏花邨': 'region_hk_island',
+    '黃竹坑': 'region_hk_island', '旺角': 'region_kowloon', '尖沙咀': 'region_kowloon',
+    '觀塘': 'region_kowloon', '深水埗': 'region_kowloon', '紅磡': 'region_kowloon',
+    '藍田': 'region_kowloon', '油麻地': 'region_kowloon', '九龍城': 'region_kowloon',
+    '土瓜灣': 'region_kowloon', '黃大仙': 'region_kowloon', '牛頭角': 'region_kowloon',
+    '九龍灣': 'region_kowloon', '秀茂坪': 'region_kowloon', '油塘': 'region_kowloon',
+    '樂富': 'region_kowloon', '啟德': 'region_kowloon', '黃埔': 'region_kowloon',
+    '慈雲山': 'region_kowloon', '大角咀': 'region_kowloon', '荔枝角': 'region_kowloon',
+    '屯門': 'region_nt', '荃灣': 'region_nt', '元朗': 'region_nt',
+    '葵芳': 'region_nt', '將軍澳': 'region_nt', '大埔': 'region_nt',
+    '葵興': 'region_nt', '天水圍': 'region_nt', '沙田': 'region_nt',
+    '大圍': 'region_nt', '馬鞍山': 'region_nt', '上水': 'region_nt',
+    '粉嶺': 'region_nt', '青衣': 'region_nt', '東涌': 'region_nt',
+    '昂坪': 'region_nt', '坑口': 'region_nt', '調景嶺': 'region_nt',
+    '日出康城': 'region_nt', '西貢': 'region_nt'
+  };
+  return regionMap[region] || null;
+}
+
 // ============================================================
-// 認證店鋪 (完整版 - 支援後台撤銷)
+// 認證店鋪 (完整修正版)
 // ============================================================
 async function submitVerification(storeId) {
     var s = STORES.find(function(x) { return x.id === storeId; });
@@ -2847,13 +2879,15 @@ async function submitVerification(storeId) {
     }
     
     // ============================================================
-    // ✅ 更新前台認證計數 (舊系統)
+    // ✅ 更新前台認證計數 (舊系統) - 使用 status 欄位
     // ============================================================
     s.verification_count = (s.verification_count || 0) + 1;
     
     // 檢查是否達到 2 人認證
     if (s.verification_count >= 2) {
-        s.verified = 'verified';
+        // ✅ 使用 status 而不是 verified
+        s.status = 'verified';
+        s.verified = 'verified';  // 保持向後相容
         s.is_verified = true;
         
         // 獎勵提交者
@@ -2868,7 +2902,6 @@ async function submitVerification(storeId) {
         // ✅ 通知管理員有新的認證審核
         if (CLOUD_ON) {
             try {
-                // 檢查是否已建立審核記錄
                 var checkResponse = await fetch(
                     SUPABASE_URL + "/rest/v1/verification_reviews?select=id&store_id=eq." + storeId + "&admin_status=eq.pending",
                     {
@@ -2880,7 +2913,6 @@ async function submitVerification(storeId) {
                 );
                 var checkData = await checkResponse.json();
                 if (!checkData || checkData.length === 0) {
-                    // 觸發器會自動建立，但以防萬一
                     toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
                 }
             } catch (e) {
@@ -2896,7 +2928,7 @@ async function submitVerification(storeId) {
     // ============================================================
     save();
     
-    // 同步到雲端 (更新 verification_count)
+    // 同步到雲端 (更新 verification_count 和 status)
     if (CLOUD_ON) {
         try {
             await fetch(
@@ -2910,7 +2942,8 @@ async function submitVerification(storeId) {
                     },
                     body: JSON.stringify({
                         verification_count: s.verification_count,
-                        verified: s.verified,
+                        status: s.status,           // ✅ 使用 status
+                        verified: s.verified,       // 保持向後相容
                         is_verified: s.is_verified
                     })
                 }
@@ -2929,29 +2962,7 @@ async function submitVerification(storeId) {
     openStore(storeId);
 }
 
-function getRegionStat(region) {
-  var regionMap = {
-    '銅鑼灣': 'region_hk_island', '天后': 'region_hk_island', '北角': 'region_hk_island',
-    '中環': 'region_hk_island', '金鐘': 'region_hk_island', '上環': 'region_hk_island',
-    '灣仔': 'region_hk_island', '鰂魚涌': 'region_hk_island', '太古': 'region_hk_island',
-    '筲箕灣': 'region_hk_island', '香港仔': 'region_hk_island', '杏花邨': 'region_hk_island',
-    '黃竹坑': 'region_hk_island', '旺角': 'region_kowloon', '尖沙咀': 'region_kowloon',
-    '觀塘': 'region_kowloon', '深水埗': 'region_kowloon', '紅磡': 'region_kowloon',
-    '藍田': 'region_kowloon', '油麻地': 'region_kowloon', '九龍城': 'region_kowloon',
-    '土瓜灣': 'region_kowloon', '黃大仙': 'region_kowloon', '牛頭角': 'region_kowloon',
-    '九龍灣': 'region_kowloon', '秀茂坪': 'region_kowloon', '油塘': 'region_kowloon',
-    '樂富': 'region_kowloon', '啟德': 'region_kowloon', '黃埔': 'region_kowloon',
-    '慈雲山': 'region_kowloon', '大角咀': 'region_kowloon', '荔枝角': 'region_kowloon',
-    '屯門': 'region_nt', '荃灣': 'region_nt', '元朗': 'region_nt',
-    '葵芳': 'region_nt', '將軍澳': 'region_nt', '大埔': 'region_nt',
-    '葵興': 'region_nt', '天水圍': 'region_nt', '沙田': 'region_nt',
-    '大圍': 'region_nt', '馬鞍山': 'region_nt', '上水': 'region_nt',
-    '粉嶺': 'region_nt', '青衣': 'region_nt', '東涌': 'region_nt',
-    '昂坪': 'region_nt', '坑口': 'region_nt', '調景嶺': 'region_nt',
-    '日出康城': 'region_nt', '西貢': 'region_nt'
-  };
-  return regionMap[region] || null;
-}
+
 
 // ============================================================
 // 補充資料表單
@@ -3045,7 +3056,7 @@ function selectCoinUI(value) {
 }
 
 // ============================================================
-// 補充資料 - 記錄 GPS 但不限區
+// 補充資料 - 記錄補充者
 // ============================================================
 async function submitAllSupplement(storeId) {
     var s = STORES.find(function(x) { return x.id === storeId; });
@@ -3094,15 +3105,42 @@ async function submitAllSupplement(storeId) {
     s.has_e_coin = coin;
     s.supplement_count = (s.supplement_count || 0) + 1;
     
+    // ✅ 記錄補充者 (重要！)
+    s.supplemented_by = STATE.user.device;
+    
+    // ✅ 更新 field_status 記錄，標記哪些欄位被補充了
+    var supplementFields = [];
+    if (isStreet && address) supplementFields.push('address_detail');
+    supplementFields.push('size');
+    supplementFields.push('has_staff');
+    supplementFields.push('has_e_coin');
+    
+    for (var i = 0; i < supplementFields.length; i++) {
+        var fieldName = supplementFields[i];
+        var fieldValue = s[fieldName];
+        if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
+            // 更新 field_status 為 pending (待查閱)
+            await sb.from('field_status').upsert({
+                table_name: 'claw_stores',
+                record_id: storeId,
+                field_name: fieldName,
+                status: 'pending',
+                submitted_by: STATE.user.device,
+                submitted_type: 'supplement',
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'table_name, record_id, field_name' });
+        }
+    }
+    
     if (CLOUD_ON) {
         var updates = {};
         if (isStreet && address) updates.address_detail = address;
         updates.size = size;
         updates.has_staff = staff;
         updates.has_e_coin = coin;
+        updates.supplemented_by = STATE.user.device;  // ✅ 同步補充者
         cloudInsert('claw_stores', Object.assign({ id: storeId }, updates));
         
-        // ✅ 記錄補充時的 GPS (供後台審查)
         if (currentGps) {
             cloudInsert('store_supplements', {
                 store_id: storeId,
@@ -5053,7 +5091,8 @@ async function submitIntel() {
     name: name,
     region: selectedRegion,
     addr: addr,
-    verified: 'pending',
+    status: 'pending',          // ✅ 新增 status 欄位
+    verified: 'pending',        // 保持向後相容
     size: '中',
     token: false,
     hour24: false,
@@ -5070,8 +5109,9 @@ async function submitIntel() {
     address_detail: '',
     has_staff: null,
     has_e_coin: null,
-    supplement_count: 0
-  };
+    supplement_count: 0,
+    supplemented_by: null      // ✅ 新增
+};
   
   STORES.push(newStore);
   if (CLOUD_ON) cloudInsert('claw_stores', newStore);
