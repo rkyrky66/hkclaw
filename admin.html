@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     
     <style>
+        /* ===== 所有樣式 (與之前相同，只增加側邊欄關閉按鈕) ===== */
         :root {
             --primary: #D4AF37;
             --primary-dark: #B8941F;
@@ -40,7 +41,6 @@
         ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
         
-        /* ===== 登入頁面 ===== */
         .login-container {
             display: flex;
             align-items: center;
@@ -91,13 +91,8 @@
             justify-content: center;
             gap: 12px;
         }
-        .btn-google:hover {
-            background: #f0f0f0;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 20px rgba(255,255,255,0.15);
-        }
+        .btn-google:hover { background: #f0f0f0; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,255,255,0.15); }
         .btn-google:active { transform: translateY(0); }
-        .btn-google img { width: 20px; height: 20px; }
         
         .login-divider {
             display: flex;
@@ -120,10 +115,10 @@
         .login-loading.show { display: block; }
         .login-loading i { margin-right: 8px; }
         
-        /* ===== 後台主界面 ===== */
         .admin-app { display: flex; height: 100vh; overflow: hidden; }
         .hidden { display: none !important; }
         
+        /* ===== 側邊欄 ===== */
         .sidebar {
             width: var(--sidebar-width);
             min-width: var(--sidebar-width);
@@ -138,6 +133,22 @@
             z-index: 100;
             transition: transform 0.3s ease;
         }
+        /* ✅ 側邊欄關閉按鈕 */
+        .sidebar-close {
+            display: none;
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+        .sidebar-close:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        
         .sidebar-brand {
             display: flex;
             align-items: center;
@@ -243,6 +254,7 @@
             font-size: 20px;
             cursor: pointer;
         }
+        .btn-toggle-sidebar:hover { color: var(--text-primary); }
         #page-title { font-size: 18px; font-weight: 700; }
         .top-bar-right { display: flex; align-items: center; gap: 20px; }
         .top-bar-stats { display: flex; gap: 16px; }
@@ -333,6 +345,8 @@
         .status-badge.confirmed { background: rgba(0,255,0,0.15); color: var(--success); }
         .status-badge.suspicious { background: rgba(255,184,0,0.15); color: var(--warning); }
         .status-badge.rejected { background: rgba(255,0,127,0.15); color: var(--danger); }
+        .status-badge.field-suspicious { background: rgba(255,184,0,0.25); color: var(--warning); border: 1px solid var(--warning); }
+        .status-badge.field-confirmed { background: rgba(0,255,0,0.15); color: var(--success); border: 1px solid var(--success); }
         
         .btn-sm {
             padding: 4px 12px;
@@ -349,6 +363,10 @@
         .btn-sm.primary:hover { background: var(--primary-dark); }
         .btn-sm.danger { border-color: var(--danger); color: var(--danger); }
         .btn-sm.danger:hover { background: rgba(255,0,127,0.1); }
+        .btn-sm.warning { border-color: var(--warning); color: var(--warning); }
+        .btn-sm.warning:hover { background: rgba(255,184,0,0.1); }
+        .btn-sm.success { border-color: var(--success); color: var(--success); }
+        .btn-sm.success:hover { background: rgba(0,255,0,0.1); }
         
         .empty-state {
             text-align: center;
@@ -373,9 +391,9 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 24px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
+            max-width: 700px;
+            width: 95%;
+            max-height: 85vh;
             overflow-y: auto;
         }
         .modal-header {
@@ -450,12 +468,50 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
+        /* ===== 欄位級存疑樣式 ===== */
+        .field-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 4px;
+            background: rgba(255,255,255,0.02);
+        }
+        .field-item .field-name { font-weight: 600; font-size: 13px; }
+        .field-item .field-value { font-size: 13px; color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .field-item .field-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .field-item .field-status {
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .field-item .field-status.status-pending { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+        .field-item .field-status.status-confirmed { background: rgba(0,255,0,0.15); color: var(--success); }
+        .field-item .field-status.status-suspicious { background: rgba(255,184,0,0.2); color: var(--warning); }
+        .field-item .field-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+        .field-item.border-suspicious { border-color: var(--warning); background: rgba(255,184,0,0.05); }
+        .field-item.border-confirmed { border-color: var(--success); background: rgba(0,255,0,0.03); }
+        
+        .field-group-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 12px 0 6px 0;
+            font-weight: 600;
+        }
+        
+        /* ===== 響應式 ===== */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
             }
             .sidebar.open {
                 transform: translateX(0);
+            }
+            .sidebar-close {
+                display: block;
             }
             .main-content {
                 margin-left: 0;
@@ -468,6 +524,24 @@
                 grid-template-columns: repeat(2, 1fr);
             }
             .login-box { padding: 32px 20px; margin: 16px; }
+            .field-item { flex-wrap: wrap; gap: 4px; }
+            .field-item .field-value { max-width: 100px; }
+        }
+        @media (max-width: 480px) {
+            .field-item .field-value { max-width: 60px; }
+            .field-item .field-actions { flex-wrap: wrap; }
+        }
+        
+        /* 側邊欄遮罩 */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 99;
+        }
+        .sidebar-overlay.show {
+            display: block;
         }
     </style>
 </head>
@@ -516,9 +590,13 @@
     </div>
 </div>
 
+<!-- ===== 側邊欄遮罩 ===== -->
+<div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
 <!-- ===== 後台主界面 ===== -->
 <div id="admin-app" class="admin-app hidden">
     <aside class="sidebar" id="sidebar">
+        <button class="sidebar-close" onclick="closeSidebar()" title="關閉側邊欄">✕</button>
         <div class="sidebar-brand">
             <span class="brand-icon">🛡️</span>
             <span class="brand-text">爪爪後台</span>
@@ -597,23 +675,23 @@
 
 <script>
 // ============================================================
-// ⚠️ 重要：不要使用 'let supabase' 或 'const supabase'
-// 因為 Supabase SDK 已經在 window 物件中註冊了
+// Supabase 配置
 // ============================================================
-
-// ✅ 直接使用 window.supabase 或 supabase (全域變數)
-// 檢查 supabase 是否已載入
-if (typeof supabase === 'undefined' && typeof window.supabase !== 'undefined') {
-    var supabase = window.supabase;
-}
-
 const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-// ✅ 使用 var 而不是 const/let，避免重複宣告錯誤
-if (typeof supabaseClient === 'undefined') {
-    var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ✅ 避免重複宣告
+if (typeof window.supabaseClient === 'undefined') {
+    if (typeof supabase !== 'undefined') {
+        var window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } else if (typeof window.supabase !== 'undefined') {
+        var window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } else {
+        var window.supabaseClient = null;
+        console.error('❌ Supabase SDK 未載入');
+    }
 }
+var sb = window.supabaseClient;
 
 // ============================================================
 // 狀態
@@ -622,6 +700,8 @@ let currentUser = null;
 let currentTab = 'dashboard';
 let modalCallback = null;
 let isLoggingIn = false;
+let currentViewStoreId = null;
+let currentFieldFlags = {}; // 暫存欄位存疑狀態
 
 // ============================================================
 // 工具函數
@@ -654,9 +734,33 @@ function modalConfirm() {
     closeModal();
 }
 
+// ===== ✅ 側邊欄控制 (已修復) =====
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
 }
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+}
+
+// ✅ 點擊頁面其他地方自動關閉側邊欄
+document.addEventListener('click', function(e) {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.querySelector('.btn-toggle-sidebar');
+    if (window.innerWidth <= 768) {
+        if (sidebar.classList.contains('open')) {
+            if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
+                closeSidebar();
+            }
+        }
+    }
+});
 
 function showLoading(show) {
     document.getElementById('login-loading').classList.toggle('show', show);
@@ -673,38 +777,25 @@ function hideLoginError() {
 }
 
 // ============================================================
-// ✅ Google OAuth 登入
+// Google OAuth 登入
 // ============================================================
 async function handleGoogleLogin() {
-    if (isLoggingIn) return;
+    if (isLoggingIn || !sb) return;
     isLoggingIn = true;
     hideLoginError();
     showLoading(true);
     
     try {
         const redirectTo = window.location.href;
-        console.log('🔐 正在啟動 Google 登入，重定向到:', redirectTo);
-        
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        const { data, error } = await sb.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: redirectTo,
-                queryParams: {
-                    access_type: 'offline',
-                    prompt: 'consent'
-                }
+                queryParams: { access_type: 'offline', prompt: 'consent' }
             }
         });
-        
-        if (error) {
-            console.error('❌ Google 登入錯誤:', error);
-            throw error;
-        }
-        
-        console.log('✅ Google 登入已啟動，正在跳轉...');
-        
+        if (error) throw error;
     } catch (error) {
-        console.error('❌ 登入失敗:', error);
         showLoginError('登入失敗: ' + (error.message || '請稍後再試'));
         showLoading(false);
         isLoggingIn = false;
@@ -717,19 +808,12 @@ async function handleGoogleLogin() {
 async function handlePasswordLogin(e) {
     e.preventDefault();
     hideLoginError();
-    
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value.trim();
-    
-    if (!email || !password) {
-        showLoginError('請輸入電子郵件和密碼');
-        return;
-    }
-    
+    if (!email || !password) { showLoginError('請輸入電子郵件和密碼'); return; }
     showLoading(true);
-    
     try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await handleSuccessfulLogin(data.user);
     } catch (error) {
@@ -743,15 +827,14 @@ async function handlePasswordLogin(e) {
 // ============================================================
 async function handleSuccessfulLogin(user) {
     try {
-        const { data: profile, error: profileError } = await supabaseClient
+        const { data: profile, error: profileError } = await sb
             .from('user_profiles')
             .select('id, display_name, email, role')
             .eq('id', user.id)
             .single();
         
         if (profileError) {
-            console.warn('⚠️ 找不到 user_profiles 記錄:', profileError);
-            const { data: newProfile, error: insertError } = await supabaseClient
+            const { data: newProfile, error: insertError } = await sb
                 .from('user_profiles')
                 .insert({
                     id: user.id,
@@ -762,12 +845,11 @@ async function handleSuccessfulLogin(user) {
                 })
                 .select()
                 .single();
-            
             if (insertError) throw insertError;
             currentUser = newProfile;
         } else {
             if (profile.role !== 'admin') {
-                await supabaseClient.auth.signOut();
+                await sb.auth.signOut();
                 throw new Error('您沒有管理員權限');
             }
             currentUser = profile;
@@ -775,17 +857,13 @@ async function handleSuccessfulLogin(user) {
         
         showAdminApp(currentUser);
         toast('登入成功！');
-        
     } catch (error) {
-        await supabaseClient.auth.signOut();
+        await sb.auth.signOut();
         showLoginError('權限驗證失敗: ' + error.message);
         showLoading(false);
     }
 }
 
-// ============================================================
-// 顯示後台
-// ============================================================
 function showAdminApp(user) {
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('admin-app').classList.remove('hidden');
@@ -797,11 +875,8 @@ function showAdminApp(user) {
     loadDashboard();
 }
 
-// ============================================================
-// 登出
-// ============================================================
 async function handleLogout() {
-    await supabaseClient.auth.signOut();
+    await sb.auth.signOut();
     currentUser = null;
     document.getElementById('admin-app').classList.add('hidden');
     document.getElementById('login-page').classList.remove('hidden');
@@ -814,49 +889,39 @@ async function handleLogout() {
 async function handleOAuthCallback() {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
-        console.log('🔐 檢測到 OAuth 回調');
         showLoading(true);
-        
         try {
-            const { data, error } = await supabaseClient.auth.getSession();
+            const { data, error } = await sb.auth.getSession();
             if (error) throw error;
-            
             if (data.session) {
                 await handleSuccessfulLogin(data.session.user);
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         } catch (error) {
-            console.error('❌ OAuth 回調處理失敗:', error);
             showLoginError('登入處理失敗: ' + error.message);
             showLoading(false);
         }
     }
 }
 
-// ============================================================
-// 檢查現有 Session
-// ============================================================
 async function checkExistingSession() {
     try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
+        const { data: { session } } = await sb.auth.getSession();
         if (session) {
-            const { data: profile } = await supabaseClient
+            const { data: profile } = await sb
                 .from('user_profiles')
                 .select('id, display_name, email, role')
                 .eq('id', session.user.id)
                 .single();
-            
             if (profile && profile.role === 'admin') {
                 currentUser = profile;
                 showAdminApp(profile);
                 return true;
             } else {
-                await supabaseClient.auth.signOut();
+                await sb.auth.signOut();
             }
         }
-    } catch (error) {
-        console.warn('⚠️ 檢查 session 失敗:', error);
-    }
+    } catch (error) { console.warn('⚠️ 檢查 session 失敗:', error); }
     return false;
 }
 
@@ -870,7 +935,7 @@ function switchTab(tab) {
     });
     const titles = { dashboard: '儀表板', stores: '新店審核', flagged: '⚠️ 存疑清單', users: '用戶管理', audit: '審計日誌' };
     document.getElementById('page-title').textContent = titles[tab] || tab;
-    
+    closeSidebar(); // ✅ 切換頁面時自動關閉側邊欄
     const loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
     if (loaders[tab]) loaders[tab]();
 }
@@ -881,20 +946,17 @@ function switchTab(tab) {
 async function loadDashboard() {
     const container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    
     try {
         const [storesCount, flaggedCount, confirmedCount] = await Promise.all([
-            supabaseClient.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
-            supabaseClient.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
-            supabaseClient.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
+            sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
+            sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
+            sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
         ]);
-        
         document.getElementById('stat-pending').textContent = storesCount.count || 0;
         document.getElementById('stat-flagged').textContent = flaggedCount.count || 0;
         document.getElementById('stat-confirmed').textContent = confirmedCount.count || 0;
         document.getElementById('badge-stores').textContent = storesCount.count || 0;
         document.getElementById('badge-flagged').textContent = flaggedCount.count || 0;
-        
         container.innerHTML = `
             <div class="dashboard-grid">
                 <div class="stat-card"><div class="number gold">${storesCount.count || 0}</div><div class="label">🏪 待審核店鋪</div></div>
@@ -907,13 +969,11 @@ async function loadDashboard() {
                 <tbody id="dashboard-table-body"></tbody></table>
             </div>
         `;
-        
-        const { data: recent } = await supabaseClient
+        const { data: recent } = await sb
             .from('claw_stores')
             .select('id, name, region, admin_overall_status')
             .order('created_at', { ascending: false })
             .limit(10);
-        
         const tbody = document.getElementById('dashboard-table-body');
         if (!recent || recent.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" class="empty-state">暫無店鋪資料</td></tr>`;
@@ -923,7 +983,7 @@ async function loadDashboard() {
                     <td>${s.name}</td>
                     <td>${s.region || '未設定'}</td>
                     <td><span class="status-badge ${s.admin_overall_status || 'pending'}">${s.admin_overall_status || '待審核'}</span></td>
-                    <td><button class="btn-sm" onclick="viewStore('${s.id}')">查看</button></td>
+                    <td><button class="btn-sm" onclick="viewStoreDetail('${s.id}')">查看</button></td>
                 </tr>
             `).join('');
         }
@@ -933,37 +993,37 @@ async function loadDashboard() {
 }
 
 // ============================================================
-// 新店審核
+// 新店審核 (完整版 - 含欄位級存疑)
 // ============================================================
 async function loadStores() {
     const container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await sb
             .from('claw_stores')
-            .select('id, name, region, addr, submitted_by, admin_overall_status, created_at')
+            .select('*')
             .in('admin_overall_status', ['pending', 'partial', 'suspicious'])
             .order('created_at', { ascending: false });
-        
         if (error) throw error;
-        
         container.innerHTML = `
+            <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:13px;color:var(--text-muted);">📋 共 ${data.length} 間待審核店鋪</span>
+                <button class="btn-sm" onclick="loadStores()" style="margin-left:auto;">🔄 重新整理</button>
+            </div>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>店鋪名稱</th><th>地區</th><th>提交者</th><th>狀態</th><th>時間</th><th>操作</th></tr></thead>
+                    <thead><tr><th>店名</th><th>地區</th><th>提交者</th><th>狀態</th><th>欄位狀態</th><th>操作</th></tr></thead>
                     <tbody>
                         ${data.length === 0 ? `<tr><td colspan="6" class="empty-state">🎉 沒有待審核的店鋪</td></tr>` : 
                         data.map(s => `
                             <tr>
-                                <td>${s.name}</td>
+                                <td><strong>${s.name}</strong></td>
                                 <td>${s.region || '未設定'}</td>
                                 <td>${s.submitted_by || '未知'}</td>
                                 <td><span class="status-badge ${s.admin_overall_status || 'pending'}">${s.admin_overall_status || '待審核'}</span></td>
-                                <td>${new Date(s.created_at).toLocaleDateString()}</td>
+                                <td><span class="status-badge ${s.admin_overall_status === 'suspicious' ? 'field-suspicious' : 'pending'}">${s.admin_overall_status === 'suspicious' ? '⚠️ 有欄位存疑' : '待檢查'}</span></td>
                                 <td>
-                                    <button class="btn-sm primary" onclick="confirmStore('${s.id}')">✅ 確認</button>
-                                    <button class="btn-sm danger" onclick="flagStore('${s.id}')">⚠️ 存疑</button>
+                                    <button class="btn-sm primary" onclick="viewStoreDetail('${s.id}')">📋 詳細檢視</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -977,17 +1037,147 @@ async function loadStores() {
 }
 
 // ============================================================
-// 店鋪操作
+// ✅ 完整店鋪檢視 (含欄位級存疑)
 // ============================================================
-async function confirmStore(storeId) {
+async function viewStoreDetail(storeId) {
+    currentViewStoreId = storeId;
+    currentFieldFlags = {};
+    
     try {
-        const { error } = await supabaseClient
+        const { data: store, error } = await sb
+            .from('claw_stores')
+            .select('*')
+            .eq('id', storeId)
+            .single();
+        if (error) throw error;
+        
+        // 取得該店鋪所有欄位的存疑狀態
+        const { data: fieldStatuses } = await sb
+            .from('field_status')
+            .select('*')
+            .eq('table_name', 'claw_stores')
+            .eq('record_id', storeId);
+        
+        // 建立欄位狀態對照表
+        const fieldStatusMap = {};
+        if (fieldStatuses) {
+            fieldStatuses.forEach(fs => {
+                fieldStatusMap[fs.field_name] = fs.status;
+            });
+        }
+        
+        // 定義要顯示的欄位
+        const fields = [
+            { key: 'name', label: '店名', value: store.name || '未填' },
+            { key: 'region', label: '地區', value: store.region || '未填' },
+            { key: 'addr', label: '地址', value: store.addr || '未填' },
+            { key: 'address_detail', label: '詳細地址', value: store.address_detail || '未填' },
+            { key: 'size', label: '規模', value: store.size || '未填' },
+            { key: 'has_staff', label: '有場務', value: store.has_staff !== undefined ? (store.has_staff ? '有' : '無') : '未填' },
+            { key: 'has_e_coin', label: '電子兌幣', value: store.has_e_coin !== undefined ? (store.has_e_coin ? '有' : '無') : '未填' },
+            { key: 'photo', label: '照片', value: store.photo || '無照片' },
+            { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' },
+        ];
+        
+        // 計算整體狀態
+        const hasSuspicious = Object.values(fieldStatusMap).some(s => s === 'suspicious');
+        const allConfirmed = Object.values(fieldStatusMap).every(s => s === 'confirmed') && Object.keys(fieldStatusMap).length > 0;
+        const overallStatus = hasSuspicious ? 'suspicious' : (allConfirmed ? 'confirmed' : 'pending');
+        
+        // 生成欄位 HTML
+        let fieldsHtml = fields.map(f => {
+            const status = fieldStatusMap[f.key] || 'pending';
+            const statusLabels = {
+                'pending': '<span class="field-status status-pending">⏳ 待查閱</span>',
+                'confirmed': '<span class="field-status status-confirmed">✅ 已確認</span>',
+                'suspicious': '<span class="field-status status-suspicious">⚠️ 存疑</span>'
+            };
+            const borderClass = status === 'suspicious' ? 'border-suspicious' : (status === 'confirmed' ? 'border-confirmed' : '');
+            const isPhoto = f.key === 'photo';
+            const displayValue = isPhoto && f.value !== '無照片' && f.value !== '未填' 
+                ? `<img src="${f.value}" style="max-height:60px;border-radius:4px;object-fit:cover;" />` 
+                : f.value;
+            
+            return `
+                <div class="field-item ${borderClass}" data-field="${f.key}">
+                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                        <input type="checkbox" class="field-checkbox" id="field-${f.key}" data-field="${f.key}" ${status === 'suspicious' ? 'checked' : ''}>
+                        <span class="field-name">${f.label}</span>
+                        <span class="field-value">${displayValue}</span>
+                    </div>
+                    <div class="field-actions">
+                        ${statusLabels[status] || statusLabels.pending}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        openModal(`
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <h3 style="font-size:18px;">📋 ${store.name}</h3>
+                    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                        <span class="status-badge ${overallStatus}">${overallStatus === 'suspicious' ? '⚠️ 有存疑欄位' : (overallStatus === 'confirmed' ? '✅ 已完整確認' : '⏳ 待審核')}</span>
+                        <span style="font-size:12px;color:var(--text-muted);">📍 ${store.region || '未知地區'}</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="btn-sm primary" onclick="confirmAllFields('${storeId}')">✅ 全部確認</button>
+                    <button class="btn-sm warning" onclick="applyFieldFlags('${storeId}')">⚠️ 標記選中欄位為存疑</button>
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+                    💡 勾選欄位後點擊「標記選中欄位為存疑」 | 綠色=已確認 | 黃色=存疑 | 灰色=待查閱
+                </div>
+                ${fieldsHtml}
+            </div>
+            <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                    <span style="font-size:12px;color:var(--text-muted);">📌 提交時間: ${new Date(store.created_at).toLocaleString()}</span>
+                    <span style="font-size:12px;color:var(--text-muted);">| 提交者: ${store.submitted_by || '未知'}</span>
+                    ${store.photo ? `<a href="${store.photo}" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>` : ''}
+                </div>
+            </div>
+        `, '', '關閉');
+        
+    } catch (error) {
+        toast('載入失敗: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// ✅ 全部確認 (完整項目)
+// ============================================================
+async function confirmAllFields(storeId) {
+    if (!confirm('確定要確認此店鋪的所有欄位嗎？')) return;
+    
+    try {
+        // 1. 更新店鋪整體狀態
+        const { error } = await sb
             .from('claw_stores')
             .update({ admin_overall_status: 'confirmed' })
             .eq('id', storeId);
-        
         if (error) throw error;
-        toast('✅ 已確認此店鋪');
+        
+        // 2. 更新或建立所有欄位的 field_status 為 confirmed
+        const fields = ['name', 'region', 'addr', 'address_detail', 'size', 'has_staff', 'has_e_coin', 'photo', 'submitted_by'];
+        for (const field of fields) {
+            await sb
+                .from('field_status')
+                .upsert({
+                    table_name: 'claw_stores',
+                    record_id: storeId,
+                    field_name: field,
+                    status: 'confirmed',
+                    flagged_by: currentUser?.display_name || 'admin',
+                    resolved: true,
+                    resolved_at: new Date().toISOString()
+                }, { onConflict: 'table_name, record_id, field_name' });
+        }
+        
+        toast('✅ 已完整確認此店鋪所有欄位');
+        closeModal();
         loadStores();
         loadDashboard();
     } catch (error) {
@@ -995,98 +1185,103 @@ async function confirmStore(storeId) {
     }
 }
 
-async function flagStore(storeId) {
-    openModal('⚠️ 標記存疑', `
-        <p>請輸入存疑原因：</p>
-        <textarea id="flag-reason" class="form-control" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border-color);margin-top:8px;min-height:80px;"></textarea>
-    `, '提交', 'danger');
+// ============================================================
+// ✅ 標記選中欄位為存疑
+// ============================================================
+async function applyFieldFlags(storeId) {
+    // 收集所有被勾選的欄位
+    const checkboxes = document.querySelectorAll('.field-checkbox:checked');
+    if (checkboxes.length === 0) {
+        toast('請至少勾選一個欄位', 'warning');
+        return;
+    }
     
-    modalCallback = async function() {
-        const reason = document.getElementById('flag-reason').value.trim() || '無說明';
-        try {
-            const { error } = await supabaseClient
-                .from('claw_stores')
-                .update({ admin_overall_status: 'suspicious' })
-                .eq('id', storeId);
-            
-            if (error) throw error;
-            
-            await supabaseClient
+    const selectedFields = Array.from(checkboxes).map(cb => cb.dataset.field);
+    
+    // 確認操作
+    if (!confirm(`確定要將 ${selectedFields.length} 個欄位標記為「存疑」嗎？`)) return;
+    
+    try {
+        // 1. 更新每個欄位的狀態為 suspicious
+        for (const field of selectedFields) {
+            await sb
                 .from('field_status')
                 .upsert({
                     table_name: 'claw_stores',
                     record_id: storeId,
-                    field_name: '整體',
+                    field_name: field,
                     status: 'suspicious',
                     flagged_by: currentUser?.display_name || 'admin',
-                    note: reason
+                    flagged_at: new Date().toISOString(),
+                    note: '管理員標記存疑',
+                    resolved: false
                 }, { onConflict: 'table_name, record_id, field_name' });
-            
-            toast('⚠️ 已標記為存疑');
-            loadStores();
-            loadDashboard();
-        } catch (error) {
-            toast('操作失敗: ' + error.message, 'error');
         }
-    };
-}
-
-async function viewStore(storeId) {
-    try {
-        const { data, error } = await supabaseClient
+        
+        // 2. 更新店鋪整體狀態為 suspicious
+        await sb
             .from('claw_stores')
-            .select('*')
-            .eq('id', storeId)
-            .single();
+            .update({ admin_overall_status: 'suspicious' })
+            .eq('id', storeId);
         
-        if (error) throw error;
-        
-        openModal('📋 店鋪詳情', `
-            <div style="display:grid;gap:8px;">
-                <p><strong>店名：</strong>${data.name}</p>
-                <p><strong>地區：</strong>${data.region || '未設定'}</p>
-                <p><strong>地址：</strong>${data.addr || '未設定'}</p>
-                <p><strong>提交者：</strong>${data.submitted_by || '未知'}</p>
-                <p><strong>狀態：</strong><span class="status-badge ${data.admin_overall_status || 'pending'}">${data.admin_overall_status || '待審核'}</span></p>
-                ${data.photo ? `<p><strong>照片：</strong><br><img src="${data.photo}" style="max-width:100%;border-radius:8px;margin-top:4px;" /></p>` : ''}
-                <p><strong>建立時間：</strong>${new Date(data.created_at).toLocaleString()}</p>
-            </div>
-        `, '關閉');
+        toast(`⚠️ 已將 ${selectedFields.length} 個欄位標記為存疑`);
+        closeModal();
+        loadStores();
+        loadDashboard();
     } catch (error) {
-        toast('載入失敗: ' + error.message, 'error');
+        toast('操作失敗: ' + error.message, 'error');
     }
 }
 
 // ============================================================
-// 存疑清單
+// 存疑清單 (顯示所有欄位級存疑)
 // ============================================================
 async function loadFlagged() {
     const container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await sb
             .from('field_status')
             .select('*')
             .eq('status', 'suspicious')
+            .eq('resolved', false)
             .order('flagged_at', { ascending: false });
-        
         if (error) throw error;
         
+        // 獲取店鋪名稱
+        const storeIds = [...new Set(data.map(f => f.record_id))];
+        let storeNames = {};
+        if (storeIds.length > 0) {
+            const { data: stores } = await sb
+                .from('claw_stores')
+                .select('id, name')
+                .in('id', storeIds);
+            if (stores) {
+                stores.forEach(s => { storeNames[s.id] = s.name; });
+            }
+        }
+        
         container.innerHTML = `
+            <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:13px;color:var(--text-muted);">⚠️ 共 ${data.length} 個欄位被標記存疑</span>
+                <button class="btn-sm" onclick="loadFlagged()" style="margin-left:auto;">🔄 重新整理</button>
+            </div>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>目標</th><th>欄位</th><th>標記者</th><th>原因</th><th>時間</th><th>操作</th></tr></thead>
+                    <thead><tr><th>店鋪</th><th>欄位</th><th>標記者</th><th>原因</th><th>時間</th><th>操作</th></tr></thead>
                     <tbody>
                         ${data.length === 0 ? `<tr><td colspan="6" class="empty-state">🎉 沒有存疑項目</td></tr>` :
                         data.map(f => `
                             <tr>
-                                <td>${f.table_name}</td>
-                                <td>${f.field_name}</td>
+                                <td><strong>${storeNames[f.record_id] || f.record_id}</strong></td>
+                                <td><span class="status-badge field-suspicious">${f.field_name}</span></td>
                                 <td>${f.flagged_by || '未知'}</td>
                                 <td>${f.note || '無說明'}</td>
                                 <td>${new Date(f.flagged_at).toLocaleDateString()}</td>
-                                <td><button class="btn-sm" onclick="resolveFlag('${f.id}')">✅ 解決</button></td>
+                                <td>
+                                    <button class="btn-sm success" onclick="resolveFieldFlag('${f.id}')">✅ 解決</button>
+                                    <button class="btn-sm" onclick="viewStoreDetail('${f.record_id}')">📋 查看</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1098,13 +1293,16 @@ async function loadFlagged() {
     }
 }
 
-async function resolveFlag(flagId) {
+// ============================================================
+// 解決單一欄位存疑
+// ============================================================
+async function resolveFieldFlag(flagId) {
+    if (!confirm('確定要解決此存疑項目嗎？')) return;
     try {
-        const { error } = await supabaseClient
+        const { error } = await sb
             .from('field_status')
             .update({ status: 'confirmed', resolved: true, resolved_at: new Date().toISOString() })
             .eq('id', flagId);
-        
         if (error) throw error;
         toast('✅ 已解決此存疑項目');
         loadFlagged();
@@ -1120,15 +1318,12 @@ async function resolveFlag(flagId) {
 async function loadUsers() {
     const container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await sb
             .from('user_profiles')
             .select('id, display_name, email, role, risk_level, created_at')
             .order('created_at', { ascending: false });
-        
         if (error) throw error;
-        
         container.innerHTML = `
             <div class="table-container">
                 <table>
@@ -1155,14 +1350,12 @@ async function loadUsers() {
 
 async function viewUser(userId) {
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await sb
             .from('user_profiles')
             .select('*')
             .eq('id', userId)
             .single();
-        
         if (error) throw error;
-        
         openModal('👤 用戶詳情', `
             <div style="display:grid;gap:8px;">
                 <p><strong>名稱：</strong>${data.display_name || '未命名'}</p>
@@ -1184,25 +1377,22 @@ async function viewUser(userId) {
 async function loadAudit() {
     const container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await sb
             .from('field_status_history')
             .select('*')
             .order('changed_at', { ascending: false })
             .limit(50);
-        
         if (error) throw error;
-        
         container.innerHTML = `
             <div class="table-container">
                 <table>
-                    <thead><tr><th>欄位</th><th>舊狀態</th><th>新狀態</th><th>操作者</th><th>時間</th></tr></thead>
+                    <thead><tr><th>欄位ID</th><th>舊狀態</th><th>新狀態</th><th>操作者</th><th>時間</th></tr></thead>
                     <tbody>
                         ${data.length === 0 ? `<tr><td colspan="5" class="empty-state">暫無審計記錄</td></tr>` :
                         data.map(h => `
                             <tr>
-                                <td>${h.field_status_id || '未知'}</td>
+                                <td style="font-size:12px;color:var(--text-muted);">${h.field_status_id?.slice(0,8) || '未知'}</td>
                                 <td><span class="status-badge ${h.old_status || 'pending'}">${h.old_status || '無'}</span></td>
                                 <td><span class="status-badge ${h.new_status || 'pending'}">${h.new_status || '無'}</span></td>
                                 <td>${h.changed_by || '系統'}</td>
@@ -1233,7 +1423,6 @@ function refreshAll() {
 document.addEventListener('DOMContentLoaded', async function() {
     await handleOAuthCallback();
     const hasSession = await checkExistingSession();
-    
     if (!hasSession) {
         document.getElementById('login-page').classList.remove('hidden');
         document.getElementById('admin-app').classList.add('hidden');
