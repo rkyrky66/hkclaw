@@ -75,7 +75,6 @@
         }
         .login-error.show { display: block; }
         
-        /* Google 登入按鈕 */
         .btn-google {
             width: 100%;
             padding: 14px;
@@ -121,7 +120,7 @@
         .login-loading.show { display: block; }
         .login-loading i { margin-right: 8px; }
         
-        /* ===== 後台主界面 (與之前相同) ===== */
+        /* ===== 後台主界面 ===== */
         .admin-app { display: flex; height: 100vh; overflow: hidden; }
         .hidden { display: none !important; }
         
@@ -474,7 +473,7 @@
 </head>
 <body>
 
-<!-- ===== 登入頁面 (Google OAuth) ===== -->
+<!-- ===== 登入頁面 ===== -->
 <div id="login-page" class="login-container">
     <div class="login-box">
         <div class="login-header">
@@ -485,7 +484,6 @@
         
         <div id="login-error" class="login-error"></div>
         
-        <!-- Google 登入按鈕 -->
         <button onclick="handleGoogleLogin()" class="btn-google">
             <svg width="20" height="20" viewBox="0 0 48 48">
                 <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
@@ -498,7 +496,6 @@
         
         <div class="login-divider">或</div>
         
-        <!-- 密碼登入 (備用) -->
         <form id="login-form" onsubmit="return handlePasswordLogin(event)">
             <div class="form-group">
                 <label><i class="fas fa-envelope"></i> 電子郵件</label>
@@ -600,12 +597,23 @@
 
 <script>
 // ============================================================
-// Supabase 配置
+// ⚠️ 重要：不要使用 'let supabase' 或 'const supabase'
+// 因為 Supabase SDK 已經在 window 物件中註冊了
 // ============================================================
+
+// ✅ 直接使用 window.supabase 或 supabase (全域變數)
+// 檢查 supabase 是否已載入
+if (typeof supabase === 'undefined' && typeof window.supabase !== 'undefined') {
+    var supabase = window.supabase;
+}
+
 const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ✅ 使用 var 而不是 const/let，避免重複宣告錯誤
+if (typeof supabaseClient === 'undefined') {
+    var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
 
 // ============================================================
 // 狀態
@@ -674,11 +682,10 @@ async function handleGoogleLogin() {
     showLoading(true);
     
     try {
-        // 獲取當前頁面 URL 作為重定向目標
         const redirectTo = window.location.href;
         console.log('🔐 正在啟動 Google 登入，重定向到:', redirectTo);
         
-        const { data, error } = await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: redirectTo,
@@ -695,7 +702,6 @@ async function handleGoogleLogin() {
         }
         
         console.log('✅ Google 登入已啟動，正在跳轉...');
-        // 用戶將被重定向到 Google 登入頁面
         
     } catch (error) {
         console.error('❌ 登入失敗:', error);
@@ -723,7 +729,7 @@ async function handlePasswordLogin(e) {
     showLoading(true);
     
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await handleSuccessfulLogin(data.user);
     } catch (error) {
@@ -737,8 +743,7 @@ async function handlePasswordLogin(e) {
 // ============================================================
 async function handleSuccessfulLogin(user) {
     try {
-        // 檢查管理員權限
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile, error: profileError } = await supabaseClient
             .from('user_profiles')
             .select('id, display_name, email, role')
             .eq('id', user.id)
@@ -746,8 +751,7 @@ async function handleSuccessfulLogin(user) {
         
         if (profileError) {
             console.warn('⚠️ 找不到 user_profiles 記錄:', profileError);
-            // 如果沒有 profile，嘗試建立一個
-            const { data: newProfile, error: insertError } = await supabase
+            const { data: newProfile, error: insertError } = await supabaseClient
                 .from('user_profiles')
                 .insert({
                     id: user.id,
@@ -763,18 +767,17 @@ async function handleSuccessfulLogin(user) {
             currentUser = newProfile;
         } else {
             if (profile.role !== 'admin') {
-                await supabase.auth.signOut();
+                await supabaseClient.auth.signOut();
                 throw new Error('您沒有管理員權限');
             }
             currentUser = profile;
         }
         
-        // 顯示後台
         showAdminApp(currentUser);
         toast('登入成功！');
         
     } catch (error) {
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         showLoginError('權限驗證失敗: ' + error.message);
         showLoading(false);
     }
@@ -790,6 +793,7 @@ function showAdminApp(user) {
     document.getElementById('admin-email-display').textContent = user.email || '';
     document.getElementById('admin-avatar').textContent = user.display_name?.charAt(0) || '👤';
     showLoading(false);
+    isLoggingIn = false;
     loadDashboard();
 }
 
@@ -797,7 +801,7 @@ function showAdminApp(user) {
 // 登出
 // ============================================================
 async function handleLogout() {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     currentUser = null;
     document.getElementById('admin-app').classList.add('hidden');
     document.getElementById('login-page').classList.remove('hidden');
@@ -808,19 +812,17 @@ async function handleLogout() {
 // OAuth 回調處理
 // ============================================================
 async function handleOAuthCallback() {
-    // 檢查 URL hash 是否有 access_token
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
         console.log('🔐 檢測到 OAuth 回調');
         showLoading(true);
         
         try {
-            const { data, error } = await supabase.auth.getSession();
+            const { data, error } = await supabaseClient.auth.getSession();
             if (error) throw error;
             
             if (data.session) {
                 await handleSuccessfulLogin(data.session.user);
-                // 清除 URL hash
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         } catch (error) {
@@ -836,9 +838,9 @@ async function handleOAuthCallback() {
 // ============================================================
 async function checkExistingSession() {
     try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
-            const { data: profile } = await supabase
+            const { data: profile } = await supabaseClient
                 .from('user_profiles')
                 .select('id, display_name, email, role')
                 .eq('id', session.user.id)
@@ -849,8 +851,7 @@ async function checkExistingSession() {
                 showAdminApp(profile);
                 return true;
             } else {
-                // 有 session 但不是 admin，登出
-                await supabase.auth.signOut();
+                await supabaseClient.auth.signOut();
             }
         }
     } catch (error) {
@@ -883,9 +884,9 @@ async function loadDashboard() {
     
     try {
         const [storesCount, flaggedCount, confirmedCount] = await Promise.all([
-            supabase.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
-            supabase.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
-            supabase.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
+            supabaseClient.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
+            supabaseClient.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
+            supabaseClient.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
         ]);
         
         document.getElementById('stat-pending').textContent = storesCount.count || 0;
@@ -907,7 +908,7 @@ async function loadDashboard() {
             </div>
         `;
         
-        const { data: recent } = await supabase
+        const { data: recent } = await supabaseClient
             .from('claw_stores')
             .select('id, name, region, admin_overall_status')
             .order('created_at', { ascending: false })
@@ -939,7 +940,7 @@ async function loadStores() {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('claw_stores')
             .select('id, name, region, addr, submitted_by, admin_overall_status, created_at')
             .in('admin_overall_status', ['pending', 'partial', 'suspicious'])
@@ -980,7 +981,7 @@ async function loadStores() {
 // ============================================================
 async function confirmStore(storeId) {
     try {
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('claw_stores')
             .update({ admin_overall_status: 'confirmed' })
             .eq('id', storeId);
@@ -1003,14 +1004,14 @@ async function flagStore(storeId) {
     modalCallback = async function() {
         const reason = document.getElementById('flag-reason').value.trim() || '無說明';
         try {
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('claw_stores')
                 .update({ admin_overall_status: 'suspicious' })
                 .eq('id', storeId);
             
             if (error) throw error;
             
-            await supabase
+            await supabaseClient
                 .from('field_status')
                 .upsert({
                     table_name: 'claw_stores',
@@ -1032,7 +1033,7 @@ async function flagStore(storeId) {
 
 async function viewStore(storeId) {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('claw_stores')
             .select('*')
             .eq('id', storeId)
@@ -1064,7 +1065,7 @@ async function loadFlagged() {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('field_status')
             .select('*')
             .eq('status', 'suspicious')
@@ -1099,7 +1100,7 @@ async function loadFlagged() {
 
 async function resolveFlag(flagId) {
     try {
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('field_status')
             .update({ status: 'confirmed', resolved: true, resolved_at: new Date().toISOString() })
             .eq('id', flagId);
@@ -1121,7 +1122,7 @@ async function loadUsers() {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('user_profiles')
             .select('id, display_name, email, role, risk_level, created_at')
             .order('created_at', { ascending: false });
@@ -1154,7 +1155,7 @@ async function loadUsers() {
 
 async function viewUser(userId) {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('user_profiles')
             .select('*')
             .eq('id', userId)
@@ -1185,7 +1186,7 @@ async function loadAudit() {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('field_status_history')
             .select('*')
             .order('changed_at', { ascending: false })
@@ -1230,13 +1231,9 @@ function refreshAll() {
 // 初始化
 // ============================================================
 document.addEventListener('DOMContentLoaded', async function() {
-    // 1. 檢查是否有 OAuth 回調
     await handleOAuthCallback();
-    
-    // 2. 檢查現有 Session
     const hasSession = await checkExistingSession();
     
-    // 3. 如果沒有 session，顯示登入頁面
     if (!hasSession) {
         document.getElementById('login-page').classList.remove('hidden');
         document.getElementById('admin-app').classList.add('hidden');
