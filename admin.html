@@ -40,6 +40,7 @@
         ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
         
+        /* ===== 登入頁面 ===== */
         .login-container {
             display: flex;
             align-items: center;
@@ -55,33 +56,13 @@
             border-radius: var(--radius);
             padding: 48px 40px;
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
             box-shadow: var(--shadow);
         }
         .login-header { text-align: center; margin-bottom: 32px; }
         .login-icon { font-size: 48px; margin-bottom: 8px; }
         .login-box h1 { font-size: 24px; font-weight: 700; color: var(--primary); letter-spacing: 1px; }
         .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
-        .login-box .form-group { margin-bottom: 20px; }
-        .login-box .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-        }
-        .login-box .form-group label i { margin-right: 8px; color: var(--primary); }
-        .login-box .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 15px;
-            transition: border-color 0.2s;
-        }
-        .login-box .form-group input:focus { outline: none; border-color: var(--primary); }
         .login-error {
             background: rgba(255,0,127,0.12);
             border: 1px solid rgba(255,0,127,0.3);
@@ -93,22 +74,54 @@
             display: none;
         }
         .login-error.show { display: block; }
-        .btn-login {
+        
+        /* Google 登入按鈕 */
+        .btn-google {
             width: 100%;
             padding: 14px;
-            background: var(--primary);
-            color: #000;
+            background: #ffffff;
+            color: #1a1a1a;
             border: none;
             border-radius: 8px;
             font-size: 16px;
-            font-weight: 700;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
         }
-        .btn-login:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(212,175,55,0.25); }
-        .btn-login:active { transform: translateY(0); }
-        .login-footer { text-align: center; margin-top: 24px; color: var(--text-muted); font-size: 12px; }
+        .btn-google:hover {
+            background: #f0f0f0;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(255,255,255,0.15);
+        }
+        .btn-google:active { transform: translateY(0); }
+        .btn-google img { width: 20px; height: 20px; }
         
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 20px 0;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+        
+        .login-footer { text-align: center; margin-top: 24px; color: var(--text-muted); font-size: 12px; }
+        .login-loading { display: none; text-align: center; color: var(--text-secondary); font-size: 14px; margin-top: 12px; }
+        .login-loading.show { display: block; }
+        .login-loading i { margin-right: 8px; }
+        
+        /* ===== 後台主界面 (與之前相同) ===== */
         .admin-app { display: flex; height: 100vh; overflow: hidden; }
         .hidden { display: none !important; }
         
@@ -163,7 +176,6 @@
         }
         .sidebar-nav .nav-item .badge.badge-warning { background: rgba(255,184,0,0.2); color: var(--warning); }
         .sidebar-nav .nav-item .badge.badge-danger { background: rgba(255,0,127,0.2); color: var(--danger); }
-        .sidebar-nav .nav-item .badge.badge-success { background: rgba(0,255,0,0.15); color: var(--success); }
         .sidebar-footer {
             border-top: 1px solid var(--border-color);
             padding: 16px 20px;
@@ -462,7 +474,7 @@
 </head>
 <body>
 
-<!-- ===== 登入頁面 ===== -->
+<!-- ===== 登入頁面 (Google OAuth) ===== -->
 <div id="login-page" class="login-container">
     <div class="login-box">
         <div class="login-header">
@@ -470,18 +482,39 @@
             <h1>爪爪情報站</h1>
             <p class="login-subtitle">管理後台</p>
         </div>
-        <form id="login-form" onsubmit="return handleLogin(event)">
+        
+        <div id="login-error" class="login-error"></div>
+        
+        <!-- Google 登入按鈕 -->
+        <button onclick="handleGoogleLogin()" class="btn-google">
+            <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+                <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+                <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+                <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+            </svg>
+            使用 Google 帳號登入
+        </button>
+        
+        <div class="login-divider">或</div>
+        
+        <!-- 密碼登入 (備用) -->
+        <form id="login-form" onsubmit="return handlePasswordLogin(event)">
             <div class="form-group">
                 <label><i class="fas fa-envelope"></i> 電子郵件</label>
-                <input type="email" id="login-email" placeholder="admin@example.com" required>
+                <input type="email" id="login-email" placeholder="admin@example.com">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-lock"></i> 密碼</label>
-                <input type="password" id="login-password" placeholder="請輸入密碼" required>
+                <input type="password" id="login-password" placeholder="請輸入密碼">
             </div>
-            <div id="login-error" class="login-error"></div>
-            <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> 登入</button>
+            <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> 密碼登入</button>
         </form>
+        
+        <div id="login-loading" class="login-loading">
+            <i class="fas fa-spinner fa-spin"></i> 正在登入...
+        </div>
+        
         <div class="login-footer">🔒 僅限管理員訪問</div>
     </div>
 </div>
@@ -516,7 +549,7 @@
         </nav>
         <div class="sidebar-footer">
             <div class="admin-info">
-                <div class="admin-avatar">👤</div>
+                <div class="admin-avatar" id="admin-avatar">👤</div>
                 <div class="admin-details">
                     <div class="admin-name" id="admin-name">管理員</div>
                     <div class="admin-email" id="admin-email-display">admin@example.com</div>
@@ -564,6 +597,7 @@
 
 <!-- ===== Toast ===== -->
 <div id="toast-container" class="toast-container"></div>
+
 <script>
 // ============================================================
 // Supabase 配置
@@ -579,6 +613,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentTab = 'dashboard';
 let modalCallback = null;
+let isLoggingIn = false;
 
 // ============================================================
 // 工具函數
@@ -615,52 +650,213 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
 }
 
+function showLoading(show) {
+    document.getElementById('login-loading').classList.toggle('show', show);
+}
+
+function showLoginError(message) {
+    const el = document.getElementById('login-error');
+    el.textContent = message;
+    el.classList.add('show');
+}
+
+function hideLoginError() {
+    document.getElementById('login-error').classList.remove('show');
+}
+
 // ============================================================
-// 認證
+// ✅ Google OAuth 登入
 // ============================================================
-async function handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const errorEl = document.getElementById('login-error');
+async function handleGoogleLogin() {
+    if (isLoggingIn) return;
+    isLoggingIn = true;
+    hideLoginError();
+    showLoading(true);
     
     try {
-        errorEl.classList.remove('show');
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        // 獲取當前頁面 URL 作為重定向目標
+        const redirectTo = window.location.href;
+        console.log('🔐 正在啟動 Google 登入，重定向到:', redirectTo);
         
-        const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('id, display_name, email, role')
-            .eq('id', data.user.id)
-            .single();
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: redirectTo,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent'
+                }
+            }
+        });
         
-        if (profileError) throw profileError;
-        if (profile.role !== 'admin') {
-            await supabase.auth.signOut();
-            throw new Error('您沒有管理員權限');
+        if (error) {
+            console.error('❌ Google 登入錯誤:', error);
+            throw error;
         }
         
-        currentUser = profile;
-        document.getElementById('login-page').classList.add('hidden');
-        document.getElementById('admin-app').classList.remove('hidden');
-        document.getElementById('admin-name').textContent = profile.display_name || '管理員';
-        document.getElementById('admin-email-display').textContent = profile.email || '';
-        loadDashboard();
-        toast('登入成功！');
+        console.log('✅ Google 登入已啟動，正在跳轉...');
+        // 用戶將被重定向到 Google 登入頁面
         
     } catch (error) {
-        errorEl.textContent = error.message;
-        errorEl.classList.add('show');
+        console.error('❌ 登入失敗:', error);
+        showLoginError('登入失敗: ' + (error.message || '請稍後再試'));
+        showLoading(false);
+        isLoggingIn = false;
     }
 }
 
+// ============================================================
+// 密碼登入 (備用)
+// ============================================================
+async function handlePasswordLogin(e) {
+    e.preventDefault();
+    hideLoginError();
+    
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value.trim();
+    
+    if (!email || !password) {
+        showLoginError('請輸入電子郵件和密碼');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await handleSuccessfulLogin(data.user);
+    } catch (error) {
+        showLoginError('登入失敗: ' + (error.message || '請檢查帳號密碼'));
+        showLoading(false);
+    }
+}
+
+// ============================================================
+// 登入成功處理
+// ============================================================
+async function handleSuccessfulLogin(user) {
+    try {
+        // 檢查管理員權限
+        const { data: profile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('id, display_name, email, role')
+            .eq('id', user.id)
+            .single();
+        
+        if (profileError) {
+            console.warn('⚠️ 找不到 user_profiles 記錄:', profileError);
+            // 如果沒有 profile，嘗試建立一個
+            const { data: newProfile, error: insertError } = await supabase
+                .from('user_profiles')
+                .insert({
+                    id: user.id,
+                    display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '管理員',
+                    email: user.email,
+                    role: 'admin',
+                    is_anonymous: false
+                })
+                .select()
+                .single();
+            
+            if (insertError) throw insertError;
+            currentUser = newProfile;
+        } else {
+            if (profile.role !== 'admin') {
+                await supabase.auth.signOut();
+                throw new Error('您沒有管理員權限');
+            }
+            currentUser = profile;
+        }
+        
+        // 顯示後台
+        showAdminApp(currentUser);
+        toast('登入成功！');
+        
+    } catch (error) {
+        await supabase.auth.signOut();
+        showLoginError('權限驗證失敗: ' + error.message);
+        showLoading(false);
+    }
+}
+
+// ============================================================
+// 顯示後台
+// ============================================================
+function showAdminApp(user) {
+    document.getElementById('login-page').classList.add('hidden');
+    document.getElementById('admin-app').classList.remove('hidden');
+    document.getElementById('admin-name').textContent = user.display_name || '管理員';
+    document.getElementById('admin-email-display').textContent = user.email || '';
+    document.getElementById('admin-avatar').textContent = user.display_name?.charAt(0) || '👤';
+    showLoading(false);
+    loadDashboard();
+}
+
+// ============================================================
+// 登出
+// ============================================================
 async function handleLogout() {
     await supabase.auth.signOut();
     currentUser = null;
     document.getElementById('admin-app').classList.add('hidden');
     document.getElementById('login-page').classList.remove('hidden');
     toast('已登出');
+}
+
+// ============================================================
+// OAuth 回調處理
+// ============================================================
+async function handleOAuthCallback() {
+    // 檢查 URL hash 是否有 access_token
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+        console.log('🔐 檢測到 OAuth 回調');
+        showLoading(true);
+        
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            
+            if (data.session) {
+                await handleSuccessfulLogin(data.session.user);
+                // 清除 URL hash
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        } catch (error) {
+            console.error('❌ OAuth 回調處理失敗:', error);
+            showLoginError('登入處理失敗: ' + error.message);
+            showLoading(false);
+        }
+    }
+}
+
+// ============================================================
+// 檢查現有 Session
+// ============================================================
+async function checkExistingSession() {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('id, display_name, email, role')
+                .eq('id', session.user.id)
+                .single();
+            
+            if (profile && profile.role === 'admin') {
+                currentUser = profile;
+                showAdminApp(profile);
+                return true;
+            } else {
+                // 有 session 但不是 admin，登出
+                await supabase.auth.signOut();
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ 檢查 session 失敗:', error);
+    }
+    return false;
 }
 
 // ============================================================
@@ -814,7 +1010,6 @@ async function flagStore(storeId) {
             
             if (error) throw error;
             
-            // 記錄到 field_status
             await supabase
                 .from('field_status')
                 .upsert({
@@ -1032,25 +1227,20 @@ function refreshAll() {
 }
 
 // ============================================================
-// 自動檢查登入狀態
+// 初始化
 // ============================================================
 document.addEventListener('DOMContentLoaded', async function() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('id, display_name, email, role')
-            .eq('id', session.user.id)
-            .single();
-        
-        if (profile && profile.role === 'admin') {
-            currentUser = profile;
-            document.getElementById('login-page').classList.add('hidden');
-            document.getElementById('admin-app').classList.remove('hidden');
-            document.getElementById('admin-name').textContent = profile.display_name || '管理員';
-            document.getElementById('admin-email-display').textContent = profile.email || '';
-            loadDashboard();
-        }
+    // 1. 檢查是否有 OAuth 回調
+    await handleOAuthCallback();
+    
+    // 2. 檢查現有 Session
+    const hasSession = await checkExistingSession();
+    
+    // 3. 如果沒有 session，顯示登入頁面
+    if (!hasSession) {
+        document.getElementById('login-page').classList.remove('hidden');
+        document.getElementById('admin-app').classList.add('hidden');
+        showLoading(false);
     }
 });
 </script>
