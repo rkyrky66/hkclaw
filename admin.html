@@ -1,3 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🛡️ 爪爪情報站 · 後台管理</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #D4AF37;
+            --primary-dark: #B8941F;
+            --bg-dark: #0a0a0a;
+            --bg-card: #141414;
+            --bg-input: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border-color: #2a2a2a;
+            --success: #00FF00;
+            --warning: #FFB800;
+            --danger: #FF007F;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --radius: 12px;
+            --sidebar-width: 260px;
+            --topbar-height: 64px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+        
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 0%, rgba(212,175,55,0.08), transparent 40%),
+                        radial-gradient(circle at 80% 100%, rgba(255,0,127,0.05), transparent 40%),
+                        var(--bg-dark);
+        }
+        .login-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: var(--shadow);
+        }
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-icon { font-size: 48px; margin-bottom: 8px; }
+        .login-box h1 { font-size: 24px; font-weight: 700; color: var(--primary); letter-spacing: 1px; }
+        .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+        .login-box .form-group { margin-bottom: 20px; }
+        .login-box .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .login-box .form-group label i { margin-right: 8px; color: var(--primary); }
+        .login-box .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+        .login-box .form-group input:focus { outline: none; border-color: var(--primary); }
+        .login-error {
+            background: rgba(255,0,127,0.12);
+            border: 1px solid rgba(255,0,127,0.3);
+            color: var(--danger);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .login-error.show { display: block; }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-login:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(212,175,55,0.25); }
+        .btn-login:active { transform: translateY(0); }
+        .login-footer { text-align: center; margin-top: 24px; color: var(--text-muted); font-size: 12px; }
+        
+        .admin-app { display: flex; height: 100vh; overflow: hidden; }
+        .hidden { display: none !important; }
+        
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 20px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .brand-icon { font-size: 28px; }
+        .brand-text { font-size: 18px; font-weight: 700; color: var(--primary); }
+        .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 0; }
+        .sidebar-nav ul { list-style: none; }
+        .sidebar-nav .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 20px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            font-size: 14px;
+            position: relative;
+        }
+        .sidebar-nav .nav-item:hover { background: rgba(212,175,55,0.06); color: var(--text-primary); }
+        .sidebar-nav .nav-item.active { color: var(--primary); border-left-color: var(--primary); background: rgba(212,175,55,0.08); }
+        .sidebar-nav .nav-item i { width: 20px; text-align: center; font-size: 16px; }
+        .sidebar-nav .nav-item .badge {
+            margin-left: auto;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--border-color);
+            color: var(--text-secondary);
+        }
+        .sidebar-nav .nav-item .badge.badge-warning { background: rgba(255,184,0,0.2); color: var(--warning); }
+        .sidebar-nav .nav-item .badge.badge-danger { background: rgba(255,0,127,0.2); color: var(--danger); }
+        .sidebar-nav .nav-item .badge.badge-success { background: rgba(0,255,0,0.15); color: var(--success); }
+        .sidebar-footer {
+            border-top: 1px solid var(--border-color);
+            padding: 16px 20px;
+        }
+        .admin-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .admin-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(212,175,55,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .admin-details { flex: 1; min-width: 0; }
+        .admin-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .admin-email { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-logout {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255,0,127,0.1);
+            border: 1px solid rgba(255,0,127,0.2);
+            border-radius: 8px;
+            color: var(--danger);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-logout:hover { background: rgba(255,0,127,0.2); }
+        
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: var(--topbar-height);
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-card);
+            flex-shrink: 0;
+        }
+        .top-bar-left { display: flex; align-items: center; gap: 16px; }
+        .btn-toggle-sidebar {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        #page-title { font-size: 18px; font-weight: 700; }
+        .top-bar-right { display: flex; align-items: center; gap: 20px; }
+        .top-bar-stats { display: flex; gap: 16px; }
+        .stat-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .stat-label { color: var(--text-muted); }
+        .stat-value { font-weight: 700; color: var(--text-primary); }
+        .btn-refresh {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-refresh:hover { border-color: var(--primary); color: var(--primary); }
+        
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 200px;
+            color: var(--text-muted);
+        }
+        .loading-spinner i { font-size: 32px; }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-card .number { font-size: 32px; font-weight: 700; }
+        .stat-card .label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+        .stat-card .number.gold { color: var(--primary); }
+        .stat-card .number.green { color: var(--success); }
+        .stat-card .number.red { color: var(--danger); }
+        .stat-card .number.yellow { color: var(--warning); }
+        
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .table-container table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .table-container th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table-container td {
+            padding: 12px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .table-container tr:last-child td { border-bottom: none; }
+        .table-container tr:hover { background: rgba(255,255,255,0.02); }
+        
+        .status-badge {
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-badge.pending { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
+        .status-badge.confirmed { background: rgba(0,255,0,0.15); color: var(--success); }
+        .status-badge.suspicious { background: rgba(255,184,0,0.15); color: var(--warning); }
+        .status-badge.rejected { background: rgba(255,0,127,0.15); color: var(--danger); }
+        
+        .btn-sm {
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-sm.primary { background: var(--primary); color: #000; border-color: var(--primary); }
+        .btn-sm.primary:hover { background: var(--primary-dark); }
+        .btn-sm.danger { border-color: var(--danger); color: var(--danger); }
+        .btn-sm.danger:hover { background: rgba(255,0,127,0.1); }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; }
+        
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-header h3 { font-size: 18px; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        .btn-modal-cancel {
+            padding: 8px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .btn-modal-confirm {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-modal-confirm.danger { background: var(--danger); color: #fff; }
+        
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+            max-width: 360px;
+        }
+        .toast.success { border-color: var(--success); color: var(--success); }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+        .toast.warning { border-color: var(--warning); color: var(--warning); }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .btn-toggle-sidebar {
+                display: block;
+            }
+            .top-bar-stats { display: none; }
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .login-box { padding: 32px 20px; margin: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== 登入頁面 ===== -->
+<div id="login-page" class="login-container">
+    <div class="login-box">
+        <div class="login-header">
+            <div class="login-icon">🛡️</div>
+            <h1>爪爪情報站</h1>
+            <p class="login-subtitle">管理後台</p>
+        </div>
+        <form id="login-form" onsubmit="return handleLogin(event)">
+            <div class="form-group">
+                <label><i class="fas fa-envelope"></i> 電子郵件</label>
+                <input type="email" id="login-email" placeholder="admin@example.com" required>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-lock"></i> 密碼</label>
+                <input type="password" id="login-password" placeholder="請輸入密碼" required>
+            </div>
+            <div id="login-error" class="login-error"></div>
+            <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> 登入</button>
+        </form>
+        <div class="login-footer">🔒 僅限管理員訪問</div>
+    </div>
+</div>
+
+<!-- ===== 後台主界面 ===== -->
+<div id="admin-app" class="admin-app hidden">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <span class="brand-icon">🛡️</span>
+            <span class="brand-text">爪爪後台</span>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+                    <i class="fas fa-chart-pie"></i><span>儀表板</span>
+                </li>
+                <li class="nav-item" data-tab="stores" onclick="switchTab('stores')">
+                    <i class="fas fa-store"></i><span>新店審核</span>
+                    <span class="badge badge-warning" id="badge-stores">0</span>
+                </li>
+                <li class="nav-item" data-tab="flagged" onclick="switchTab('flagged')">
+                    <i class="fas fa-exclamation-triangle"></i><span>⚠️ 存疑清單</span>
+                    <span class="badge badge-danger" id="badge-flagged">0</span>
+                </li>
+                <li class="nav-item" data-tab="users" onclick="switchTab('users')">
+                    <i class="fas fa-users"></i><span>用戶管理</span>
+                </li>
+                <li class="nav-item" data-tab="audit" onclick="switchTab('audit')">
+                    <i class="fas fa-history"></i><span>審計日誌</span>
+                </li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="admin-info">
+                <div class="admin-avatar">👤</div>
+                <div class="admin-details">
+                    <div class="admin-name" id="admin-name">管理員</div>
+                    <div class="admin-email" id="admin-email-display">admin@example.com</div>
+                </div>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout"><i class="fas fa-sign-out-alt"></i> 登出</button>
+        </div>
+    </aside>
+    
+    <main class="main-content">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="btn-toggle-sidebar" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                <h2 id="page-title">儀表板</h2>
+            </div>
+            <div class="top-bar-right">
+                <div class="top-bar-stats">
+                    <span class="stat-item"><span class="stat-label">待處理</span><span class="stat-value" id="stat-pending">0</span></span>
+                    <span class="stat-item"><span class="stat-label">存疑</span><span class="stat-value" id="stat-flagged">0</span></span>
+                    <span class="stat-item"><span class="stat-label">已確認</span><span class="stat-value" id="stat-confirmed">0</span></span>
+                </div>
+                <button class="btn-refresh" onclick="refreshAll()"><i class="fas fa-sync-alt"></i></button>
+            </div>
+        </header>
+        <section class="content-area" id="content-area">
+            <div id="tab-content"><div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div></div>
+        </section>
+    </main>
+</div>
+
+<!-- ===== 模態框 ===== -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="modal-title">標題</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer">
+            <button class="btn-modal-cancel" onclick="closeModal()">取消</button>
+            <button class="btn-modal-confirm" id="modal-confirm-btn" onclick="modalConfirm()">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div id="toast-container" class="toast-container"></div>
 <script>
 // ============================================================
 // Supabase 配置
