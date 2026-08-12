@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     
     <style>
-        /* ===== 所有樣式 (與之前相同，只增加側邊欄關閉按鈕) ===== */
         :root {
             --primary: #D4AF37;
             --primary-dark: #B8941F;
@@ -118,7 +117,6 @@
         .admin-app { display: flex; height: 100vh; overflow: hidden; }
         .hidden { display: none !important; }
         
-        /* ===== 側邊欄 ===== */
         .sidebar {
             width: var(--sidebar-width);
             min-width: var(--sidebar-width);
@@ -133,7 +131,6 @@
             z-index: 100;
             transition: transform 0.3s ease;
         }
-        /* ✅ 側邊欄關閉按鈕 */
         .sidebar-close {
             display: none;
             position: absolute;
@@ -468,7 +465,6 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
-        /* ===== 欄位級存疑樣式 ===== */
         .field-item {
             display: flex;
             align-items: center;
@@ -502,37 +498,6 @@
             font-weight: 600;
         }
         
-        /* ===== 響應式 ===== */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .sidebar-close {
-                display: block;
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .btn-toggle-sidebar {
-                display: block;
-            }
-            .top-bar-stats { display: none; }
-            .dashboard-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            .login-box { padding: 32px 20px; margin: 16px; }
-            .field-item { flex-wrap: wrap; gap: 4px; }
-            .field-item .field-value { max-width: 100px; }
-        }
-        @media (max-width: 480px) {
-            .field-item .field-value { max-width: 60px; }
-            .field-item .field-actions { flex-wrap: wrap; }
-        }
-        
-        /* 側邊欄遮罩 */
         .sidebar-overlay {
             display: none;
             position: fixed;
@@ -540,8 +505,23 @@
             background: rgba(0,0,0,0.5);
             z-index: 99;
         }
-        .sidebar-overlay.show {
-            display: block;
+        .sidebar-overlay.show { display: block; }
+        
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-close { display: block; }
+            .main-content { margin-left: 0; }
+            .btn-toggle-sidebar { display: block; }
+            .top-bar-stats { display: none; }
+            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+            .login-box { padding: 32px 20px; margin: 16px; }
+            .field-item { flex-wrap: wrap; gap: 4px; }
+            .field-item .field-value { max-width: 100px; }
+        }
+        @media (max-width: 480px) {
+            .field-item .field-value { max-width: 60px; }
+            .field-item .field-actions { flex-wrap: wrap; }
         }
     </style>
 </head>
@@ -675,52 +655,54 @@
 
 <script>
 // ============================================================
-// Supabase 配置
+// ✅ 修復：Supabase 初始化 (使用正確的語法)
 // ============================================================
-const SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
+var SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
+var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 
-// ✅ 避免重複宣告
-if (typeof window.supabaseClient === 'undefined') {
-    if (typeof supabase !== 'undefined') {
-        var window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else if (typeof window.supabase !== 'undefined') {
-        var window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else {
-        var window.supabaseClient = null;
-        console.error('❌ Supabase SDK 未載入');
-    }
+// 檢查 supabase 是否已載入
+var sb = null;
+if (typeof supabase !== 'undefined' && supabase.createClient) {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} else if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+    // 如果還是沒有，顯示錯誤
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;color:#fff;font-family:sans-serif;text-align:center;padding:20px;"><div><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h2 style="color:#D4AF37;">Supabase SDK 載入失敗</h2><p style="color:#a0a0a0;margin-top:8px;">請檢查網路連線後重新整理頁面</p><button onclick="location.reload()" style="margin-top:16px;padding:10px 30px;background:#D4AF37;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;">重新整理</button></div></div>';
+    throw new Error('Supabase SDK 載入失敗');
 }
-var sb = window.supabaseClient;
 
 // ============================================================
 // 狀態
 // ============================================================
-let currentUser = null;
-let currentTab = 'dashboard';
-let modalCallback = null;
-let isLoggingIn = false;
-let currentViewStoreId = null;
-let currentFieldFlags = {}; // 暫存欄位存疑狀態
+var currentUser = null;
+var currentTab = 'dashboard';
+var modalCallback = null;
+var isLoggingIn = false;
+var currentViewStoreId = null;
+var currentFieldFlags = {};
 
 // ============================================================
 // 工具函數
 // ============================================================
-function toast(message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
+function toast(message, type) {
+    if (type === undefined) type = 'success';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast ' + type;
     el.textContent = message;
     container.appendChild(el);
-    setTimeout(() => el.remove(), 3000);
+    setTimeout(function() { el.remove(); }, 3000);
 }
 
-function openModal(title, body, confirmText = '確認', confirmClass = '') {
+function openModal(title, body, confirmText, confirmClass) {
+    if (confirmText === undefined) confirmText = '確認';
+    if (confirmClass === undefined) confirmClass = '';
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = body;
-    const btn = document.getElementById('modal-confirm-btn');
+    var btn = document.getElementById('modal-confirm-btn');
     btn.textContent = confirmText;
-    btn.className = `btn-modal-confirm ${confirmClass}`;
+    btn.className = 'btn-modal-confirm ' + confirmClass;
     document.getElementById('modal-overlay').classList.remove('hidden');
 }
 
@@ -734,25 +716,24 @@ function modalConfirm() {
     closeModal();
 }
 
-// ===== ✅ 側邊欄控制 (已修復) =====
 function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
     sidebar.classList.toggle('open');
     overlay.classList.toggle('show');
 }
 
 function closeSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
     sidebar.classList.remove('open');
     overlay.classList.remove('show');
 }
 
-// ✅ 點擊頁面其他地方自動關閉側邊欄
+// 點擊其他地方關閉側邊欄
 document.addEventListener('click', function(e) {
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.querySelector('.btn-toggle-sidebar');
+    var sidebar = document.getElementById('sidebar');
+    var toggleBtn = document.querySelector('.btn-toggle-sidebar');
     if (window.innerWidth <= 768) {
         if (sidebar.classList.contains('open')) {
             if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
@@ -763,11 +744,16 @@ document.addEventListener('click', function(e) {
 });
 
 function showLoading(show) {
-    document.getElementById('login-loading').classList.toggle('show', show);
+    var el = document.getElementById('login-loading');
+    if (show) {
+        el.classList.add('show');
+    } else {
+        el.classList.remove('show');
+    }
 }
 
 function showLoginError(message) {
-    const el = document.getElementById('login-error');
+    var el = document.getElementById('login-error');
     el.textContent = message;
     el.classList.add('show');
 }
@@ -779,89 +765,101 @@ function hideLoginError() {
 // ============================================================
 // Google OAuth 登入
 // ============================================================
-async function handleGoogleLogin() {
-    if (isLoggingIn || !sb) return;
+function handleGoogleLogin() {
+    if (isLoggingIn) return;
+    if (!sb) {
+        showLoginError('Supabase 服務尚未初始化，請重新整理頁面');
+        return;
+    }
     isLoggingIn = true;
     hideLoginError();
     showLoading(true);
     
-    try {
-        const redirectTo = window.location.href;
-        const { data, error } = await sb.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: redirectTo,
-                queryParams: { access_type: 'offline', prompt: 'consent' }
-            }
-        });
-        if (error) throw error;
-    } catch (error) {
+    sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.href,
+            queryParams: { access_type: 'offline', prompt: 'consent' }
+        }
+    }).then(function(result) {
+        if (result.error) throw result.error;
+    }).catch(function(error) {
         showLoginError('登入失敗: ' + (error.message || '請稍後再試'));
         showLoading(false);
         isLoggingIn = false;
-    }
+    });
 }
 
 // ============================================================
-// 密碼登入 (備用)
+// 密碼登入
 // ============================================================
-async function handlePasswordLogin(e) {
+function handlePasswordLogin(e) {
     e.preventDefault();
     hideLoginError();
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value.trim();
-    if (!email || !password) { showLoginError('請輸入電子郵件和密碼'); return; }
-    showLoading(true);
-    try {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        await handleSuccessfulLogin(data.user);
-    } catch (error) {
-        showLoginError('登入失敗: ' + (error.message || '請檢查帳號密碼'));
-        showLoading(false);
+    var email = document.getElementById('login-email').value.trim();
+    var password = document.getElementById('login-password').value.trim();
+    if (!email || !password) {
+        showLoginError('請輸入電子郵件和密碼');
+        return;
     }
+    showLoading(true);
+    sb.auth.signInWithPassword({ email: email, password: password })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            return handleSuccessfulLogin(result.data.user);
+        })
+        .catch(function(error) {
+            showLoginError('登入失敗: ' + (error.message || '請檢查帳號密碼'));
+            showLoading(false);
+        });
 }
 
 // ============================================================
 // 登入成功處理
 // ============================================================
-async function handleSuccessfulLogin(user) {
-    try {
-        const { data: profile, error: profileError } = await sb
-            .from('user_profiles')
-            .select('id, display_name, email, role')
-            .eq('id', user.id)
-            .single();
-        
-        if (profileError) {
-            const { data: newProfile, error: insertError } = await sb
-                .from('user_profiles')
-                .insert({
-                    id: user.id,
-                    display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '管理員',
-                    email: user.email,
-                    role: 'admin',
-                    is_anonymous: false
-                })
-                .select()
-                .single();
-            if (insertError) throw insertError;
-            currentUser = newProfile;
-        } else {
-            if (profile.role !== 'admin') {
-                await sb.auth.signOut();
-                throw new Error('您沒有管理員權限');
+function handleSuccessfulLogin(user) {
+    return sb
+        .from('user_profiles')
+        .select('id, display_name, email, role')
+        .eq('id', user.id)
+        .single()
+        .then(function(result) {
+            if (result.error) {
+                // 如果找不到 profile，嘗試建立
+                return sb
+                    .from('user_profiles')
+                    .insert({
+                        id: user.id,
+                        display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '管理員',
+                        email: user.email,
+                        role: 'admin',
+                        is_anonymous: false
+                    })
+                    .select()
+                    .single()
+                    .then(function(insertResult) {
+                        if (insertResult.error) throw insertResult.error;
+                        return insertResult.data;
+                    });
             }
+            if (result.data.role !== 'admin') {
+                return sb.auth.signOut().then(function() {
+                    throw new Error('您沒有管理員權限');
+                });
+            }
+            return result.data;
+        })
+        .then(function(profile) {
             currentUser = profile;
-        }
-        
-        showAdminApp(currentUser);
-        toast('登入成功！');
-    } catch (error) {
-        await sb.auth.signOut();
-        showLoginError('權限驗證失敗: ' + error.message);
-        showLoading(false);
-    }
+            showAdminApp(profile);
+            toast('登入成功！');
+        })
+        .catch(function(error) {
+            return sb.auth.signOut().then(function() {
+                showLoginError('權限驗證失敗: ' + error.message);
+                showLoading(false);
+            });
+        });
 }
 
 function showAdminApp(user) {
@@ -869,60 +867,76 @@ function showAdminApp(user) {
     document.getElementById('admin-app').classList.remove('hidden');
     document.getElementById('admin-name').textContent = user.display_name || '管理員';
     document.getElementById('admin-email-display').textContent = user.email || '';
-    document.getElementById('admin-avatar').textContent = user.display_name?.charAt(0) || '👤';
+    document.getElementById('admin-avatar').textContent = user.display_name ? user.display_name.charAt(0) : '👤';
     showLoading(false);
     isLoggingIn = false;
     loadDashboard();
 }
 
-async function handleLogout() {
-    await sb.auth.signOut();
-    currentUser = null;
-    document.getElementById('admin-app').classList.add('hidden');
-    document.getElementById('login-page').classList.remove('hidden');
-    toast('已登出');
+function handleLogout() {
+    sb.auth.signOut()
+        .then(function() {
+            currentUser = null;
+            document.getElementById('admin-app').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+            toast('已登出');
+        })
+        .catch(function(error) {
+            toast('登出失敗: ' + error.message, 'error');
+        });
 }
 
 // ============================================================
 // OAuth 回調處理
 // ============================================================
-async function handleOAuthCallback() {
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
+function handleOAuthCallback() {
+    var hash = window.location.hash;
+    if (hash && hash.indexOf('access_token') !== -1) {
         showLoading(true);
-        try {
-            const { data, error } = await sb.auth.getSession();
-            if (error) throw error;
-            if (data.session) {
-                await handleSuccessfulLogin(data.session.user);
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        } catch (error) {
-            showLoginError('登入處理失敗: ' + error.message);
-            showLoading(false);
-        }
+        sb.auth.getSession()
+            .then(function(result) {
+                if (result.error) throw result.error;
+                if (result.data.session) {
+                    return handleSuccessfulLogin(result.data.session.user)
+                        .then(function() {
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                        });
+                }
+            })
+            .catch(function(error) {
+                showLoginError('登入處理失敗: ' + error.message);
+                showLoading(false);
+            });
     }
 }
 
-async function checkExistingSession() {
-    try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session) {
-            const { data: profile } = await sb
-                .from('user_profiles')
-                .select('id, display_name, email, role')
-                .eq('id', session.user.id)
-                .single();
-            if (profile && profile.role === 'admin') {
-                currentUser = profile;
-                showAdminApp(profile);
-                return true;
-            } else {
-                await sb.auth.signOut();
+function checkExistingSession() {
+    return sb.auth.getSession()
+        .then(function(result) {
+            if (result.error) throw result.error;
+            if (result.data.session) {
+                return sb
+                    .from('user_profiles')
+                    .select('id, display_name, email, role')
+                    .eq('id', result.data.session.user.id)
+                    .single()
+                    .then(function(profileResult) {
+                        if (profileResult.error) throw profileResult.error;
+                        if (profileResult.data && profileResult.data.role === 'admin') {
+                            currentUser = profileResult.data;
+                            showAdminApp(profileResult.data);
+                            return true;
+                        } else {
+                            return sb.auth.signOut().then(function() { return false; });
+                        }
+                    });
             }
-        }
-    } catch (error) { console.warn('⚠️ 檢查 session 失敗:', error); }
-    return false;
+            return false;
+        })
+        .catch(function(error) {
+            console.warn('⚠️ 檢查 session 失敗:', error);
+            return false;
+        });
 }
 
 // ============================================================
@@ -930,482 +944,540 @@ async function checkExistingSession() {
 // ============================================================
 function switchTab(tab) {
     currentTab = tab;
-    document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === tab);
-    });
-    const titles = { dashboard: '儀表板', stores: '新店審核', flagged: '⚠️ 存疑清單', users: '用戶管理', audit: '審計日誌' };
+    var items = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        if (el.dataset.tab === tab) {
+            el.classList.add('active');
+        } else {
+            el.classList.remove('active');
+        }
+    }
+    var titles = { dashboard: '儀表板', stores: '新店審核', flagged: '⚠️ 存疑清單', users: '用戶管理', audit: '審計日誌' };
     document.getElementById('page-title').textContent = titles[tab] || tab;
-    closeSidebar(); // ✅ 切換頁面時自動關閉側邊欄
-    const loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
+    closeSidebar();
+    
+    var loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
     if (loaders[tab]) loaders[tab]();
 }
 
 // ============================================================
 // 儀表板
 // ============================================================
-async function loadDashboard() {
-    const container = document.getElementById('tab-content');
+function loadDashboard() {
+    var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    try {
-        const [storesCount, flaggedCount, confirmedCount] = await Promise.all([
-            sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
-            sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
-            sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
-        ]);
+    
+    Promise.all([
+        sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'pending'),
+        sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
+        sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed')
+    ])
+    .then(function(results) {
+        var storesCount = results[0];
+        var flaggedCount = results[1];
+        var confirmedCount = results[2];
+        
         document.getElementById('stat-pending').textContent = storesCount.count || 0;
         document.getElementById('stat-flagged').textContent = flaggedCount.count || 0;
         document.getElementById('stat-confirmed').textContent = confirmedCount.count || 0;
         document.getElementById('badge-stores').textContent = storesCount.count || 0;
         document.getElementById('badge-flagged').textContent = flaggedCount.count || 0;
-        container.innerHTML = `
-            <div class="dashboard-grid">
-                <div class="stat-card"><div class="number gold">${storesCount.count || 0}</div><div class="label">🏪 待審核店鋪</div></div>
-                <div class="stat-card"><div class="number red">${flaggedCount.count || 0}</div><div class="label">⚠️ 存疑項目</div></div>
-                <div class="stat-card"><div class="number green">${confirmedCount.count || 0}</div><div class="label">✅ 已確認</div></div>
-                <div class="stat-card"><div class="number">${(storesCount.count || 0) + (confirmedCount.count || 0)}</div><div class="label">🏪 總店鋪</div></div>
-            </div>
-            <div class="table-container">
-                <table><thead><tr><th>店鋪名稱</th><th>地區</th><th>狀態</th><th>操作</th></tr></thead>
-                <tbody id="dashboard-table-body"></tbody></table>
-            </div>
-        `;
-        const { data: recent } = await sb
+        
+        container.innerHTML = 
+            '<div class="dashboard-grid">' +
+                '<div class="stat-card"><div class="number gold">' + (storesCount.count || 0) + '</div><div class="label">🏪 待審核店鋪</div></div>' +
+                '<div class="stat-card"><div class="number red">' + (flaggedCount.count || 0) + '</div><div class="label">⚠️ 存疑項目</div></div>' +
+                '<div class="stat-card"><div class="number green">' + (confirmedCount.count || 0) + '</div><div class="label">✅ 已確認</div></div>' +
+                '<div class="stat-card"><div class="number">' + ((storesCount.count || 0) + (confirmedCount.count || 0)) + '</div><div class="label">🏪 總店鋪</div></div>' +
+            '</div>' +
+            '<div class="table-container">' +
+                '<table><thead><tr><th>店鋪名稱</th><th>地區</th><th>狀態</th><th>操作</th></tr></thead>' +
+                '<tbody id="dashboard-table-body"></tbody></table>' +
+            '</div>';
+        
+        return sb
             .from('claw_stores')
             .select('id, name, region, admin_overall_status')
             .order('created_at', { ascending: false })
             .limit(10);
-        const tbody = document.getElementById('dashboard-table-body');
-        if (!recent || recent.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="empty-state">暫無店鋪資料</td></tr>`;
+    })
+    .then(function(result) {
+        var recent = result.data || [];
+        var tbody = document.getElementById('dashboard-table-body');
+        if (recent.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">暫無店鋪資料</td></tr>';
         } else {
-            tbody.innerHTML = recent.map(s => `
-                <tr>
-                    <td>${s.name}</td>
-                    <td>${s.region || '未設定'}</td>
-                    <td><span class="status-badge ${s.admin_overall_status || 'pending'}">${s.admin_overall_status || '待審核'}</span></td>
-                    <td><button class="btn-sm" onclick="viewStoreDetail('${s.id}')">查看</button></td>
-                </tr>
-            `).join('');
+            var html = '';
+            for (var i = 0; i < recent.length; i++) {
+                var s = recent[i];
+                html += '<tr>' +
+                    '<td>' + s.name + '</td>' +
+                    '<td>' + (s.region || '未設定') + '</td>' +
+                    '<td><span class="status-badge ' + (s.admin_overall_status || 'pending') + '">' + (s.admin_overall_status || '待審核') + '</span></td>' +
+                    '<td><button class="btn-sm" onclick="viewStoreDetail(\'' + s.id + '\')">查看</button></td>' +
+                '</tr>';
+            }
+            tbody.innerHTML = html;
         }
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ${error.message}</p></div>`;
-    }
+    })
+    .catch(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+    });
 }
 
 // ============================================================
-// 新店審核 (完整版 - 含欄位級存疑)
+// 新店審核
 // ============================================================
-async function loadStores() {
-    const container = document.getElementById('tab-content');
+function loadStores() {
+    var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    try {
-        const { data, error } = await sb
-            .from('claw_stores')
-            .select('*')
-            .in('admin_overall_status', ['pending', 'partial', 'suspicious'])
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        container.innerHTML = `
-            <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                <span style="font-size:13px;color:var(--text-muted);">📋 共 ${data.length} 間待審核店鋪</span>
-                <button class="btn-sm" onclick="loadStores()" style="margin-left:auto;">🔄 重新整理</button>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>店名</th><th>地區</th><th>提交者</th><th>狀態</th><th>欄位狀態</th><th>操作</th></tr></thead>
-                    <tbody>
-                        ${data.length === 0 ? `<tr><td colspan="6" class="empty-state">🎉 沒有待審核的店鋪</td></tr>` : 
-                        data.map(s => `
-                            <tr>
-                                <td><strong>${s.name}</strong></td>
-                                <td>${s.region || '未設定'}</td>
-                                <td>${s.submitted_by || '未知'}</td>
-                                <td><span class="status-badge ${s.admin_overall_status || 'pending'}">${s.admin_overall_status || '待審核'}</span></td>
-                                <td><span class="status-badge ${s.admin_overall_status === 'suspicious' ? 'field-suspicious' : 'pending'}">${s.admin_overall_status === 'suspicious' ? '⚠️ 有欄位存疑' : '待檢查'}</span></td>
-                                <td>
-                                    <button class="btn-sm primary" onclick="viewStoreDetail('${s.id}')">📋 詳細檢視</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ${error.message}</p></div>`;
-    }
-}
-
-// ============================================================
-// ✅ 完整店鋪檢視 (含欄位級存疑)
-// ============================================================
-async function viewStoreDetail(storeId) {
-    currentViewStoreId = storeId;
-    currentFieldFlags = {};
     
-    try {
-        const { data: store, error } = await sb
-            .from('claw_stores')
-            .select('*')
-            .eq('id', storeId)
-            .single();
-        if (error) throw error;
-        
-        // 取得該店鋪所有欄位的存疑狀態
-        const { data: fieldStatuses } = await sb
-            .from('field_status')
-            .select('*')
-            .eq('table_name', 'claw_stores')
-            .eq('record_id', storeId);
-        
-        // 建立欄位狀態對照表
-        const fieldStatusMap = {};
-        if (fieldStatuses) {
-            fieldStatuses.forEach(fs => {
-                fieldStatusMap[fs.field_name] = fs.status;
-            });
-        }
-        
-        // 定義要顯示的欄位
-        const fields = [
-            { key: 'name', label: '店名', value: store.name || '未填' },
-            { key: 'region', label: '地區', value: store.region || '未填' },
-            { key: 'addr', label: '地址', value: store.addr || '未填' },
-            { key: 'address_detail', label: '詳細地址', value: store.address_detail || '未填' },
-            { key: 'size', label: '規模', value: store.size || '未填' },
-            { key: 'has_staff', label: '有場務', value: store.has_staff !== undefined ? (store.has_staff ? '有' : '無') : '未填' },
-            { key: 'has_e_coin', label: '電子兌幣', value: store.has_e_coin !== undefined ? (store.has_e_coin ? '有' : '無') : '未填' },
-            { key: 'photo', label: '照片', value: store.photo || '無照片' },
-            { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' },
-        ];
-        
-        // 計算整體狀態
-        const hasSuspicious = Object.values(fieldStatusMap).some(s => s === 'suspicious');
-        const allConfirmed = Object.values(fieldStatusMap).every(s => s === 'confirmed') && Object.keys(fieldStatusMap).length > 0;
-        const overallStatus = hasSuspicious ? 'suspicious' : (allConfirmed ? 'confirmed' : 'pending');
-        
-        // 生成欄位 HTML
-        let fieldsHtml = fields.map(f => {
-            const status = fieldStatusMap[f.key] || 'pending';
-            const statusLabels = {
-                'pending': '<span class="field-status status-pending">⏳ 待查閱</span>',
-                'confirmed': '<span class="field-status status-confirmed">✅ 已確認</span>',
-                'suspicious': '<span class="field-status status-suspicious">⚠️ 存疑</span>'
-            };
-            const borderClass = status === 'suspicious' ? 'border-suspicious' : (status === 'confirmed' ? 'border-confirmed' : '');
-            const isPhoto = f.key === 'photo';
-            const displayValue = isPhoto && f.value !== '無照片' && f.value !== '未填' 
-                ? `<img src="${f.value}" style="max-height:60px;border-radius:4px;object-fit:cover;" />` 
-                : f.value;
+    sb
+        .from('claw_stores')
+        .select('*')
+        .in('admin_overall_status', ['pending', 'partial', 'suspicious'])
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            var html = 
+                '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                    '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + data.length + ' 間待審核店鋪</span>' +
+                    '<button class="btn-sm" onclick="loadStores()" style="margin-left:auto;">🔄 重新整理</button>' +
+                '</div>' +
+                '<div class="table-container">' +
+                    '<table>' +
+                        '<thead><tr><th>店名</th><th>地區</th><th>提交者</th><th>狀態</th><th>欄位狀態</th><th>操作</th></tr></thead>' +
+                        '<tbody>';
             
-            return `
-                <div class="field-item ${borderClass}" data-field="${f.key}">
-                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
-                        <input type="checkbox" class="field-checkbox" id="field-${f.key}" data-field="${f.key}" ${status === 'suspicious' ? 'checked' : ''}>
-                        <span class="field-name">${f.label}</span>
-                        <span class="field-value">${displayValue}</span>
-                    </div>
-                    <div class="field-actions">
-                        ${statusLabels[status] || statusLabels.pending}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        openModal(`
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                <div>
-                    <h3 style="font-size:18px;">📋 ${store.name}</h3>
-                    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
-                        <span class="status-badge ${overallStatus}">${overallStatus === 'suspicious' ? '⚠️ 有存疑欄位' : (overallStatus === 'confirmed' ? '✅ 已完整確認' : '⏳ 待審核')}</span>
-                        <span style="font-size:12px;color:var(--text-muted);">📍 ${store.region || '未知地區'}</span>
-                    </div>
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button class="btn-sm primary" onclick="confirmAllFields('${storeId}')">✅ 全部確認</button>
-                    <button class="btn-sm warning" onclick="applyFieldFlags('${storeId}')">⚠️ 標記選中欄位為存疑</button>
-                </div>
-            </div>
-            <div style="margin-top:12px;">
-                <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
-                    💡 勾選欄位後點擊「標記選中欄位為存疑」 | 綠色=已確認 | 黃色=存疑 | 灰色=待查閱
-                </div>
-                ${fieldsHtml}
-            </div>
-            <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">
-                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-                    <span style="font-size:12px;color:var(--text-muted);">📌 提交時間: ${new Date(store.created_at).toLocaleString()}</span>
-                    <span style="font-size:12px;color:var(--text-muted);">| 提交者: ${store.submitted_by || '未知'}</span>
-                    ${store.photo ? `<a href="${store.photo}" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>` : ''}
-                </div>
-            </div>
-        `, '', '關閉');
-        
-    } catch (error) {
-        toast('載入失敗: ' + error.message, 'error');
-    }
+            if (data.length === 0) {
+                html += '<tr><td colspan="6" class="empty-state">🎉 沒有待審核的店鋪</td></tr>';
+            } else {
+                for (var i = 0; i < data.length; i++) {
+                    var s = data[i];
+                    html += '<tr>' +
+                        '<td><strong>' + s.name + '</strong></td>' +
+                        '<td>' + (s.region || '未設定') + '</td>' +
+                        '<td>' + (s.submitted_by || '未知') + '</td>' +
+                        '<td><span class="status-badge ' + (s.admin_overall_status || 'pending') + '">' + (s.admin_overall_status || '待審核') + '</span></td>' +
+                        '<td><span class="status-badge ' + (s.admin_overall_status === 'suspicious' ? 'field-suspicious' : 'pending') + '">' + (s.admin_overall_status === 'suspicious' ? '⚠️ 有欄位存疑' : '待檢查') + '</span></td>' +
+                        '<td><button class="btn-sm primary" onclick="viewStoreDetail(\'' + s.id + '\')">📋 詳細檢視</button></td>' +
+                    '</tr>';
+                }
+            }
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
 }
 
 // ============================================================
-// ✅ 全部確認 (完整項目)
+// 完整店鋪檢視 (含欄位級存疑)
 // ============================================================
-async function confirmAllFields(storeId) {
+function viewStoreDetail(storeId) {
+    currentViewStoreId = storeId;
+    
+    sb
+        .from('claw_stores')
+        .select('*')
+        .eq('id', storeId)
+        .single()
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var store = result.data;
+            
+            return sb
+                .from('field_status')
+                .select('*')
+                .eq('table_name', 'claw_stores')
+                .eq('record_id', storeId)
+                .then(function(fsResult) {
+                    var fieldStatuses = fsResult.data || [];
+                    var fieldStatusMap = {};
+                    for (var i = 0; i < fieldStatuses.length; i++) {
+                        fieldStatusMap[fieldStatuses[i].field_name] = fieldStatuses[i].status;
+                    }
+                    
+                    var fields = [
+                        { key: 'name', label: '店名', value: store.name || '未填' },
+                        { key: 'region', label: '地區', value: store.region || '未填' },
+                        { key: 'addr', label: '地址', value: store.addr || '未填' },
+                        { key: 'address_detail', label: '詳細地址', value: store.address_detail || '未填' },
+                        { key: 'size', label: '規模', value: store.size || '未填' },
+                        { key: 'has_staff', label: '有場務', value: store.has_staff !== undefined ? (store.has_staff ? '有' : '無') : '未填' },
+                        { key: 'has_e_coin', label: '電子兌幣', value: store.has_e_coin !== undefined ? (store.has_e_coin ? '有' : '無') : '未填' },
+                        { key: 'photo', label: '照片', value: store.photo || '無照片' },
+                        { key: 'submitted_by', label: '提交者', value: store.submitted_by || '未知' }
+                    ];
+                    
+                    var hasSuspicious = false;
+                    var allConfirmed = true;
+                    var statusKeys = Object.keys(fieldStatusMap);
+                    for (var i = 0; i < statusKeys.length; i++) {
+                        if (fieldStatusMap[statusKeys[i]] === 'suspicious') hasSuspicious = true;
+                        if (fieldStatusMap[statusKeys[i]] !== 'confirmed') allConfirmed = false;
+                    }
+                    if (statusKeys.length === 0) allConfirmed = false;
+                    var overallStatus = hasSuspicious ? 'suspicious' : (allConfirmed ? 'confirmed' : 'pending');
+                    
+                    var fieldsHtml = '';
+                    for (var i = 0; i < fields.length; i++) {
+                        var f = fields[i];
+                        var status = fieldStatusMap[f.key] || 'pending';
+                        var statusLabels = {
+                            'pending': '<span class="field-status status-pending">⏳ 待查閱</span>',
+                            'confirmed': '<span class="field-status status-confirmed">✅ 已確認</span>',
+                            'suspicious': '<span class="field-status status-suspicious">⚠️ 存疑</span>'
+                        };
+                        var borderClass = status === 'suspicious' ? 'border-suspicious' : (status === 'confirmed' ? 'border-confirmed' : '');
+                        var isPhoto = f.key === 'photo';
+                        var displayValue = isPhoto && f.value !== '無照片' && f.value !== '未填' ? 
+                            '<img src="' + f.value + '" style="max-height:60px;border-radius:4px;object-fit:cover;" />' : 
+                            f.value;
+                        
+                        fieldsHtml += 
+                            '<div class="field-item ' + borderClass + '" data-field="' + f.key + '">' +
+                                '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' +
+                                    '<input type="checkbox" class="field-checkbox" id="field-' + f.key + '" data-field="' + f.key + '" ' + (status === 'suspicious' ? 'checked' : '') + '>' +
+                                    '<span class="field-name">' + f.label + '</span>' +
+                                    '<span class="field-value">' + displayValue + '</span>' +
+                                '</div>' +
+                                '<div class="field-actions">' +
+                                    statusLabels[status] +
+                                '</div>' +
+                            '</div>';
+                    }
+                    
+                    var modalHtml = 
+                        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                            '<div>' +
+                                '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
+                                '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
+                                    '<span class="status-badge ' + overallStatus + '">' + (overallStatus === 'suspicious' ? '⚠️ 有存疑欄位' : (overallStatus === 'confirmed' ? '✅ 已完整確認' : '⏳ 待審核')) + '</span>' +
+                                    '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                                '<button class="btn-sm primary" onclick="confirmAllFields(\'' + storeId + '\')">✅ 全部確認</button>' +
+                                '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中欄位為存疑</button>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="margin-top:12px;">' +
+                            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中欄位為存疑」 | 綠色=已確認 | 黃色=存疑 | 灰色=待查閱</div>' +
+                            fieldsHtml +
+                        '</div>' +
+                        '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
+                            '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
+                                '<span style="font-size:12px;color:var(--text-muted);">📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
+                                '<span style="font-size:12px;color:var(--text-muted);">| 提交者: ' + (store.submitted_by || '未知') + '</span>' +
+                                (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
+                            '</div>' +
+                        '</div>';
+                    
+                    openModal(modalHtml, '', '關閉');
+                });
+        })
+        .catch(function(error) {
+            toast('載入失敗: ' + error.message, 'error');
+        });
+}
+
+// ============================================================
+// 全部確認
+// ============================================================
+function confirmAllFields(storeId) {
     if (!confirm('確定要確認此店鋪的所有欄位嗎？')) return;
     
-    try {
-        // 1. 更新店鋪整體狀態
-        const { error } = await sb
-            .from('claw_stores')
-            .update({ admin_overall_status: 'confirmed' })
-            .eq('id', storeId);
-        if (error) throw error;
-        
-        // 2. 更新或建立所有欄位的 field_status 為 confirmed
-        const fields = ['name', 'region', 'addr', 'address_detail', 'size', 'has_staff', 'has_e_coin', 'photo', 'submitted_by'];
-        for (const field of fields) {
-            await sb
-                .from('field_status')
-                .upsert({
-                    table_name: 'claw_stores',
-                    record_id: storeId,
-                    field_name: field,
-                    status: 'confirmed',
-                    flagged_by: currentUser?.display_name || 'admin',
-                    resolved: true,
-                    resolved_at: new Date().toISOString()
-                }, { onConflict: 'table_name, record_id, field_name' });
-        }
-        
-        toast('✅ 已完整確認此店鋪所有欄位');
-        closeModal();
-        loadStores();
-        loadDashboard();
-    } catch (error) {
-        toast('操作失敗: ' + error.message, 'error');
+    var fields = ['name', 'region', 'addr', 'address_detail', 'size', 'has_staff', 'has_e_coin', 'photo', 'submitted_by'];
+    var promises = [];
+    
+    // 更新店鋪整體狀態
+    promises.push(
+        sb.from('claw_stores').update({ admin_overall_status: 'confirmed' }).eq('id', storeId)
+    );
+    
+    // 更新所有欄位狀態
+    for (var i = 0; i < fields.length; i++) {
+        promises.push(
+            sb.from('field_status').upsert({
+                table_name: 'claw_stores',
+                record_id: storeId,
+                field_name: fields[i],
+                status: 'confirmed',
+                flagged_by: currentUser ? currentUser.display_name : 'admin',
+                resolved: true,
+                resolved_at: new Date().toISOString()
+            }, { onConflict: 'table_name, record_id, field_name' })
+        );
     }
+    
+    Promise.all(promises)
+        .then(function() {
+            toast('✅ 已完整確認此店鋪所有欄位');
+            closeModal();
+            loadStores();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
 }
 
 // ============================================================
-// ✅ 標記選中欄位為存疑
+// 標記選中欄位為存疑
 // ============================================================
-async function applyFieldFlags(storeId) {
-    // 收集所有被勾選的欄位
-    const checkboxes = document.querySelectorAll('.field-checkbox:checked');
+function applyFieldFlags(storeId) {
+    var checkboxes = document.querySelectorAll('.field-checkbox:checked');
     if (checkboxes.length === 0) {
         toast('請至少勾選一個欄位', 'warning');
         return;
     }
     
-    const selectedFields = Array.from(checkboxes).map(cb => cb.dataset.field);
-    
-    // 確認操作
-    if (!confirm(`確定要將 ${selectedFields.length} 個欄位標記為「存疑」嗎？`)) return;
-    
-    try {
-        // 1. 更新每個欄位的狀態為 suspicious
-        for (const field of selectedFields) {
-            await sb
-                .from('field_status')
-                .upsert({
-                    table_name: 'claw_stores',
-                    record_id: storeId,
-                    field_name: field,
-                    status: 'suspicious',
-                    flagged_by: currentUser?.display_name || 'admin',
-                    flagged_at: new Date().toISOString(),
-                    note: '管理員標記存疑',
-                    resolved: false
-                }, { onConflict: 'table_name, record_id, field_name' });
-        }
-        
-        // 2. 更新店鋪整體狀態為 suspicious
-        await sb
-            .from('claw_stores')
-            .update({ admin_overall_status: 'suspicious' })
-            .eq('id', storeId);
-        
-        toast(`⚠️ 已將 ${selectedFields.length} 個欄位標記為存疑`);
-        closeModal();
-        loadStores();
-        loadDashboard();
-    } catch (error) {
-        toast('操作失敗: ' + error.message, 'error');
+    var selectedFields = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+        selectedFields.push(checkboxes[i].dataset.field);
     }
+    
+    if (!confirm('確定要將 ' + selectedFields.length + ' 個欄位標記為「存疑」嗎？')) return;
+    
+    var promises = [];
+    for (var i = 0; i < selectedFields.length; i++) {
+        promises.push(
+            sb.from('field_status').upsert({
+                table_name: 'claw_stores',
+                record_id: storeId,
+                field_name: selectedFields[i],
+                status: 'suspicious',
+                flagged_by: currentUser ? currentUser.display_name : 'admin',
+                flagged_at: new Date().toISOString(),
+                note: '管理員標記存疑',
+                resolved: false
+            }, { onConflict: 'table_name, record_id, field_name' })
+        );
+    }
+    
+    // 更新店鋪整體狀態
+    promises.push(
+        sb.from('claw_stores').update({ admin_overall_status: 'suspicious' }).eq('id', storeId)
+    );
+    
+    Promise.all(promises)
+        .then(function() {
+            toast('⚠️ 已將 ' + selectedFields.length + ' 個欄位標記為存疑');
+            closeModal();
+            loadStores();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
 }
 
 // ============================================================
-// 存疑清單 (顯示所有欄位級存疑)
+// 存疑清單
 // ============================================================
-async function loadFlagged() {
-    const container = document.getElementById('tab-content');
+function loadFlagged() {
+    var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    try {
-        const { data, error } = await sb
-            .from('field_status')
-            .select('*')
-            .eq('status', 'suspicious')
-            .eq('resolved', false)
-            .order('flagged_at', { ascending: false });
-        if (error) throw error;
-        
-        // 獲取店鋪名稱
-        const storeIds = [...new Set(data.map(f => f.record_id))];
-        let storeNames = {};
-        if (storeIds.length > 0) {
-            const { data: stores } = await sb
+    
+    sb
+        .from('field_status')
+        .select('*')
+        .eq('status', 'suspicious')
+        .eq('resolved', false)
+        .order('flagged_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            
+            // 獲取店鋪名稱
+            var storeIds = [];
+            for (var i = 0; i < data.length; i++) {
+                if (storeIds.indexOf(data[i].record_id) === -1) {
+                    storeIds.push(data[i].record_id);
+                }
+            }
+            
+            return sb
                 .from('claw_stores')
                 .select('id, name')
-                .in('id', storeIds);
-            if (stores) {
-                stores.forEach(s => { storeNames[s.id] = s.name; });
-            }
-        }
-        
-        container.innerHTML = `
-            <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                <span style="font-size:13px;color:var(--text-muted);">⚠️ 共 ${data.length} 個欄位被標記存疑</span>
-                <button class="btn-sm" onclick="loadFlagged()" style="margin-left:auto;">🔄 重新整理</button>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>店鋪</th><th>欄位</th><th>標記者</th><th>原因</th><th>時間</th><th>操作</th></tr></thead>
-                    <tbody>
-                        ${data.length === 0 ? `<tr><td colspan="6" class="empty-state">🎉 沒有存疑項目</td></tr>` :
-                        data.map(f => `
-                            <tr>
-                                <td><strong>${storeNames[f.record_id] || f.record_id}</strong></td>
-                                <td><span class="status-badge field-suspicious">${f.field_name}</span></td>
-                                <td>${f.flagged_by || '未知'}</td>
-                                <td>${f.note || '無說明'}</td>
-                                <td>${new Date(f.flagged_at).toLocaleDateString()}</td>
-                                <td>
-                                    <button class="btn-sm success" onclick="resolveFieldFlag('${f.id}')">✅ 解決</button>
-                                    <button class="btn-sm" onclick="viewStoreDetail('${f.record_id}')">📋 查看</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ${error.message}</p></div>`;
-    }
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    var storeNames = {};
+                    var stores = storeResult.data || [];
+                    for (var i = 0; i < stores.length; i++) {
+                        storeNames[stores[i].id] = stores[i].name;
+                    }
+                    
+                    var html = 
+                        '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                            '<span style="font-size:13px;color:var(--text-muted);">⚠️ 共 ' + data.length + ' 個欄位被標記存疑</span>' +
+                            '<button class="btn-sm" onclick="loadFlagged()" style="margin-left:auto;">🔄 重新整理</button>' +
+                        '</div>' +
+                        '<div class="table-container">' +
+                            '<table>' +
+                                '<thead><tr><th>店鋪</th><th>欄位</th><th>標記者</th><th>原因</th><th>時間</th><th>操作</th></tr></thead>' +
+                                '<tbody>';
+                    
+                    if (data.length === 0) {
+                        html += '<tr><td colspan="6" class="empty-state">🎉 沒有存疑項目</td></tr>';
+                    } else {
+                        for (var i = 0; i < data.length; i++) {
+                            var f = data[i];
+                            html += '<tr>' +
+                                '<td><strong>' + (storeNames[f.record_id] || f.record_id) + '</strong></td>' +
+                                '<td><span class="status-badge field-suspicious">' + f.field_name + '</span></td>' +
+                                '<td>' + (f.flagged_by || '未知') + '</td>' +
+                                '<td>' + (f.note || '無說明') + '</td>' +
+                                '<td>' + new Date(f.flagged_at).toLocaleDateString() + '</td>' +
+                                '<td>' +
+                                    '<button class="btn-sm success" onclick="resolveFieldFlag(\'' + f.id + '\')">✅ 解決</button>' +
+                                    '<button class="btn-sm" onclick="viewStoreDetail(\'' + f.record_id + '\')">📋 查看</button>' +
+                                '</td>' +
+                            '</tr>';
+                        }
+                    }
+                    html += '</tbody></table></div>';
+                    container.innerHTML = html;
+                });
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
 }
 
 // ============================================================
 // 解決單一欄位存疑
 // ============================================================
-async function resolveFieldFlag(flagId) {
+function resolveFieldFlag(flagId) {
     if (!confirm('確定要解決此存疑項目嗎？')) return;
-    try {
-        const { error } = await sb
-            .from('field_status')
-            .update({ status: 'confirmed', resolved: true, resolved_at: new Date().toISOString() })
-            .eq('id', flagId);
-        if (error) throw error;
-        toast('✅ 已解決此存疑項目');
-        loadFlagged();
-        loadDashboard();
-    } catch (error) {
-        toast('操作失敗: ' + error.message, 'error');
-    }
+    
+    sb
+        .from('field_status')
+        .update({ status: 'confirmed', resolved: true, resolved_at: new Date().toISOString() })
+        .eq('id', flagId)
+        .then(function(result) {
+            if (result.error) throw result.error;
+            toast('✅ 已解決此存疑項目');
+            loadFlagged();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
 }
 
 // ============================================================
 // 用戶管理
 // ============================================================
-async function loadUsers() {
-    const container = document.getElementById('tab-content');
+function loadUsers() {
+    var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    try {
-        const { data, error } = await sb
-            .from('user_profiles')
-            .select('id, display_name, email, role, risk_level, created_at')
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        container.innerHTML = `
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>用戶</th><th>Email</th><th>角色</th><th>風險等級</th><th>操作</th></tr></thead>
-                    <tbody>
-                        ${data.length === 0 ? `<tr><td colspan="5" class="empty-state">暫無用戶</td></tr>` :
-                        data.map(u => `
-                            <tr>
-                                <td>${u.display_name || '未命名'}</td>
-                                <td>${u.email || '無'}</td>
-                                <td><span class="status-badge ${u.role === 'admin' ? 'confirmed' : 'pending'}">${u.role || 'user'}</span></td>
-                                <td>${u.risk_level || 'normal'}</td>
-                                <td><button class="btn-sm" onclick="viewUser('${u.id}')">查看</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ${error.message}</p></div>`;
-    }
+    
+    sb
+        .from('user_profiles')
+        .select('id, display_name, email, role, risk_level, created_at')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            var html = 
+                '<div class="table-container">' +
+                    '<table>' +
+                        '<thead><tr><th>用戶</th><th>Email</th><th>角色</th><th>風險等級</th><th>操作</th></tr></thead>' +
+                        '<tbody>';
+            
+            if (data.length === 0) {
+                html += '<tr><td colspan="5" class="empty-state">暫無用戶</td></tr>';
+            } else {
+                for (var i = 0; i < data.length; i++) {
+                    var u = data[i];
+                    html += '<tr>' +
+                        '<td>' + (u.display_name || '未命名') + '</td>' +
+                        '<td>' + (u.email || '無') + '</td>' +
+                        '<td><span class="status-badge ' + (u.role === 'admin' ? 'confirmed' : 'pending') + '">' + (u.role || 'user') + '</span></td>' +
+                        '<td>' + (u.risk_level || 'normal') + '</td>' +
+                        '<td><button class="btn-sm" onclick="viewUser(\'' + u.id + '\')">查看</button></td>' +
+                    '</tr>';
+                }
+            }
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
 }
 
-async function viewUser(userId) {
-    try {
-        const { data, error } = await sb
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-        if (error) throw error;
-        openModal('👤 用戶詳情', `
-            <div style="display:grid;gap:8px;">
-                <p><strong>名稱：</strong>${data.display_name || '未命名'}</p>
-                <p><strong>Email：</strong>${data.email || '無'}</p>
-                <p><strong>角色：</strong>${data.role || 'user'}</p>
-                <p><strong>風險等級：</strong>${data.risk_level || 'normal'}</p>
-                <p><strong>積分：</strong>${data.total_points || 0}</p>
-                <p><strong>加入時間：</strong>${new Date(data.created_at).toLocaleString()}</p>
-            </div>
-        `, '關閉');
-    } catch (error) {
-        toast('載入失敗: ' + error.message, 'error');
-    }
+function viewUser(userId) {
+    sb
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data;
+            openModal('👤 用戶詳情', 
+                '<div style="display:grid;gap:8px;">' +
+                    '<p><strong>名稱：</strong>' + (data.display_name || '未命名') + '</p>' +
+                    '<p><strong>Email：</strong>' + (data.email || '無') + '</p>' +
+                    '<p><strong>角色：</strong>' + (data.role || 'user') + '</p>' +
+                    '<p><strong>風險等級：</strong>' + (data.risk_level || 'normal') + '</p>' +
+                    '<p><strong>積分：</strong>' + (data.total_points || 0) + '</p>' +
+                    '<p><strong>加入時間：</strong>' + new Date(data.created_at).toLocaleString() + '</p>' +
+                '</div>', 
+            '關閉');
+        })
+        .catch(function(error) {
+            toast('載入失敗: ' + error.message, 'error');
+        });
 }
 
 // ============================================================
 // 審計日誌
 // ============================================================
-async function loadAudit() {
-    const container = document.getElementById('tab-content');
+function loadAudit() {
+    var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
-    try {
-        const { data, error } = await sb
-            .from('field_status_history')
-            .select('*')
-            .order('changed_at', { ascending: false })
-            .limit(50);
-        if (error) throw error;
-        container.innerHTML = `
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>欄位ID</th><th>舊狀態</th><th>新狀態</th><th>操作者</th><th>時間</th></tr></thead>
-                    <tbody>
-                        ${data.length === 0 ? `<tr><td colspan="5" class="empty-state">暫無審計記錄</td></tr>` :
-                        data.map(h => `
-                            <tr>
-                                <td style="font-size:12px;color:var(--text-muted);">${h.field_status_id?.slice(0,8) || '未知'}</td>
-                                <td><span class="status-badge ${h.old_status || 'pending'}">${h.old_status || '無'}</span></td>
-                                <td><span class="status-badge ${h.new_status || 'pending'}">${h.new_status || '無'}</span></td>
-                                <td>${h.changed_by || '系統'}</td>
-                                <td>${new Date(h.changed_at).toLocaleString()}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ${error.message}</p></div>`;
-    }
+    
+    sb
+        .from('field_status_history')
+        .select('*')
+        .order('changed_at', { ascending: false })
+        .limit(50)
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            var html = 
+                '<div class="table-container">' +
+                    '<table>' +
+                        '<thead><tr><th>欄位ID</th><th>舊狀態</th><th>新狀態</th><th>操作者</th><th>時間</th></tr></thead>' +
+                        '<tbody>';
+            
+            if (data.length === 0) {
+                html += '<tr><td colspan="5" class="empty-state">暫無審計記錄</td></tr>';
+            } else {
+                for (var i = 0; i < data.length; i++) {
+                    var h = data[i];
+                    html += '<tr>' +
+                        '<td style="font-size:12px;color:var(--text-muted);">' + (h.field_status_id ? h.field_status_id.slice(0,8) : '未知') + '</td>' +
+                        '<td><span class="status-badge ' + (h.old_status || 'pending') + '">' + (h.old_status || '無') + '</span></td>' +
+                        '<td><span class="status-badge ' + (h.new_status || 'pending') + '">' + (h.new_status || '無') + '</span></td>' +
+                        '<td>' + (h.changed_by || '系統') + '</td>' +
+                        '<td>' + new Date(h.changed_at).toLocaleString() + '</td>' +
+                    '</tr>';
+                }
+            }
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
 }
 
 // ============================================================
@@ -1413,21 +1485,23 @@ async function loadAudit() {
 // ============================================================
 function refreshAll() {
     toast('🔄 重新整理中...');
-    const loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
+    var loaders = { dashboard: loadDashboard, stores: loadStores, flagged: loadFlagged, users: loadUsers, audit: loadAudit };
     if (loaders[currentTab]) loaders[currentTab]();
 }
 
 // ============================================================
 // 初始化
 // ============================================================
-document.addEventListener('DOMContentLoaded', async function() {
-    await handleOAuthCallback();
-    const hasSession = await checkExistingSession();
-    if (!hasSession) {
-        document.getElementById('login-page').classList.remove('hidden');
-        document.getElementById('admin-app').classList.add('hidden');
-        showLoading(false);
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    handleOAuthCallback();
+    checkExistingSession()
+        .then(function(hasSession) {
+            if (!hasSession) {
+                document.getElementById('login-page').classList.remove('hidden');
+                document.getElementById('admin-app').classList.add('hidden');
+                showLoading(false);
+            }
+        });
 });
 </script>
 
