@@ -1,5 +1,5 @@
 // ============================================================
-// js/task-system.js
+// js/task-system.js (修正版)
 // 爪爪情報站 - 任務系統與成就系統
 // ============================================================
 
@@ -441,6 +441,288 @@ function getUserLevel() {
 }
 
 // ============================================================
+// 簽到管理 (CheckinManager) - 移到此處確保可用
+// ============================================================
+const CheckinManager = {
+  getTodayKey() {
+    return new Date().toISOString().slice(0, 10);
+  },
+  getReminderKey() {
+    return 'claw_reminder_' + this.getTodayKey();
+  },
+  hasShownToday() {
+    return localStorage.getItem(this.getReminderKey()) === 'true';
+  },
+  markShownToday() {
+    localStorage.setItem(this.getReminderKey(), 'true');
+  },
+  
+  async isCheckedInToday() {
+    const today = this.getTodayKey();
+    const deviceId = STATE.user.device;
+    
+    if (!CLOUD_ON) {
+      const progress = getWeeklyCheckinProgress();
+      return progress.isTodaySigned;
+    }
+    
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_checkins?select=id&device_id=eq.${deviceId}&checkin_date=eq.${today}&limit=1`,
+        { headers: getSupabaseHeaders() }
+      );
+      if (!response.ok) return false;
+      const data = await response.json();
+      return data.length > 0;
+    } catch (e) {
+      console.warn('⚠️ 檢查簽到失敗，使用本地:', e.message);
+      const progress = getWeeklyCheckinProgress();
+      return progress.isTodaySigned;
+    }
+  },
+  
+  async doCheckin() {
+    const today = this.getTodayKey();
+    const deviceId = STATE.user.device;
+    const userId = STATE.user.user_id || null;
+    
+    const alreadyChecked = await this.isCheckedInToday();
+    if (alreadyChecked) {
+      toast('今日已簽到，明天再來吧！', 'gold');
+      return false;
+    }
+    
+    const progress = getWeeklyCheckinProgress();
+    const daysSigned = progress.count + 1;
+    let bonus = 5;
+    let bonusMsg = '基礎簽到 +5 分';
+    if (daysSigned === 3) {
+      bonus += 5;
+      bonusMsg = '連續 3 天！額外 +5 分 🎉';
+    } else if (daysSigned === 5) {
+      bonus += 5;
+      bonusMsg = '連續 5 天！額外 +5 分 🎉🎉';
+    } else if (daysSigned === 7) {
+      bonus += 15;
+      bonusMsg = '🎊 本週全勤！額外 +15 分 🎊';
+    }
+    
+    if (CLOUD_ON) {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/user_checkins`, {
+          method: 'POST',
+          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify([{
+            device_id: deviceId,
+            user_id: userId,
+            checkin_date: today,
+            created_at: new Date().toISOString()
+          }])
+        });
+        if (!response.ok) {
+          if (response.status === 409) {
+            toast('今日已簽到', 'gold');
+            return false;
+          }
+          throw new Error(`HTTP ${response.status}`);
+        }
+        console.log('✅ 簽到已同步到雲端');
+      } catch (e) {
+        console.warn('⚠️ 雲端同步失敗，儲存到本地:', e.message);
+        this._saveLocal(today);
+      }
+    } else {
+      this._saveLocal(today);
+    }
+    
+    this._updateLocalState(today);
+    await addPoints(bonus, `簽到 (第 ${daysSigned} 天)`);
+    updateAchievementStat('checkin', 1);
+    updateStreak();
+    this.markShownToday();
+    
+    await recordTaskCompletion('checkin');
+    
+    toast(`✅ 簽到成功！獲得 ${bonus} 分（${bonusMsg}）`, 'green');
+    showView('task');
+    return true;
+  },
+  
+  _saveLocal(today) {
+    const weekStart = getWeekStartDate(new Date());
+    const weekKey = weekStart.toISOString().slice(0, 10);
+    if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+    if (!STATE.weeklyCheckin[weekKey]) {
+      STATE.weeklyCheckin[weekKey] = { days: [], claimed: false };
+    }
+    const dayOfWeek = new Date().getDay();
+    const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+    if (!STATE.weeklyCheckin[weekKey].days.includes(todayNum)) {
+      STATE.weeklyCheckin[weekKey].days.push(todayNum);
+    }
+    save();
+  },
+  
+  _updateLocalState(today) {
+    const weekStart = getWeekStartDate(new Date());
+    const weekKey = weekStart.toISOString().slice(0, 10);
+    const dayOfWeek = new Date().getDay();
+    const todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+    if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+    if (!STATE.weeklyCheckin[weekKey]) {
+      STATE.weeklyCheckin[weekKey] = { days: [], claimed: false };
+    }
+    if (!STATE.weeklyCheckin[weekKey].days.includes(todayNum)) {
+      STATE.weeklyCheckin[weekKey].days.push(todayNum);
+    }
+    save();
+  },
+  
+  async checkAndShowReminder() {
+    if (this.hasShownToday()) {
+      console.log('📅 今日已顯示過簽到提醒，跳過');
+      return;
+    }
+    
+    const checkedIn = await this.isCheckedInToday();
+    if (checkedIn) {
+      this.markShownToday();
+      console.log('📅 今日已簽到，標記為已顯示');
+      return;
+    }
+    
+    console.log('📅 今日尚未簽到，顯示提醒');
+    setTimeout(() => {
+      showCheckinReminder();
+      this.markShownToday();
+    }, 2000);
+  },
+  
+  async syncFromCloud() {
+    const deviceId = STATE.user.device;
+    const today = new Date();
+    const weekStart = getWeekStartDate(today);
+    const weekStartStr = weekStart.toISOString().slice(0, 10);
+    const todayStr = today.toISOString().slice(0, 10);
+    
+    if (!CLOUD_ON) return;
+    
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_checkins?select=checkin_date&device_id=eq.${deviceId}&checkin_date=gte.${weekStartStr}&checkin_date=lte.${todayStr}`,
+        { headers: getSupabaseHeaders() }
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const days = data.map(item => {
+        const date = new Date(item.checkin_date);
+        const day = date.getDay();
+        return day === 0 ? 7 : day;
+      });
+      
+      const weekKey = weekStartStr;
+      if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+      STATE.weeklyCheckin[weekKey] = {
+        days: days,
+        claimed: days.length >= 7
+      };
+      
+      const todayNum = today.getDay() === 0 ? 7 : today.getDay();
+      if (days.includes(todayNum)) {
+        this.markShownToday();
+      }
+      
+      save();
+      console.log('📅 簽到狀態已同步，本週簽到:', days.length, '天');
+    } catch (e) {
+      console.warn('⚠️ 同步簽到失敗:', e.message);
+    }
+  }
+};
+
+function getWeekStartDate(date) {
+  var d = new Date(date);
+  var day = d.getDay();
+  var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getWeeklyCheckinProgress() {
+  var today = new Date();
+  var weekStart = getWeekStartDate(today);
+  var weekKey = weekStart.toISOString().slice(0, 10);
+  if (!STATE.weeklyCheckin) STATE.weeklyCheckin = {};
+  if (!STATE.weeklyCheckin[weekKey]) {
+    STATE.weeklyCheckin[weekKey] = { days: [], claimed: false };
+  }
+  var weekData = STATE.weeklyCheckin[weekKey];
+  var dayOfWeek = today.getDay();
+  var todayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+  var isTodaySigned = weekData.days.includes(todayNum);
+  return {
+    days: weekData.days,
+    count: weekData.days.length,
+    isTodaySigned: isTodaySigned,
+    weekKey: weekKey,
+    isComplete: weekData.days.length >= 7
+  };
+}
+
+function doCheckin() {
+  CheckinManager.doCheckin();
+}
+
+function showCheckinReminder() {
+  const progress = getWeeklyCheckinProgress();
+  const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
+  
+  let daysHtml = progress.days.map(d => {
+    return `<span class="inline-block w-8 h-8 rounded-full bg-neongreen text-black text-xs font-bold leading-8 text-center mx-0.5">${dayNames[d-1]}</span>`;
+  }).join('');
+  
+  const emptyDays = 7 - progress.days.length;
+  for (let i = 0; i < emptyDays; i++) {
+    daysHtml += `<span class="inline-block w-8 h-8 rounded-full bg-white/10 text-white/30 text-xs leading-8 text-center mx-0.5">${i+1}</span>`;
+  }
+  
+  openModal(`
+    <div class="flex flex-col items-center py-4">
+      <div class="text-6xl mb-3">📅</div>
+      <h2 class="text-xl font-black text-gold">今日簽到</h2>
+      <p class="text-xs text-white/40 mt-1">每天簽到累積獎勵</p>
+      <div class="mt-4 flex gap-1">
+        ${daysHtml}
+      </div>
+      <p class="text-xs text-white/30 mt-2">本週簽到 ${progress.count}/7 天</p>
+      <div class="mt-4 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">
+        <p class="text-xs text-white/40">📌 獎勵規則</p>
+        <div class="mt-1 text-[10px] text-white/30 space-y-0.5">
+          <p>✅ 每日簽到：<span class="text-neongreen">+5 分</span></p>
+          <p>🔥 連續 3 天：<span class="text-gold">+5 分</span></p>
+          <p>🔥 連續 5 天：<span class="text-gold">+5 分</span></p>
+          <p>🎊 全勤 7 天：<span class="text-gold">+15 分</span></p>
+        </div>
+      </div>
+      <button onclick="doCheckinFromReminder()" 
+        class="mt-4 w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold">
+        📝 立即簽到
+      </button>
+      <button onclick="closeModal()" 
+        class="mt-2 text-xs text-white/30 hover:text-white/60 transition-colors">
+        稍後再說
+      </button>
+    </div>
+  `);
+}
+
+function doCheckinFromReminder() {
+  closeModal();
+  CheckinManager.doCheckin();
+}
+
+// ============================================================
 // 任務頁面
 // ============================================================
 function viewTask() {
@@ -616,3 +898,10 @@ function showFilterGuide(message) {
     if (guide.parentNode) guide.remove();
   }, 5000);
 }
+
+// 將 CheckinManager 掛載到 window 以便其他檔案訪問
+window.CheckinManager = CheckinManager;
+window.getWeeklyCheckinProgress = getWeeklyCheckinProgress;
+window.doCheckin = doCheckin;
+window.showCheckinReminder = showCheckinReminder;
+window.doCheckinFromReminder = doCheckinFromReminder;
