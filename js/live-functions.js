@@ -133,7 +133,7 @@ function viewLive() {
         if (CURRENT === 'live') {
           var overlay = document.getElementById('page-overlay');
           if (overlay) {
-            overlay.innerHTML = VIEWS.live();
+            overlay.innerHTML = viewLive();
             overlay.scrollTop = 0;
             overlay.classList.add("view-enter");
           }

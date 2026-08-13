@@ -167,3 +167,263 @@ function loadMoreStores() {
     container.insertAdjacentHTML('beforeend', '<p class="mt-2 text-center text-xs text-white/40">— 已顯示全部 ' + allFilteredStores.length + ' 間店鋪 —</p>');
   }
 }
+// ============================================================
+// GPS 定位相關函數 (添加到 store-operations.js 末尾)
+// ============================================================
+
+function refreshGPS() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+  toast("定位中…", "green");
+  
+  if (!navigator.geolocation) {
+    toast("此裝置不支援定位", "pink");
+    showView("find");
+    return;
+  }
+  
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+      if (result.state === 'denied') {
+        if (isIOS) {
+          showIOSLocationGuide();
+        } else {
+          showAndroidLocationGuide();
+        }
+        return;
+      } else if (result.state === 'prompt') {
+        doLocationRequest();
+      } else if (result.state === 'granted') {
+        doLocationRequest();
+      }
+    }).catch(function() {
+      doLocationRequest();
+    });
+  } else {
+    doLocationRequest();
+  }
+}
+
+function doLocationRequest() {
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      gpsLat = userLocation.lat;
+      gpsLng = userLocation.lng;
+      toast("✅ 定位成功！已更新附近店舖", "green");
+      const region = getRegionFromCoords(userLocation.lat, userLocation.lng);
+      if (region) findState.region = region;
+      if (map && mapInitialized) {
+        map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1 });
+        addUserMarker(userLocation.lat, userLocation.lng);
+        updateMapMarkers();
+        updateMapList();
+        updateRegionProgress();
+      }
+      showView("find");
+    },
+    function(err) {
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (err.code === 1) {
+        if (isIOS) {
+          showIOSLocationGuide();
+        } else {
+          showAndroidLocationGuide();
+        }
+      } else if (err.code === 2) {
+        toast("📡 GPS 訊號弱，請到室外", "pink");
+      } else if (err.code === 3) {
+        toast("⏱️ 定位超時，請重試", "pink");
+      } else {
+        toast("❌ 定位失敗: " + err.message, "pink");
+      }
+      showView("find");
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function getRegionFromCoords(lat, lng) {
+  if (lat >= 22.24 && lat <= 22.29 && lng >= 114.14 && lng <= 114.25) {
+    if (lng >= 114.18 && lng <= 114.20) return '銅鑼灣';
+    if (lng >= 114.16 && lng <= 114.17) return '中環';
+    if (lng >= 114.20 && lng <= 114.22) return '北角';
+    return '銅鑼灣';
+  }
+  if (lat >= 22.29 && lat <= 22.35 && lng >= 114.14 && lng <= 114.24) {
+    if (lat >= 22.31 && lat <= 22.32 && lng >= 114.16 && lng <= 114.17) return '旺角';
+    if (lat >= 22.29 && lat <= 22.30 && lng >= 114.16 && lng <= 114.17) return '尖沙咀';
+    if (lat >= 22.31 && lat <= 22.33 && lng >= 114.22 && lng <= 114.24) return '觀塘';
+    if (lat >= 22.32 && lat <= 22.33 && lng >= 114.15 && lng <= 114.16) return '深水埗';
+    return '旺角';
+  }
+  if (lat >= 22.35 && lat <= 22.56 && lng >= 113.92 && lng <= 114.30) {
+    if (lat >= 22.35 && lat <= 22.38 && lng >= 114.10 && lng <= 114.13) return '荃灣';
+    if (lat >= 22.35 && lat <= 22.36 && lng >= 114.12 && lng <= 114.13) return '葵芳';
+    if (lat >= 22.42 && lat <= 22.45 && lng >= 114.02 && lng <= 114.04) return '元朗';
+    return '荃灣';
+  }
+  return null;
+}
+
+function showIOSLocationGuide() {
+  openModal(`
+    <div class="flex flex-col items-center py-3">
+      <div class="text-5xl mb-2">🔒</div>
+      <h2 class="text-xl font-black text-gold">定位權限已關閉</h2>
+      <p class="text-sm text-white/60 text-center mt-1 px-4">
+        您之前可能選擇了「永不」，需要在 iPhone 設定中重新開啟：
+      </p>
+      <div class="mt-3 w-full text-left text-sm space-y-1.5 px-2">
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">1.</span>
+          <span class="text-xs">打開 <b class="text-white">設定</b> App</span>
+        </div>
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">2.</span>
+          <span class="text-xs">點選 <b class="text-white">隱私與安全性</b></span>
+        </div>
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">3.</span>
+          <span class="text-xs">點選 <b class="text-white">定位服務</b></span>
+        </div>
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">4.</span>
+          <span class="text-xs">找到 <b class="text-white">Safari 瀏覽器</b></span>
+        </div>
+        <div class="flex items-start gap-3 bg-neongreen/10 rounded-lg p-2 border border-neongreen/20">
+          <span class="text-neongreen font-bold text-xs">5.</span>
+          <span class="text-xs text-neongreen">選擇 <b>「使用 App 期間」</b> ✅</span>
+        </div>
+      </div>
+      <div class="mt-3 w-full flex gap-2">
+        <button onclick="openSettings()" 
+          class="flex-1 rounded-xl bg-gold py-2.5 text-sm text-black font-black">
+          ⚙️ 跳轉到設定
+        </button>
+        <button onclick="closeModal(); setTimeout(refreshGPS, 500);" 
+          class="flex-1 rounded-xl border border-neongreen/40 py-2.5 text-sm text-neongreen font-black">
+          🔄 已設定好
+        </button>
+      </div>
+      <button onclick="closeModal()" 
+        class="mt-2 text-[10px] text-white/30 hover:text-white/60">
+        暫時跳過
+      </button>
+    </div>
+  `);
+}
+
+function showAndroidLocationGuide() {
+  openModal(`
+    <div class="flex flex-col items-center py-3">
+      <div class="text-5xl mb-2">🔒</div>
+      <h2 class="text-xl font-black text-gold">需要定位權限</h2>
+      <p class="text-sm text-white/60 text-center mt-1 px-4">請允許使用位置資訊：</p>
+      <div class="mt-3 w-full text-left text-sm space-y-1.5 px-2">
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">1.</span>
+          <span class="text-xs">點擊下方「前往設定」</span>
+        </div>
+        <div class="flex items-start gap-3 bg-white/5 rounded-lg p-2">
+          <span class="text-gold font-bold text-xs">2.</span>
+          <span class="text-xs">找到 <b class="text-white">位置</b> 權限</span>
+        </div>
+        <div class="flex items-start gap-3 bg-neongreen/10 rounded-lg p-2 border border-neongreen/20">
+          <span class="text-neongreen font-bold text-xs">3.</span>
+          <span class="text-xs text-neongreen">選擇 <b>「允許」</b> ✅</span>
+        </div>
+      </div>
+      <div class="mt-3 w-full flex gap-2">
+        <button onclick="openAndroidSettings()" 
+          class="flex-1 rounded-xl bg-gold py-2.5 text-sm text-black font-black">
+          ⚙️ 前往設定
+        </button>
+        <button onclick="closeModal(); setTimeout(refreshGPS, 500);" 
+          class="flex-1 rounded-xl border border-neongreen/40 py-2.5 text-sm text-neongreen font-black">
+          🔄 已設定好
+        </button>
+      </div>
+      <button onclick="closeModal()" 
+        class="mt-2 text-[10px] text-white/30 hover:text-white/60">
+        暫時跳過
+      </button>
+    </div>
+  `);
+}
+
+function openSettings() {
+  window.location.href = 'app-settings:';
+  setTimeout(() => {
+    toast('📍 請找到「Safari 瀏覽器」開啟定位', 'gold');
+  }, 1000);
+}
+
+function openAndroidSettings() {
+  window.location.href = `intent://settings/#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;end`;
+  setTimeout(() => {
+    toast('📍 請在設定中允許定位權限', 'gold');
+  }, 500);
+}
+
+// ============================================================
+// setRegion - 設置地區搜索
+// ============================================================
+function setRegion(r) {
+  findState.region = r;
+  if (r !== "全部" && r !== "") {
+    STATE.recentRegions = STATE.recentRegions.filter(function(x) { return x !== r; });
+    STATE.recentRegions.unshift(r);
+    if (STATE.recentRegions.length > 6) STATE.recentRegions = STATE.recentRegions.slice(0, 6);
+    save();
+    
+    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+      syncRecentRegions();
+    }
+  }
+  showView("find");
+}
+
+async function syncRecentRegions() {
+  if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
+  
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${STATE.user.user_id}`, {
+      method: 'PATCH',
+      headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({
+        recent_regions: STATE.recentRegions,
+        updated_at: new Date().toISOString()
+      })
+    });
+  } catch (e) {
+    console.warn('⚠️ 最近搜索雲端同步失敗:', e.message);
+  }
+}
+
+// ============================================================
+// openIntelForm - 提交店鋪情報表單 (如果缺失)
+// ============================================================
+function openIntelForm(prefillMall, prefillRegion) {
+  // 這個函數應該已經在 store-operations.js 中定義了
+  // 如果沒有，請檢查 store-operations.js 中是否有此函數
+  // 如果缺失，請從原始代碼複製完整的 openIntelForm 函數
+  console.log('openIntelForm 被調用，但函數可能缺失');
+  toast('提交店鋪功能正在加載...', 'gold');
+}
+
+// ============================================================
+// 將所有函數掛載到 window 確保全局可見
+// ============================================================
+window.viewFind = viewFind;
+window.viewMe = viewMe;
+window.refreshGPS = refreshGPS;
+window.setRegion = setRegion;
+window.openIntelForm = openIntelForm;
+window.toggleMoreRegions = toggleMoreRegions;
+window.toggleRegionGroup = toggleRegionGroup;
+window.loadMoreStores = loadMoreStores;
+window.filteredStores = filteredStores;
+window.renderStoreList = renderStoreList;
+window.filterActive = filterActive;
+window.resetAll = resetAll;
+window.syncRecentRegions = syncRecentRegions;

@@ -151,7 +151,95 @@ function addUserMarker(lat, lng) {
     interactive: false
   }).addTo(map);
 }
+// ============================================================
+// 創建個人化店鋪標記 (添加到 map-functions.js)
+// ============================================================
+function createPersonalizedMarker(store) {
+    var levelInfo = getMarkerLevelInfo(store.id);
+    var isVerified = store.status === 'verified' || store.verified === 'verified';
+    
+    var baseColor = isVerified ? '#00CC66' : '#FFB800';
+    var borderColor = isVerified ? '#00FF88' : '#FFD700';
+    
+    var glowStyle = '';
+    var iconDisplay = '●';
+    var levelClass = '';
+    
+    if (levelInfo.level === 1) {
+        iconDisplay = '⭐';
+        levelClass = 'marker-level-1';
+    } else if (levelInfo.level === 2) {
+        iconDisplay = '✨';
+        glowStyle = 'box-shadow:0 0 20px rgba(212,175,55,0.6),0 0 40px rgba(212,175,55,0.3);';
+        levelClass = 'marker-level-2';
+    } else if (levelInfo.level === 3) {
+        iconDisplay = '👑';
+        glowStyle = 'box-shadow:0 0 30px rgba(255,215,0,0.5),0 0 60px rgba(255,215,0,0.25);';
+        levelClass = 'marker-level-3';
+    }
+    
+    var markerHtml = '<div class="' + levelClass + '" style="position:relative;width:36px;height:44px;background:' + baseColor + ';border:2px solid ' + borderColor + ';border-radius:50% 50% 50% 0;transform:rotate(-45deg);' + glowStyle + 'display:flex;align-items:center;justify-content:center;cursor:pointer;">' +
+        '<span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);line-height:1;z-index:2;">' + iconDisplay + '</span>' +
+    '</div>';
+    
+    return L.divIcon({
+        className: '',
+        html: markerHtml,
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+        popupAnchor: [0, -48]
+    });
+}
 
+// ============================================================
+// 獲取標記等級資訊 (添加到 map-functions.js)
+// ============================================================
+function getMarkerLevelInfo(storeId) {
+    var contribution = getUserContribution(storeId);
+    var levels = [
+        { level: 0, label: '普通標記', icon: '●', color: '#666', requirement: '無貢獻' },
+        { level: 1, label: '⭐ 一星標記', icon: '⭐', color: '#D4AF37', requirement: '貢獻值 1-2' },
+        { level: 2, label: '✨ 光暈標記', icon: '✨', color: '#D4AF37', requirement: '貢獻值 3-4' },
+        { level: 3, label: '👑 皇冠標記', icon: '👑', color: '#FFD700', requirement: '貢獻值 5+' }
+    ];
+    
+    var currentLevel = levels[0];
+    for (var i = levels.length - 1; i >= 0; i--) {
+        if (contribution >= i) {
+            currentLevel = levels[i];
+            break;
+        }
+    }
+    
+    return {
+        level: currentLevel.level,
+        label: currentLevel.label,
+        icon: currentLevel.icon,
+        color: currentLevel.color,
+        contribution: contribution,
+        nextLevel: levels[currentLevel.level + 1] || null
+    };
+}
+
+// ============================================================
+// 獲取用戶貢獻值 (添加到 map-functions.js)
+// ============================================================
+function getUserContribution(storeId) {
+    var store = STORES.find(function(s) { return s.id === storeId; });
+    if (!store) return 0;
+    
+    var device = STATE.user.device;
+    var count = 0;
+    
+    if (store.submitted_by === device) count += 1;
+    if (store._userVerified) count += 1;
+    if (store._userSupplemented) count += 1;
+    if (store.machines && store.machines.some(function(m) { return m.submitted_by === device; })) {
+        count += 1;
+    }
+    
+    return count;
+}
 // ============================================================
 // 更新地圖標記
 // ============================================================
