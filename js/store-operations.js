@@ -399,16 +399,243 @@ async function syncRecentRegions() {
     console.warn('⚠️ 最近搜索雲端同步失敗:', e.message);
   }
 }
-
 // ============================================================
-// openIntelForm - 提交店鋪情報表單 (如果缺失)
+// 提交店鋪 (含雲端同步)
+// ============================================================
+async function submitIntel() {
+  if (!await checkDailySubmitLimit()) { return; }
+  if (!isFormComplete()) { toast('請完成所有必填欄位', 'pink'); return; }
+  
+  var name = document.getElementById('nt-name')?.value.trim();
+  if (!name) { toast('請輸入店名', 'pink'); return; }
+  
+  var photoBlob = window._cam?.nt;
+  if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
+  
+  var addr = '';
+  if (selectedType === 'mall' && selectedMall && selectedFloor) {
+    var mallStore = STORES.find(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
+    if (mallStore && mallStore.addr) addr = mallStore.addr;
+    addr = selectedRegion + addr + selectedMall + selectedFloor + '樓';
+  } else if (selectedType === 'street') {
+    addr = document.getElementById('nt-addr')?.value.trim() || '';
+  }
+  
+  var photoUrl = '';
+  if (CLOUD_ON) {
+    try {
+      var file = new File([photoBlob], "store_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+      photoUrl = await uploadImage(file, 'stores');
+    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
+  } else {
+    photoUrl = window._camPreview?.nt || '';
+  }
+  
+  var data = {
+    name: name,
+    region: selectedRegion,
+    type: selectedType,
+    mall: selectedType === 'mall' ? selectedMall : '',
+    floor: selectedType === 'mall' ? selectedFloor : '',
+    addr: addr,
+    lat: gpsLat,
+    lng: gpsLng,
+    accuracy: gpsAccuracy,
+    photo: photoUrl
+  };
+  
+  // 處理商場
+  if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
+    var existsInCache = false;
+    if (MALLS_CACHE) {
+      var regionKey = '';
+      if (selectedRegion === '港島區') regionKey = 'hk';
+      else if (selectedRegion === '九龍區') regionKey = 'kl';
+      else if (selectedRegion === '新界區') regionKey = 'nt';
+      else {
+        Object.keys(REGIONS).forEach(function(key) {
+          var group = REGIONS[key];
+          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey = key;
+        });
+      }
+      if (regionKey && MALLS_CACHE[regionKey]) {
+        existsInCache = MALLS_CACHE[regionKey].some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
+      }
+      if (!regionKey) {
+        existsInCache = Object.values(MALLS_CACHE).flat().some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
+      }
+    }
+    var existsInStores = STORES.some(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
+    if (!existsInCache && !existsInStores) {
+      var regionKey2 = '';
+      if (selectedRegion === '港島區') regionKey2 = 'hk';
+      else if (selectedRegion === '九龍區') regionKey2 = 'kl';
+      else if (selectedRegion === '新界區') regionKey2 = 'nt';
+      else {
+        Object.keys(REGIONS).forEach(function(key) {
+          var group = REGIONS[key];
+          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey2 = key;
+        });
+      }
+      if (!regionKey2) regionKey2 = 'kl';
+      var newMall = {
+        name: selectedMall,
+        region: selectedRegion === '港島區' ? '港島區' : selectedRegion === '九龍區' ? '九龍區' : '新界區',
+        district: selectedRegion,
+        address: addr || '',
+        lat: gpsLat || 0,
+        lng: gpsLng || 0,
+        created_at: new Date().toISOString()
+      };
+      if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
+      MALLS_CACHE[regionKey2].push(newMall);
+      cloudInsert('malls', newMall);
+      console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
+    }
+  }
+  
+  var newStore = {
+    id: String(Date.now()),
+    name: name,
+    region: selectedRegion,
+    addr: addr,
+    status: 'pending',
+    verified: 'pending',
+    size: '中',
+    token: false,
+    hour24: false,
+    staff: false,
+    machines: [],
+    photo: photoUrl,
+    lat: gpsLat,
+    lng: gpsLng,
+    mall: selectedType === 'mall' ? selectedMall : '',
+    floor: selectedType === 'mall' ? selectedFloor : '',
+    submitted_by: STATE.user.device,
+    verification_count: 0,
+    is_verified: false,
+    address_detail: '',
+    has_staff: null,
+    has_e_coin: null,
+    supplement_count: 0,
+    supplemented_by: null,
+    _userVerified: false,
+    _userSupplemented: false
+  };
+  
+  STORES.push(newStore);
+  if (CLOUD_ON) cloudInsert('claw_stores', newStore);
+  
+  if (selectedRegion) {
+    var regionStat = getRegionStat(selectedRegion);
+    if (regionStat) setTimeout(function() { return updateAchievementStat(regionStat); }, 200);
+  }
+  updateStreak();
+  
+  STATE._submitCount = (STATE._submitCount || 0) + 1;
+  save();
+  
+  if (CLOUD_ON) {
+    try {
+      var today = new Date().toISOString().slice(0, 10);
+      var userId = STATE.user.user_id || STATE.user.device;
+      await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
+        method: 'POST',
+        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify([{
+          user_id: userId,
+          date: today,
+          submit_count: STATE._submitCount
+        }])
+      });
+      console.log('✅ 提交計數已同步到雲端');
+    } catch (e) {
+      console.warn('⚠️ 提交計數雲端同步失敗:', e.message);
+    }
+  }
+  
+  // 記錄任務進度
+  await recordTaskCompletion('submit_store');
+  
+  // 記錄貢獻
+  if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+    try {
+      await fetch(
+        SUPABASE_URL + "/rest/v1/user_contributions",
+        {
+          method: 'POST',
+          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify([{
+            user_id: STATE.user.user_id,
+            device_id: STATE.user.device,
+            store_id: newStore.id,
+            contribution_type: 'submit',
+            contribution_value: 1,
+            created_at: new Date().toISOString()
+          }])
+        }
+      );
+    } catch (e) {
+      console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+    }
+  }
+  
+  toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
+  await addPoints(10, '提交店鋪情報');
+  closeModal();
+}
+// ============================================================
+// openIntelForm - 提交店鋪情報表單 (完整版)
 // ============================================================
 function openIntelForm(prefillMall, prefillRegion) {
-  // 這個函數應該已經在 store-operations.js 中定義了
-  // 如果沒有，請檢查 store-operations.js 中是否有此函數
-  // 如果缺失，請從原始代碼複製完整的 openIntelForm 函數
-  console.log('openIntelForm 被調用，但函數可能缺失');
-  toast('提交店鋪功能正在加載...', 'gold');
+  selectedRegion = '';
+  selectedType = '';
+  selectedMall = '';
+  selectedFloor = '';
+  isGpsReady = false;
+  gpsLat = null;
+  gpsLng = null;
+  mallSelectionMode = 'button';
+  mallInputValue = '';
+  
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="form-guide" class="text-xs text-yellow-400 mt-1">📝 請先輸入店名</div>\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3"><span id="nt-gps" class="text-yellow-400 text-xs">定位中，請確認已開啟 GPS...</span><button id="gps-retry" onclick="retryGPS()" class="hidden mt-2 text-xs text-gold">🔄 重新定位</button></div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  
+  renderRegionSelectorTab();
+  setTimeout(function() { return grabGPS('nt-gps'); }, 500);
+  setTimeout(function() {
+    var camBtn = document.getElementById('nt-camera-btn');
+    if (camBtn) { camBtn.disabled = true; camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed'; camBtn.onclick = null; }
+  }, 100);
+  
+  if (prefillMall) {
+    setTimeout(function() {
+      if (prefillRegion) {
+        selectedRegion = prefillRegion;
+        var display = document.getElementById('selected-region-display');
+        if (display) display.textContent = prefillRegion;
+        var selector = document.getElementById('region-selector');
+        if (selector) selector.classList.add('hidden');
+        var confirmed = document.getElementById('region-confirmed');
+        if (confirmed) confirmed.classList.remove('hidden');
+        updateTabHighlight(prefillRegion);
+      }
+      selectType('mall');
+      setTimeout(function() { selectMall(prefillMall); toast('已自動填入「' + prefillMall + '」', 'green'); }, 300);
+    }, 500);
+  }
+  
+  var typeObserver = setInterval(function() {
+    var streetSection = document.getElementById('street-address-section');
+    if (streetSection) streetSection.classList.toggle('hidden', selectedType !== 'street');
+    if (selectedType) clearInterval(typeObserver);
+  }, 100);
+}
+
+// ============================================================
+// cameraBlock - 相機區塊 HTML
+// ============================================================
+function cameraBlock(key, quality) {
+  return '<div id="' + key + '-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n    <button id="' + key + '-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n    <img id="' + key + '-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n  </div>';
 }
 
 // ============================================================
