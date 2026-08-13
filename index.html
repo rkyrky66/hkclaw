@@ -179,17 +179,12 @@ input, select, textarea { font-size: 16px; }
     top: 12px;
     left: 12px;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: 12px;
-    padding: 12px 14px;
-    border: 1px solid rgba(212, 175, 55, 0.25);
+    padding: 8px 12px;
     min-width: 140px;
     max-width: 200px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
     pointer-events: none;
     transition: all 0.3s ease;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.8);
 }
 #region-progress-container .title {
     font-size: 9px;
@@ -705,6 +700,7 @@ var DEFAULT_STATE = {
   _submitCount: 0,
   _currentViewingStore: null,
   notifications: [],
+  checkins: {},
   // ============================================================
   // 🎯 任務系統 (新增)
   // ============================================================
@@ -2676,7 +2672,216 @@ function initMap(initialCenter, initialZoom) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
       maxZoom: 19
     }).addTo(map);
+    // 在 L.tileLayer 之後，map.on 之前添加：
+
+// ============================================================
+// 🌍 區域 Polygon 覆蓋層
+// ============================================================
+
+// 區域邊界定義 (香港三大區域的近似多邊形)
+var REGION_POLYGONS = {
+    hk: {
+        label: '港島區',
+        color: 'rgba(59, 130, 246, 0.15)',
+        borderColor: 'rgba(59, 130, 246, 0.4)',
+        // 港島區大致範圍 (北岸從堅尼地城到柴灣)
+        coords: [
+            [22.2900, 114.1100], // 堅尼地城
+            [22.2820, 114.1200],
+            [22.2800, 114.1400],
+            [22.2790, 114.1600],
+            [22.2790, 114.1800],
+            [22.2800, 114.2000],
+            [22.2850, 114.2200],
+            [22.2900, 114.2400],
+            [22.2950, 114.2500],
+            [22.3000, 114.2550],
+            [22.3100, 114.2500],
+            [22.3150, 114.2400],
+            [22.3180, 114.2300],
+            [22.3200, 114.2200],
+            [22.3200, 114.2000],
+            [22.3180, 114.1800],
+            [22.3150, 114.1600],
+            [22.3100, 114.1400],
+            [22.3050, 114.1200],
+            [22.2980, 114.1100]
+        ]
+    },
+    kl: {
+        label: '九龍區',
+        color: 'rgba(239, 68, 68, 0.12)',
+        borderColor: 'rgba(239, 68, 68, 0.35)',
+        // 九龍區大致範圍
+        coords: [
+            [22.3250, 114.1350],
+            [22.3200, 114.1500],
+            [22.3180, 114.1600],
+            [22.3180, 114.1800],
+            [22.3200, 114.2000],
+            [22.3200, 114.2200],
+            [22.3250, 114.2300],
+            [22.3300, 114.2400],
+            [22.3350, 114.2450],
+            [22.3400, 114.2500],
+            [22.3450, 114.2500],
+            [22.3500, 114.2450],
+            [22.3550, 114.2400],
+            [22.3580, 114.2300],
+            [22.3600, 114.2200],
+            [22.3600, 114.2000],
+            [22.3580, 114.1800],
+            [22.3550, 114.1600],
+            [22.3500, 114.1450],
+            [22.3400, 114.1300],
+            [22.3350, 114.1250],
+            [22.3300, 114.1280]
+        ]
+    },
+    nt: {
+        label: '新界區',
+        color: 'rgba(34, 197, 94, 0.10)',
+        borderColor: 'rgba(34, 197, 94, 0.30)',
+        // 新界區大致範圍 (九龍以北)
+        coords: [
+            [22.3550, 113.9800],
+            [22.3600, 113.9900],
+            [22.3700, 114.0000],
+            [22.3800, 114.0100],
+            [22.3900, 114.0200],
+            [22.4000, 114.0300],
+            [22.4100, 114.0400],
+            [22.4200, 114.0500],
+            [22.4300, 114.0600],
+            [22.4400, 114.0700],
+            [22.4500, 114.0800],
+            [22.4600, 114.0900],
+            [22.4700, 114.1000],
+            [22.4800, 114.1100],
+            [22.4900, 114.1200],
+            [22.5000, 114.1300],
+            [22.5100, 114.1400],
+            [22.5200, 114.1500],
+            [22.5300, 114.1600],
+            [22.5400, 114.1700],
+            [22.5450, 114.1800],
+            [22.5500, 114.1900],
+            [22.5550, 114.2000],
+            [22.5580, 114.2100],
+            [22.5600, 114.2200],
+            [22.5580, 114.2300],
+            [22.5550, 114.2400],
+            [22.5500, 114.2500],
+            [22.5450, 114.2600],
+            [22.5400, 114.2700],
+            [22.5350, 114.2800],
+            [22.5300, 114.2900],
+            [22.5250, 114.3000],
+            [22.5200, 114.3100],
+            [22.5150, 114.3200],
+            [22.5100, 114.3300],
+            [22.5050, 114.3400],
+            [22.5000, 114.3500],
+            [22.4900, 114.3600],
+            [22.4800, 114.3700],
+            [22.4700, 114.3800],
+            [22.4600, 114.3900],
+            [22.4500, 114.4000],
+            [22.4400, 114.4100],
+            [22.4300, 114.4200],
+            [22.4200, 114.4300],
+            [22.4100, 114.4400],
+            [22.4000, 114.4500],
+            [22.3900, 114.4600],
+            [22.3800, 114.4700],
+            [22.3700, 114.4800],
+            [22.3600, 114.4900],
+            [22.3500, 114.5000],
+            [22.3400, 114.5100],
+            [22.3300, 114.5200],
+            [22.3200, 114.5300],
+            [22.3100, 114.5400],
+            [22.3000, 114.5500],
+            [22.2900, 114.5600],
+            [22.2800, 114.5700],
+            // 回到西南邊界
+            [22.2800, 114.5000],
+            [22.2900, 114.4500],
+            [22.3000, 114.4000],
+            [22.3100, 114.3500],
+            [22.3200, 114.3000],
+            [22.3300, 114.2500],
+            [22.3400, 114.2000],
+            [22.3500, 114.1500],
+            [22.3580, 114.1000],
+            [22.3600, 114.0500],
+            [22.3580, 114.0000],
+            [22.3550, 113.9800]
+        ]
+    }
+};
+
+// 儲存 polygon 引用以便更新
+window._regionPolygons = [];
+
+function addRegionPolygons() {
+    // 清除舊的 polygon
+    if (window._regionPolygons.length > 0) {
+        window._regionPolygons.forEach(function(p) {
+            if (map) map.removeLayer(p);
+        });
+        window._regionPolygons = [];
+    }
     
+    if (!map) return;
+    
+    // 添加每個區域的 polygon
+    for (var key in REGION_POLYGONS) {
+        var region = REGION_POLYGONS[key];
+        var polygon = L.polygon(region.coords, {
+            color: region.borderColor,
+            weight: 1.5,
+            opacity: 0.7,
+            fillColor: region.color,
+            fillOpacity: 1,
+            interactive: false,
+            smoothFactor: 1,
+            className: 'region-polygon'
+        }).addTo(map);
+        
+        // 儲存引用
+        window._regionPolygons.push(polygon);
+        
+        // 添加區域標籤 (在中心位置)
+        var center = getPolygonCenter(region.coords);
+        var label = L.divIcon({
+            className: 'region-label',
+            html: '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-shadow:0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.8);letter-spacing:1px;pointer-events:none;">' + region.label + '</div>',
+            iconSize: [60, 20],
+            iconAnchor: [30, 10]
+        });
+        var labelMarker = L.marker([center.lat, center.lng], {
+            icon: label,
+            interactive: false,
+            keyboard: false
+        }).addTo(map);
+        window._regionPolygons.push(labelMarker);
+    }
+}
+
+// 計算多邊形中心點
+function getPolygonCenter(coords) {
+    var latSum = 0, lngSum = 0, count = 0;
+    for (var i = 0; i < coords.length; i++) {
+        latSum += coords[i][0];
+        lngSum += coords[i][1];
+        count++;
+    }
+    return { lat: latSum / count, lng: lngSum / count };
+}
+
+// 在 map 初始化完成後添加 polygon
+// 在 mapInitialized = true 之後調用
     map.on('moveend zoomend', function() {
       if (CURRENT === 'map') {
         updateMapList();
@@ -2715,6 +2920,7 @@ function initMap(initialCenter, initialZoom) {
       ensureStoresVisible();
     }
     mapInitialized = true;
+    addRegionPolygons();
     isInitializingMap = false;
     if (CURRENT === 'map') {
       setTimeout(function() {
@@ -3278,7 +3484,7 @@ function buildStoreContent(s, _a) {
         machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
     }
     
-    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size && s.size !== '中' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
+    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size && s.size !== '中' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -5052,7 +5258,90 @@ async function submitMachine(sid) {
   closeModal();
   openStore(sid);
 }
+// ============================================================
+// 📍 店鋪打卡功能
+// ============================================================
 
+// 獲取今日打卡記錄
+function getTodayCheckins() {
+    var today = todayKey();
+    if (!STATE.checkins) STATE.checkins = {};
+    if (!STATE.checkins[today]) STATE.checkins[today] = [];
+    return STATE.checkins[today];
+}
+
+// 檢查是否已在該店鋪打卡
+function hasCheckedInToday(storeId) {
+    var checkins = getTodayCheckins();
+    return checkins.indexOf(storeId) !== -1;
+}
+
+// 店鋪打卡
+async function doStoreCheckin(storeId) {
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    
+    // 檢查是否已打卡
+    if (hasCheckedInToday(storeId)) {
+        toast('📍 今日已在「' + s.name + '」打卡，明天再來吧！', 'gold');
+        return;
+    }
+    
+    // 檢查 GPS
+    if (!gpsLat || !gpsLng) {
+        toast('📍 請先開啟 GPS 定位', 'pink');
+        return;
+    }
+    
+    // GPS 距離檢查 (300米)
+    if (s.lat && s.lng) {
+        var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+        var distanceMeters = Math.round(distance * 1000);
+        if (distance > 0.3) {
+            toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 300 米內打卡', 'pink');
+            return;
+        }
+        toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
+    }
+    
+    // 記錄打卡
+    var checkins = getTodayCheckins();
+    checkins.push(storeId);
+    save();
+    
+    // 記錄任務進度
+    await recordTaskCompletion('checkin');
+    
+    // 同步到雲端
+    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+        try {
+            await fetch(
+                SUPABASE_URL + "/rest/v1/store_checkins",
+                {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([{
+                        user_id: STATE.user.user_id,
+                        device_id: STATE.user.device,
+                        store_id: storeId,
+                        store_name: s.name,
+                        checkin_date: todayKey(),
+                        lat: gpsLat,
+                        lng: gpsLng,
+                        created_at: new Date().toISOString()
+                    }])
+                }
+            );
+        } catch (e) {
+            console.warn('⚠️ 打卡雲端同步失敗:', e.message);
+        }
+    }
+    
+    toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
+    
+    // 更新店鋪詳情 (刷新按鈕狀態)
+    updateStoreContent(storeId);
+}
 // ============================================================
 // 提交店鋪情報表單 (開頭部分)
 // ============================================================
@@ -5104,9 +5393,521 @@ function cameraBlock(key, quality) {
   return '<div id="' + key + '-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n    <button id="' + key + '-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n    <img id="' + key + '-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n  </div>';
 }
 
-// [由於篇幅限制，省略 renderRegionSelectorTab、switchTab、toggleMoreRegionsTab、updateTabHighlight、updateNameSuggestions、selectNameSuggestion 等函數 - 它們與原代碼相同]
-// [省略 selectRegion、reselectRegion、selectType、renderMallOptions、switchToMallInput、onMallCustomInput、confirmMallInput、selectMall、reselectMall、onFloorInput、updateAddressPreview、onStreetAddressInput、grabGPS、retryGPS、updateFormState、isFormComplete、updateSubmitButton 等函數 - 它們與原代碼相同]
+// ============================================================
+// 提交店鋪 - 地區選擇器輔助函數
+// ============================================================
 
+function renderRegionSelectorTab() {
+    var container = document.querySelector('.region-selector-container');
+    if (!container) return;
+    
+    var tabsHtml = '<div class="flex gap-2 mb-3">' + Object.keys(REGIONS).map(function(key) {
+        var group = REGIONS[key];
+        var isActive = currentTab === key;
+        return '<button onclick="switchTab(\'' + key + '\')" class="region-tab flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (isActive ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold') + '">' + group.icon + ' ' + group.label + '</button>';
+    }).join('') + '</div>';
+    
+    var group = REGIONS[currentTab];
+    var isMoreOpen = intelMoreOpenMap && intelMoreOpenMap[currentTab] || false;
+    var allRegions = isMoreOpen ? group.hot.concat(group.more) : group.hot;
+    
+    var regionsHtml = '<div class="flex flex-wrap gap-1.5">' + allRegions.map(function(r) {
+        return '<button onclick="selectRegion(\'' + r + '\', \'' + currentTab + '\')" data-region="' + r + '" class="region-btn rounded-full border border-gold/40 px-3 py-1 text-xs text-gold hover:bg-gold/10 transition-all ' + (selectedRegion === r ? 'chip-active-gold border-gold/60' : '') + '">' + r + '</button>';
+    }).join('') + (group.more.length > 0 ? '<button onclick="toggleMoreRegionsTab()" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold/50 hover:text-gold transition-all">' + (isMoreOpen ? '📍 收起' : '📍 更多') + '</button>' : '') + '</div>';
+    
+    container.innerHTML = tabsHtml + regionsHtml;
+}
+
+function switchTab(tabKey) {
+    currentTab = tabKey;
+    renderRegionSelectorTab();
+}
+
+function toggleMoreRegionsTab() {
+    if (!intelMoreOpenMap) intelMoreOpenMap = { hk: false, kl: false, nt: false };
+    intelMoreOpenMap[currentTab] = !intelMoreOpenMap[currentTab];
+    renderRegionSelectorTab();
+}
+
+function updateTabHighlight(region) {
+    var foundTab = 'hk';
+    Object.keys(REGIONS).forEach(function(key) {
+        var group = REGIONS[key];
+        if (group.hot.includes(region) || group.more.includes(region)) foundTab = key;
+    });
+    currentTab = foundTab;
+    renderRegionSelectorTab();
+}
+
+function updateNameSuggestions(value) {
+    var container = document.getElementById('name-suggestions');
+    var input = document.getElementById('nt-name');
+    if (!container || !input) return;
+    var query = value.trim();
+    if (query.length < 1) { container.classList.add('hidden'); return; }
+    var uniqueNames = STORES.map(function(s) { return s.name; });
+    uniqueNames = Array.from(new Set(uniqueNames));
+    var matched = uniqueNames.filter(function(name) { return name.toLowerCase().startsWith(query.toLowerCase()); }).slice(0, 6);
+    if (matched.length === 0) { container.classList.add('hidden'); return; }
+    container.classList.remove('hidden');
+    container.innerHTML = matched.map(function(name) {
+        return '<button onclick="selectNameSuggestion(\'' + name.replace(/'/g, "\\'") + '\')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0 transition-colors">📝 ' + name + '</button>';
+    }).join('');
+}
+
+function selectNameSuggestion(name) {
+    var input = document.getElementById('nt-name');
+    var container = document.getElementById('name-suggestions');
+    if (input) { input.value = name; input.dispatchEvent(new Event('input')); }
+    if (container) container.classList.add('hidden');
+    updateFormState();
+}
+
+// 點擊外部關閉建議
+document.addEventListener('click', function(e) {
+    var container = document.getElementById('name-suggestions');
+    var input = document.getElementById('nt-name');
+    if (container && input && !container.contains(e.target) && e.target !== input) {
+        container.classList.add('hidden');
+    }
+});
+
+function selectRegion(region, groupKey) {
+    selectedRegion = region;
+    document.querySelectorAll('.region-btn').forEach(function(btn) {
+        btn.classList.toggle('chip-active-gold', btn.dataset.region === region);
+        btn.classList.toggle('border-gold/40', btn.dataset.region !== region);
+        btn.classList.toggle('text-gold', btn.dataset.region !== region);
+    });
+    var display = document.getElementById('selected-region-display');
+    if (display) display.textContent = region;
+    var selector = document.getElementById('region-selector');
+    if (selector) selector.classList.add('hidden');
+    var confirmed = document.getElementById('region-confirmed');
+    if (confirmed) confirmed.classList.remove('hidden');
+    selectedType = '';
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+        btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+        btn.classList.add('border-white/20', 'text-white/45');
+    });
+    var mallSection = document.getElementById('mall-section');
+    if (mallSection) mallSection.classList.add('hidden');
+    var floorSection = document.getElementById('floor-section');
+    if (floorSection) floorSection.classList.add('hidden');
+    var streetSection = document.getElementById('street-address-section');
+    if (streetSection) streetSection.classList.add('hidden');
+    var mallSelector = document.getElementById('mall-selector');
+    if (mallSelector) mallSelector.classList.remove('hidden');
+    var mallConfirmed = document.getElementById('mall-confirmed');
+    if (mallConfirmed) mallConfirmed.classList.add('hidden');
+    var mallOptions = document.getElementById('mall-options');
+    if (mallOptions) mallOptions.innerHTML = '';
+    var mallDisplay = document.getElementById('mall-display');
+    if (mallDisplay) mallDisplay.textContent = '';
+    var addressPreview = document.getElementById('address-preview');
+    if (addressPreview) addressPreview.classList.add('hidden');
+    var floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    selectedMall = '';
+    selectedFloor = '';
+    mallSelectionMode = 'button';
+    mallInputValue = '';
+    updateFormState();
+}
+
+function reselectRegion() {
+    selectedType = '';
+    selectedMall = '';
+    selectedFloor = '';
+    mallSelectionMode = 'button';
+    mallInputValue = '';
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+        btn.classList.add('border-white/20', 'text-white/45');
+    });
+    var camBtn = document.getElementById('nt-camera-btn');
+    if (camBtn) {
+        camBtn.disabled = true;
+        camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
+        camBtn.onclick = null;
+    }
+    var mallSection = document.getElementById('mall-section');
+    if (mallSection) mallSection.classList.add('hidden');
+    var floorSection = document.getElementById('floor-section');
+    if (floorSection) floorSection.classList.add('hidden');
+    var streetSection = document.getElementById('street-address-section');
+    if (streetSection) streetSection.classList.add('hidden');
+    var mallSelector = document.getElementById('mall-selector');
+    if (mallSelector) mallSelector.classList.remove('hidden');
+    var mallConfirmed = document.getElementById('mall-confirmed');
+    if (mallConfirmed) mallConfirmed.classList.add('hidden');
+    var mallOptions = document.getElementById('mall-options');
+    if (mallOptions) mallOptions.innerHTML = '';
+    var mallDisplay = document.getElementById('mall-display');
+    if (mallDisplay) mallDisplay.textContent = '';
+    var addressPreview = document.getElementById('address-preview');
+    if (addressPreview) addressPreview.classList.add('hidden');
+    var floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    var selector = document.getElementById('region-selector');
+    if (selector) selector.classList.remove('hidden');
+    var confirmed = document.getElementById('region-confirmed');
+    if (confirmed) confirmed.classList.add('hidden');
+    selectedRegion = '';
+    updateFormState();
+}
+
+function selectType(type) {
+    if (!selectedRegion) {
+        toast('請先選擇地區', 'pink');
+        return;
+    }
+    selectedType = type;
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+        var isActive = btn.dataset.type === type;
+        btn.classList.toggle('border-gold', isActive);
+        btn.classList.toggle('bg-gold/20', isActive);
+        btn.classList.toggle('text-gold', isActive);
+        btn.classList.toggle('glow-gold', isActive);
+        btn.classList.toggle('border-white/20', !isActive);
+        btn.classList.toggle('text-white/45', !isActive);
+    });
+    var mallSection = document.getElementById('mall-section');
+    var streetSection = document.getElementById('street-address-section');
+    if (type === 'mall') {
+        if (mallSection) mallSection.classList.remove('hidden');
+        if (streetSection) streetSection.classList.add('hidden');
+        if (selectedRegion) renderMallOptions();
+    } else {
+        if (mallSection) mallSection.classList.add('hidden');
+        if (streetSection) streetSection.classList.remove('hidden');
+        selectedMall = '';
+        selectedFloor = '';
+        var floorSection = document.getElementById('floor-section');
+        if (floorSection) floorSection.classList.add('hidden');
+        var mallSelector = document.getElementById('mall-selector');
+        if (mallSelector) mallSelector.classList.remove('hidden');
+        var mallConfirmed = document.getElementById('mall-confirmed');
+        if (mallConfirmed) mallConfirmed.classList.add('hidden');
+        var addressPreview = document.getElementById('address-preview');
+        if (addressPreview) addressPreview.classList.add('hidden');
+        var mallDisplay = document.getElementById('mall-display');
+        if (mallDisplay) mallDisplay.textContent = '';
+        var mallOptions = document.getElementById('mall-options');
+        if (mallOptions) mallOptions.innerHTML = '';
+        var floorInput = document.getElementById('nt-floor');
+        if (floorInput) floorInput.value = '';
+        mallSelectionMode = 'button';
+        mallInputValue = '';
+    }
+    updateFormState();
+}
+
+function renderMallOptions(forceRefresh) {
+    if (forceRefresh === void 0) forceRefresh = false;
+    var container = document.getElementById('mall-options');
+    if (!container) return;
+    if (!selectedRegion) {
+        container.innerHTML = '<span class="text-[10px] text-white/40 py-1">⚠️ 請先選擇地區</span>';
+        return;
+    }
+    var malls = [];
+    var regionKey = '';
+    Object.keys(REGIONS).forEach(function(key) {
+        var group = REGIONS[key];
+        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey = key;
+    });
+    if (regionKey && MALLS_CACHE && MALLS_CACHE[regionKey]) {
+        malls = MALLS_CACHE[regionKey].filter(function(m) { return m.district === selectedRegion; }).map(function(m) { return m.name; });
+    }
+    if (malls.length === 0) {
+        malls = STORES.filter(function(s) { return s.region === selectedRegion && s.mall; }).map(function(s) { return s.mall; });
+        malls = Array.from(new Set(malls));
+    }
+    var filteredMalls = malls;
+    if (mallSelectionMode === 'input' && mallInputValue.trim()) {
+        var query = mallInputValue.trim().toLowerCase();
+        filteredMalls = malls.filter(function(m) { return m.toLowerCase().includes(query); });
+    }
+    var displayMalls = (mallSelectionMode === 'input' && filteredMalls.length > 0) ? filteredMalls : malls;
+    var html = '';
+    if (mallSelectionMode === 'button') {
+        html += '<div class="flex flex-wrap gap-2 mb-2">\n      <button onclick="switchToMallInput()" class="px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">✏️ 自行輸入</button>\n      ' + malls.map(function(m) { return '<button onclick="selectMall(\'' + m.replace(/'/g, "\\'") + '\')" class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">🏬 ' + m + '</button>'; }).join('') + '\n    </div>';
+    } else {
+        html += '<div class="flex gap-2 mb-2">\n      <input id="mall-custom-input" placeholder="請輸入商場名稱" class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + mallInputValue + '" oninput="onMallCustomInput(this.value)" />\n      <button onclick="confirmMallInput()" class="px-4 py-2 rounded-lg bg-gold/20 border border-gold/40 text-sm text-gold font-bold hover:bg-gold/30 transition-all">✅ 確認</button>\n    </div>\n    <div class="flex flex-wrap gap-2" id="mall-button-list">\n      ' + displayMalls.map(function(m) { return '<button onclick="selectMall(\'' + m.replace(/'/g, "\\'") + '\')" class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">🏬 ' + m + '</button>'; }).join('') + '\n      ' + (displayMalls.length === 0 ? '<span class="text-[10px] text-white/40 py-1">該地區暫無商場</span>' : '') + '\n    </div>';
+    }
+    container.innerHTML = html;
+    if (mallSelectionMode === 'input') {
+        setTimeout(function() {
+            var input = document.getElementById('mall-custom-input');
+            if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+        }, 50);
+    }
+}
+
+function switchToMallInput() {
+    mallSelectionMode = 'input';
+    mallInputValue = '';
+    renderMallOptions(false);
+    setTimeout(function() {
+        var input = document.getElementById('mall-custom-input');
+        if (input) input.focus();
+    }, 100);
+}
+
+function onMallCustomInput(value) {
+    mallInputValue = value;
+    var buttonList = document.getElementById('mall-button-list');
+    if (buttonList) {
+        var malls_1 = [];
+        var regionKey_1 = '';
+        if (selectedRegion === '港島區') regionKey_1 = 'hk';
+        else if (selectedRegion === '九龍區') regionKey_1 = 'kl';
+        else if (selectedRegion === '新界區') regionKey_1 = 'nt';
+        else {
+            Object.keys(REGIONS).forEach(function(key) {
+                var group = REGIONS[key];
+                if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey_1 = key;
+            });
+        }
+        if (regionKey_1 && MALLS_CACHE && MALLS_CACHE[regionKey_1]) {
+            malls_1 = MALLS_CACHE[regionKey_1].map(function(m) { return m.name; });
+        }
+        if (malls_1.length === 0) {
+            malls_1 = STORES.filter(function(s) { return s.region === selectedRegion && s.mall; }).map(function(s) { return s.mall; });
+            malls_1 = Array.from(new Set(malls_1));
+        }
+        var query_1 = value.trim().toLowerCase();
+        var filteredMalls = query_1 ? malls_1.filter(function(m) { return m.toLowerCase().includes(query_1); }) : malls_1;
+        buttonList.innerHTML = filteredMalls.map(function(m) { return '<button onclick="selectMall(\'' + m.replace(/'/g, "\\'") + '\')" class="mall-option-btn px-3 py-1.5 rounded-full border border-gold/40 text-xs text-gold hover:bg-gold/10 transition-all">🏬 ' + m + '</button>'; }).join('') + (filteredMalls.length === 0 ? '<span class="text-[10px] text-white/40 py-1">該地區暫無商場</span>' : '');
+    }
+}
+
+function confirmMallInput() {
+    var value = mallInputValue.trim();
+    if (!value) { toast('請輸入商場名稱', 'pink'); return; }
+    selectedMall = value;
+    var display = document.getElementById('mall-display');
+    if (display) display.textContent = value;
+    var selector = document.getElementById('mall-selector');
+    if (selector) selector.classList.add('hidden');
+    var confirmed = document.getElementById('mall-confirmed');
+    if (confirmed) confirmed.classList.remove('hidden');
+    var floorSection = document.getElementById('floor-section');
+    if (floorSection) floorSection.classList.remove('hidden');
+    var floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    selectedFloor = '';
+    var addressPreview = document.getElementById('address-preview');
+    if (addressPreview) addressPreview.classList.add('hidden');
+    mallSelectionMode = 'button';
+    mallInputValue = '';
+    updateFormState();
+}
+
+function selectMall(mallName) {
+    selectedMall = mallName;
+    var display = document.getElementById('mall-display');
+    if (display) display.textContent = mallName;
+    var selector = document.getElementById('mall-selector');
+    if (selector) selector.classList.add('hidden');
+    var confirmed = document.getElementById('mall-confirmed');
+    if (confirmed) confirmed.classList.remove('hidden');
+    var floorSection = document.getElementById('floor-section');
+    if (floorSection) floorSection.classList.remove('hidden');
+    var floorInput = document.getElementById('nt-floor');
+    if (floorInput) floorInput.value = '';
+    selectedFloor = '';
+    var addressPreview = document.getElementById('address-preview');
+    if (addressPreview) addressPreview.classList.add('hidden');
+    mallSelectionMode = 'button';
+    mallInputValue = '';
+    updateFormState();
+}
+
+function reselectMall() {
+    var selector = document.getElementById('mall-selector');
+    if (selector) selector.classList.remove('hidden');
+    var confirmed = document.getElementById('mall-confirmed');
+    if (confirmed) confirmed.classList.add('hidden');
+    selectedMall = '';
+    var floorSection = document.getElementById('floor-section');
+    if (floorSection) floorSection.classList.add('hidden');
+    var addressPreview = document.getElementById('address-preview');
+    if (addressPreview) addressPreview.classList.add('hidden');
+    updateFormState();
+}
+
+function onFloorInput(value) {
+    var clean = value.replace(/[^Gg0-9]/g, '').toUpperCase();
+    if (clean.length <= 3) {
+        selectedFloor = clean;
+        var input = document.getElementById('nt-floor');
+        if (input) input.value = clean;
+        updateAddressPreview();
+        updateFormState();
+    } else {
+        var input = document.getElementById('nt-floor');
+        if (input) input.value = value.slice(0, 3);
+    }
+}
+
+function updateAddressPreview() {
+    var preview = document.getElementById('address-preview');
+    var text = document.getElementById('address-preview-text');
+    if (!preview || !text) return;
+    if (selectedType === 'mall' && selectedMall && selectedFloor) {
+        var mallStore = STORES.find(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
+        var addr = mallStore && mallStore.addr ? mallStore.addr : '';
+        text.textContent = selectedRegion + addr + selectedMall + selectedFloor + '樓';
+        preview.classList.remove('hidden');
+    } else {
+        preview.classList.add('hidden');
+    }
+}
+
+function onStreetAddressInput(value) { updateFormState(); }
+
+function grabGPS(elementId) {
+    var el = document.getElementById(elementId);
+    if (!el) return;
+    el.textContent = '定位中，請確認已開啟 GPS...';
+    el.className = 'text-yellow-400 text-xs';
+    isGpsReady = false;
+    var retryBtn = document.getElementById('gps-retry');
+    if (retryBtn) retryBtn.classList.add('hidden');
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            gpsLat = pos.coords.latitude;
+            gpsLng = pos.coords.longitude;
+            gpsAccuracy = pos.coords.accuracy;
+            isGpsReady = true;
+            el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
+            el.className = 'text-neongreen text-xs';
+            updateFormState();
+        }, function(err) {
+            isGpsReady = false;
+            el.textContent = '⚠️ 定位失敗，請確認已開啟 GPS 並重新嘗試';
+            el.className = 'text-neonpink text-xs';
+            var retryBtn = document.getElementById('gps-retry');
+            if (retryBtn) retryBtn.classList.remove('hidden');
+            updateFormState();
+        }, { enableHighAccuracy: true, timeout: 10000 });
+    } else {
+        isGpsReady = false;
+        el.textContent = '⚠️ 此裝置不支援 GPS';
+        el.className = 'text-neonpink text-xs';
+        updateFormState();
+    }
+}
+
+function retryGPS() {
+    var retryBtn = document.getElementById('gps-retry');
+    if (retryBtn) retryBtn.classList.add('hidden');
+    grabGPS('nt-gps');
+}
+
+function updateFormState() {
+    var name = document.getElementById('nt-name')?.value.trim();
+    var hasName = !!name;
+    var hasRegion = !!selectedRegion;
+    var canProceed = hasName && hasRegion;
+    var guideEl = document.getElementById('form-guide');
+    if (guideEl) {
+        if (!hasName) {
+            guideEl.textContent = '📝 請先輸入店名';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else if (!hasRegion) {
+            guideEl.textContent = '📍 請選擇地區';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else if (!selectedType) {
+            guideEl.textContent = '🏪 請選擇店鋪類型';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else if (!isGpsReady) {
+            guideEl.textContent = '📍 請等待 GPS 定位完成...';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else {
+            guideEl.textContent = '✅ 所有必填欄位已完成，可以提交了！';
+            guideEl.className = 'text-xs text-neongreen';
+        }
+    }
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+        if (!canProceed) {
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
+            btn.classList.add('border-white/20', 'text-white/45');
+            btn.innerHTML = '🔒 ' + btn.textContent.replace('🔒 ', '');
+        } else {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.innerHTML = btn.textContent.replace('🔒 ', '');
+        }
+    });
+    var typeLabel = document.querySelector('label[for="store-type"]');
+    if (typeLabel) {
+        typeLabel.className = "text-xs font-bold " + (canProceed ? 'text-gold' : 'text-white/30');
+        if (!canProceed) {
+            typeLabel.innerHTML = '🔒 店鋪類型 <span class="text-neonpink">（請先填寫店名和地區）</span>';
+        } else {
+            typeLabel.innerHTML = '店鋪類型 <span class="text-neonpink">（必填）</span>';
+        }
+    }
+    var hasType = !!selectedType;
+    var canCamera = canProceed && hasType;
+    var camBtn = document.getElementById('nt-camera-btn');
+    if (camBtn) {
+        if (!canCamera) {
+            camBtn.disabled = true;
+            camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed';
+            camBtn.onclick = null;
+            camBtn.innerHTML = '🔒 請先完成上一步';
+        } else {
+            camBtn.disabled = false;
+            camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
+            camBtn.onclick = function() { openCamera('nt'); };
+            camBtn.innerHTML = '📸 開啟相機拍照';
+        }
+    }
+    var gpsLabel = document.querySelector('label[for="gps-section"]');
+    if (gpsLabel) {
+        gpsLabel.className = "text-xs font-bold " + (canCamera ? 'text-gold' : 'text-white/30');
+        if (!canCamera) {
+            gpsLabel.innerHTML = '🔒 定位 <span class="text-neonpink">（請先完成上一步）</span>';
+        } else {
+            gpsLabel.innerHTML = '定位 <span class="text-neonpink">（必填）</span>';
+        }
+    }
+    updateSubmitButton();
+}
+
+function isFormComplete() {
+    var name = document.getElementById('nt-name')?.value.trim();
+    if (!name) return false;
+    if (!selectedRegion) return false;
+    if (!selectedType) return false;
+    if (!isGpsReady) return false;
+    if (selectedType === 'mall' && !selectedMall) return false;
+    return true;
+}
+
+function updateSubmitButton() {
+    var btn = document.getElementById('nt-submit-btn');
+    var complete = isFormComplete();
+    if (btn) {
+        if (complete) {
+            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            btn.innerHTML = '✅ 提交（+10 積分）';
+        } else {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+            btn.innerHTML = '請完成所有必填欄位';
+        }
+    }
+}
 // ============================================================
 // 提交店鋪 (含雲端同步)
 // ============================================================
