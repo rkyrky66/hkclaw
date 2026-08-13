@@ -1,0 +1,886 @@
+/* ============================================================
+   css/style.css
+   爪爪情報站 - 所有樣式
+   ============================================================ */
+
+/* ============================================================
+   全域樣式
+   ============================================================ */
+html, body {
+    height: 100%;
+    overscroll-behavior: none;
+}
+
+body {
+    background: radial-gradient(circle at 20% 0%, rgba(255,0,127,0.10), transparent 40%),
+                radial-gradient(circle at 80% 100%, rgba(0,255,0,0.08), transparent 40%),
+                #000;
+    color: #ffffff;
+    font-family: 'Noto Sans TC', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+}
+
+/* ============================================================
+   滾動條樣式
+   ============================================================ */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* ============================================================
+   頁面布局
+   ============================================================ */
+#main.map-page {
+    overflow: hidden !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#map-wrapper {
+    flex-shrink: 0;
+    height: 40vh;
+    min-height: 200px;
+    position: relative;
+}
+
+#map-store-list-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+   文字效果
+   ============================================================ */
+.neon-green {
+    text-shadow: 0 0 4px #00FF00, 0 0 12px #00FF00;
+}
+
+.neon-pink {
+    text-shadow: 0 0 4px #FF007F, 0 0 12px #FF007F;
+}
+
+.neon-gold {
+    text-shadow: 0 0 4px #D4AF37, 0 0 10px #D4AF37;
+}
+
+/* ============================================================
+   光暈效果
+   ============================================================ */
+.glow-green {
+    box-shadow: 0 0 6px rgba(0,255,0,.5), inset 0 0 6px rgba(0,255,0,.2);
+}
+
+.glow-pink {
+    box-shadow: 0 0 6px rgba(255,0,127,.5), inset 0 0 6px rgba(255,0,127,.2);
+}
+
+.glow-gold {
+    box-shadow: 0 0 8px rgba(212,175,55,.5);
+}
+
+/* ============================================================
+   標籤/晶片樣式
+   ============================================================ */
+.chip-active-green {
+    background: #00FF00;
+    color: #000;
+    box-shadow: 0 0 10px #00FF00;
+}
+
+.chip-active-pink {
+    background: #FF007F;
+    color: #000;
+    box-shadow: 0 0 10px #FF007F;
+}
+
+.chip-active-gold {
+    background: #D4AF37;
+    color: #000;
+    box-shadow: 0 0 10px #D4AF37;
+}
+
+/* ============================================================
+   動畫
+   ============================================================ */
+@keyframes pop {
+    0% { transform: scale(.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-pop {
+    animation: pop .18s ease-out;
+}
+
+@keyframes flicker {
+    0%,100% { opacity: 1; }
+    45% { opacity: .75; }
+    55% { opacity: .9; }
+}
+
+.flicker {
+    animation: flicker 3s infinite;
+}
+
+@keyframes fadeup {
+    0% { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.view-enter {
+    animation: fadeup .22s ease-out;
+}
+
+/* ============================================================
+   導航
+   ============================================================ */
+.nav-btn.active .nav-ico {
+    filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor);
+}
+
+/* ============================================================
+   地圖
+   ============================================================ */
+#map-container {
+    height: 100%;
+    width: 100%;
+    background: #111;
+    position: relative;
+    z-index: 1;
+}
+
+#map-container .leaflet-control-zoom {
+    border: none !important;
+}
+
+#map-container .leaflet-control-zoom a {
+    background: rgba(20,20,20,0.85) !important;
+    color: #D4AF37 !important;
+    border: 1px solid rgba(212,175,55,0.25) !important;
+}
+
+.map-divider {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), rgba(0,255,0,0.2), rgba(212,175,55,0.3), transparent);
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   地圖標記 (自定義)
+   ============================================================ */
+.custom-marker-green {
+    position: relative;
+    width: 36px;
+    height: 44px;
+    background: #00CC66;
+    border: 2px solid #00FF88;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 4px 12px rgba(0,204,102,0.6), 0 2px 8px rgba(0,0,0,0.3);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.custom-marker-green .marker-number {
+    transform: rotate(45deg);
+    color: #fff;
+    font-weight: 900;
+    font-size: 13px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    line-height: 1;
+    z-index: 2;
+}
+
+.custom-marker-yellow {
+    position: relative;
+    width: 34px;
+    height: 42px;
+    background: #FFB800;
+    border: 2px solid #FFD700;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 4px 12px rgba(255,184,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.custom-marker-yellow .marker-number {
+    transform: rotate(45deg);
+    color: #1a1a1a;
+    font-weight: 900;
+    font-size: 13px;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+    line-height: 1;
+    z-index: 2;
+}
+
+.custom-marker-user {
+    background: #3b82f6;
+    border: 2px solid #60a5fa;
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(59,130,246,0.8), 0 0 40px rgba(59,130,246,0.4);
+    width: 18px !important;
+    height: 18px !important;
+    margin-left: -9px !important;
+    margin-top: -9px !important;
+    animation: pulse-bg 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-bg {
+    0%,100% { box-shadow: 0 0 20px rgba(59,130,246,0.8), 0 0 40px rgba(59,130,246,0.4); }
+    50% { box-shadow: 0 0 30px rgba(59,130,246,1), 0 0 60px rgba(59,130,246,0.6); }
+}
+
+/* ============================================================
+   Leaflet Popup 覆蓋樣式
+   ============================================================ */
+.leaflet-popup-content-wrapper {
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 12px;
+    border: 1px solid rgba(212,175,55,0.3);
+}
+
+.leaflet-popup-tip {
+    background: #1a1a1a;
+}
+
+.leaflet-popup-content {
+    font-size: 13px;
+    line-height: 1.5;
+    min-width: 200px;
+}
+
+.leaflet-popup-content .store-name {
+    color: #D4AF37;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.leaflet-popup-content .store-addr {
+    color: #aaa;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.leaflet-popup-content .status-badge {
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-left: 6px;
+}
+
+.status-badge.verified {
+    background: rgba(0,255,0,0.2);
+    color: #00FF00;
+    border: 1px solid rgba(0,255,0,0.3);
+}
+
+.status-badge.pending {
+    background: rgba(136,136,136,0.2);
+    color: #888;
+    border: 1px solid rgba(136,136,136,0.3);
+}
+
+/* ============================================================
+   標記群集
+   ============================================================ */
+.marker-cluster-custom {
+    background: rgba(128,0,255,0.7);
+    border: 2px solid rgba(128,0,255,0.9);
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 16px rgba(128,0,255,0.5);
+}
+
+/* ============================================================
+   商場模態框
+   ============================================================ */
+.mall-modal-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 75vh;
+    max-height: 75vh;
+    min-height: 75vh;
+}
+
+.mall-modal-header {
+    border-bottom: 1px solid rgba(212,175,55,0.2);
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.mall-modal-header .mall-name {
+    color: #D4AF37;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.mall-modal-header .mall-addr {
+    color: #aaa;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.mall-modal-header .mall-count {
+    color: #00FF00;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.mall-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+}
+
+.mall-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.mall-tab {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(212,175,55,0.25);
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.mall-tab.active {
+    background: #D4AF37;
+    color: #000;
+    border-color: #D4AF37;
+    box-shadow: 0 0 16px rgba(212,175,55,0.3);
+}
+
+.mall-tab .tab-count {
+    font-weight: 400;
+    font-size: 10px;
+    opacity: 0.7;
+    margin-left: 2px;
+}
+
+.mall-tab.active .tab-count {
+    opacity: 0.8;
+}
+
+.mall-store-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 100px;
+    max-height: 45vh;
+    padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mall-store-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(212,175,55,0.1);
+    background: rgba(255,255,255,0.03);
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.mall-store-item:active {
+    transform: scale(0.98);
+}
+
+.mall-store-item.highlight {
+    border-color: #D4AF37;
+    background: rgba(212,175,55,0.15);
+    box-shadow: 0 0 12px rgba(212,175,55,0.15);
+}
+
+.mall-store-item .store-number {
+    color: #D4AF37;
+    font-weight: 700;
+    font-size: 12px;
+    min-width: 28px;
+}
+
+.mall-store-item .store-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    margin-left: 8px;
+}
+
+.mall-store-item .store-status {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.mall-store-item .store-status.verified {
+    background: rgba(0,255,0,0.15);
+    color: #00FF00;
+    border: 1px solid rgba(0,255,0,0.2);
+}
+
+.mall-store-item .store-status.pending {
+    background: rgba(255,184,0,0.15);
+    color: #FFB800;
+    border: 1px solid rgba(255,184,0,0.2);
+}
+
+.mall-footer-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-top: 12px;
+    border-radius: 10px;
+    background: rgba(212,175,55,0.12);
+    border: 1px solid rgba(212,175,55,0.25);
+    color: #D4AF37;
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    line-height: 1.5;
+}
+
+.mall-footer-btn:active {
+    transform: scale(0.97);
+    background: rgba(212,175,55,0.25);
+}
+
+.mall-footer-btn .sub-text {
+    font-weight: 400;
+    font-size: 10px;
+    opacity: 0.6;
+    display: block;
+    margin-top: 2px;
+}
+
+.mall-store-list-scroll::-webkit-scrollbar {
+    width: 3px;
+}
+
+.mall-store-list-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mall-store-list-scroll::-webkit-scrollbar-thumb {
+    background: rgba(212,175,55,0.3);
+    border-radius: 10px;
+}
+
+/* ============================================================
+   下拉刷新
+   ============================================================ */
+.pull-indicator {
+    position: absolute;
+    top: -60px;
+    left: 0;
+    right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    transition: top 0.2s ease;
+    pointer-events: none;
+}
+
+.pull-indicator.active {
+    top: 0;
+}
+
+#main {
+    position: relative;
+}
+
+.pull-indicator .spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top-color: #D4AF37;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+.pull-indicator.loading .spinner {
+    display: inline-block;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   貼文列表
+   ============================================================ */
+.my-post-item {
+    transition: all 0.2s;
+}
+
+.my-post-item.expired {
+    opacity: 0.5;
+}
+
+/* ============================================================
+   篩選按鈕
+   ============================================================ */
+.filter-btn {
+    transition: all 0.2s;
+}
+
+.filter-btn.active {
+    border-color: #D4AF37 !important;
+    background: rgba(212,175,55,0.2) !important;
+    color: #D4AF37 !important;
+}
+
+/* ============================================================
+   表單樣式
+   ============================================================ */
+input, select, textarea {
+    font-size: 16px;
+}
+
+.form-label-disabled {
+    color: rgba(255,255,255,0.3) !important;
+}
+
+.form-label-enabled {
+    color: #D4AF37 !important;
+}
+
+/* ============================================================
+   快速操作按鈕
+   ============================================================ */
+.quick-action-btn {
+    transition: all 0.15s;
+}
+
+.quick-action-btn:active {
+    transform: scale(0.9);
+}
+
+/* ============================================================
+   過期/存疑樣式
+   ============================================================ */
+.stale {
+    filter: grayscale(1) brightness(.55);
+    opacity: .55;
+}
+
+/* ============================================================
+   🎯 任務系統 CSS
+   ============================================================ */
+.task-progress-bar {
+    background: linear-gradient(90deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05));
+    border: 1px solid rgba(212,175,55,0.3);
+}
+
+.task-progress-bar .bar-fill {
+    background: linear-gradient(90deg, #D4AF37, #FFD700);
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.task-progress-bar .bar-fill.complete {
+    background: linear-gradient(90deg, #00FF00, #00CC88);
+}
+
+.task-item {
+    transition: all 0.2s ease;
+}
+
+.task-item:active {
+    transform: scale(0.98);
+}
+
+.task-item .task-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.task-item .task-icon.core {
+    background: rgba(212,175,55,0.15);
+    border: 1px solid rgba(212,175,55,0.3);
+}
+
+.task-item .task-icon.daily {
+    background: rgba(0,255,0,0.08);
+    border: 1px solid rgba(0,255,0,0.2);
+}
+
+.task-item .task-progress-mini {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+}
+
+.task-item .task-progress-mini .fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+/* ============================================================
+   🌍 區域探索進度 CSS (地圖左上角)
+   ============================================================ */
+#region-progress-container {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 1000;
+    padding: 8px 12px;
+    min-width: 140px;
+    max-width: 200px;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.8);
+}
+
+#region-progress-container .title {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#region-progress-container .region-item {
+    margin-bottom: 4px;
+}
+
+#region-progress-container .region-item:last-child {
+    margin-bottom: 0;
+}
+
+#region-progress-container .region-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+#region-progress-container .region-row .label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#region-progress-container .region-row .count {
+    font-weight: 600;
+}
+
+#region-progress-container .region-row .count.done {
+    color: #00FF00;
+}
+
+#region-progress-container .region-bar {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+#region-progress-container .region-bar .fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+}
+
+#region-progress-container .region-bar .fill.done {
+    background: linear-gradient(90deg, #00FF00, #00CC88);
+}
+
+#region-progress-container .region-bar .fill.partial {
+    background: linear-gradient(90deg, #D4AF37, #FFD700);
+}
+
+#region-progress-container .hint {
+    font-size: 7px;
+    color: rgba(255, 255, 255, 0.2);
+    text-align: center;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   ⭐ 個人標記升級 CSS (地圖標記)
+   ============================================================ */
+@keyframes markerPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(212, 175, 55, 0.3); }
+    50% { box-shadow: 0 0 24px rgba(212, 175, 55, 0.7), 0 0 48px rgba(212, 175, 55, 0.3); }
+}
+
+@keyframes markerFloat {
+    0%, 100% { transform: rotate(-45deg) translateY(0); }
+    50% { transform: rotate(-45deg) translateY(-4px); }
+}
+
+.marker-level-2 {
+    animation: markerPulse 2s ease-in-out infinite;
+}
+
+.marker-level-3 {
+    animation: markerFloat 3s ease-in-out infinite;
+}
+
+/* ============================================================
+   貢獻徽章 CSS (店鋪詳情)
+   ============================================================ */
+.contribution-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.contribution-badge.level-1 {
+    background: rgba(212, 175, 55, 0.12);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    color: #D4AF37;
+}
+
+.contribution-badge.level-2 {
+    background: rgba(212, 175, 55, 0.2);
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    color: #D4AF37;
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+}
+
+.contribution-badge.level-3 {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(255, 215, 0, 0.15));
+    border: 1px solid #D4AF37;
+    color: #FFD700;
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.25);
+}
+
+.contribution-badge .progress-text {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 400;
+}
+
+/* ============================================================
+   任務完成動畫
+   ============================================================ */
+@keyframes taskComplete {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.05); background: rgba(0, 255, 0, 0.1); }
+    100% { transform: scale(1); }
+}
+
+.task-item.completing {
+    animation: taskComplete 0.5s ease;
+}
+
+@keyframes scorePop {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.score-pop {
+    animation: scorePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   懸賞任務 CSS (前台)
+   ============================================================ */
+.bounty-card {
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.2s ease;
+}
+
+.bounty-card:active {
+    transform: scale(0.98);
+}
+
+.bounty-card .bounty-status-open {
+    color: #00FF00;
+}
+
+.bounty-card .bounty-status-in-progress {
+    color: #FFB800;
+}
+
+.bounty-card .bounty-status-completed {
+    color: #D4AF37;
+}
+
+.bounty-card .bounty-reward {
+    font-size: 14px;
+    font-weight: 700;
+    color: #D4AF37;
+}
+
+/* ============================================================
+   18區多邊形覆蓋層 (Leaflet 專用)
+   ============================================================ */
+.region-polygon {
+    pointer-events: none;
+}
+
+.region-label {
+    pointer-events: none;
+    font-weight: 700;
+    text-shadow: 0 0 12px rgba(0,0,0,0.9), 0 0 24px rgba(0,0,0,0.8);
+    letter-spacing: 1px;
+}
