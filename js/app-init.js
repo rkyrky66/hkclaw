@@ -1,5 +1,5 @@
 // ============================================================
-// js/app-init.js
+// js/app-init.js (修正版)
 // 爪爪情報站 - 應用啟動與全域初始化
 // ============================================================
 
@@ -36,6 +36,38 @@ var isRefreshing = false;
 var ensureStoresTimeout = null;
 var ensureStoresRetryCount = 0;
 var MAX_ENSURE_RETRIES = 3;
+
+// ============================================================
+// 處理離線檢舉自動上傳 (移動到這裡)
+// ============================================================
+async function processOfflineReports() {
+  if (!CLOUD_ON || !STATE._offlineReports || STATE._offlineReports.length === 0) return;
+  
+  const pending = STATE._offlineReports.slice();
+  let syncedCount = 0;
+  
+  for (const report of pending) {
+    try {
+      const response = await fetch(SUPABASE_URL + "/rest/v1/reports", {
+        method: 'POST',
+        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify([report])
+      });
+      
+      if (response.ok) {
+        syncedCount++;
+        STATE._offlineReports = STATE._offlineReports.filter(r => r !== report);
+      }
+    } catch (e) {
+      console.warn('⚠️ 離線檢舉上傳失敗:', e.message);
+    }
+  }
+  
+  if (syncedCount > 0) {
+    save();
+    console.log(`✅ 已上傳 ${syncedCount} 筆離線檢舉`);
+  }
+}
 
 // ============================================================
 // 下拉刷新

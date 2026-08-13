@@ -1,12 +1,11 @@
 // ============================================================
-// js/ui-functions.js
+// js/ui-functions.js (修正版)
 // 爪爪情報站 - UI 相關函數 (視圖切換、模態框、Toast)
 // ============================================================
 
 // ============================================================
 // 全域變數
 // ============================================================
-var VIEWS = { map: viewMap, find: viewFind, task: viewTask, live: viewLive, me: viewMe };
 var AFTER = { map: null };
 var CURRENT = "map";
 
@@ -17,6 +16,15 @@ function showView(name) {
   var overlay = document.getElementById('page-overlay');
   var mapPage = document.getElementById('map-page-container');
   CURRENT = name;
+  
+  // 獲取對應的視圖函數
+  var viewMap = {
+    'map': window.viewMap,
+    'find': window.viewFind,
+    'task': window.viewTask,
+    'live': window.viewLive,
+    'me': window.viewMe
+  };
   
   if (name === 'map') {
     if (mapPage) mapPage.style.display = 'flex';
@@ -40,7 +48,8 @@ function showView(name) {
     if (overlay) {
       overlay.style.display = 'block';
       overlay.style.pointerEvents = 'auto';
-      overlay.innerHTML = VIEWS[name]();
+      var viewFn = viewMap[name] || function() { return '<p class="text-center text-white/40 py-10">頁面載入中...</p>'; };
+      overlay.innerHTML = viewFn();
       overlay.scrollTop = 0;
       overlay.classList.add("view-enter");
     }
