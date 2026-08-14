@@ -2894,27 +2894,106 @@ function updateRegionDisplay() {
         addRegionPolygons();
     }
 }
-
 // 儲存 polygon 引用以便更新
 window._regionPolygons = [];
+window._regionLabels = [];
+window._majorRegionLabels = [];
+var currentLabelLevel = 'district'; // 'district' 或 'major'
+
+// 三大區標籤位置（手動設定的中心點）
+var MAJOR_REGION_LABELS = {
+    hk: { label: '港島區', lat: 22.26, lng: 114.18 },
+    kl: { label: '九龍區', lat: 22.32, lng: 114.19 },
+    nt: { label: '新界區', lat: 22.42, lng: 114.10 }
+};
+
+// 判斷當前應該顯示哪個層級的標籤
+function getLabelDisplayLevel() {
+    if (!map) return 'district';
+    var zoom = map.getZoom();
+    return zoom < 11 ? 'major' : 'district';
+}
+
+// 創建區域標籤
+function createRegionLabel(text, fontSize) {
+    return L.divIcon({
+        className: 'region-label',
+        html: '<div style="font-size:' + fontSize + ';font-weight:700;color:rgba(255,255,255,0.5);text-shadow:0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.8);letter-spacing:1px;pointer-events:none;">' + text + '</div>',
+        iconSize: [80, 30],
+        iconAnchor: [40, 15]
+    });
+}
+
+// 清除所有標籤
+function clearRegionLabels() {
+    window._regionLabels.forEach(function(marker) {
+        if (map) map.removeLayer(marker);
+    });
+    window._regionLabels = [];
+    
+    window._majorRegionLabels.forEach(function(marker) {
+        if (map) map.removeLayer(marker);
+    });
+    window._majorRegionLabels = [];
+}
+
+// 更新標籤顯示（在 zoom 變化時調用）
+function updateRegionDisplay() {
+    if (!map) return;
+    
+    var level = getLabelDisplayLevel();
+    if (level !== currentLabelLevel) {
+        updateRegionLabels();
+    }
+}
+
+// 更新區域標籤
+function updateRegionLabels() {
+    var level = getLabelDisplayLevel();
+    
+    // 清除舊標籤
+    clearRegionLabels();
+    
+    if (level === 'district') {
+        // 顯示18區標籤
+        for (var key in REGION_POLYGONS) {
+            var region = REGION_POLYGONS[key];
+            var center = getPolygonCenter(region.coords);
+            var label = createRegionLabel(region.label, '11px');
+            var labelMarker = L.marker([center.lat, center.lng], {
+                icon: label,
+                interactive: false,
+                keyboard: false
+            }).addTo(map);
+            window._regionLabels.push(labelMarker);
+        }
+        currentLabelLevel = 'district';
+    } else {
+        // 顯示三大區標籤
+        for (var majorKey in MAJOR_REGION_LABELS) {
+            var majorRegion = MAJOR_REGION_LABELS[majorKey];
+            var majorLabel = createRegionLabel(majorRegion.label, '14px');
+            var majorLabelMarker = L.marker([majorRegion.lat, majorRegion.lng], {
+                icon: majorLabel,
+                interactive: false,
+                keyboard: false
+            }).addTo(map);
+            window._majorRegionLabels.push(majorLabelMarker);
+        }
+        currentLabelLevel = 'major';
+    }
+}
 
 function addRegionPolygons() {
     if (!map) return;
     
-    var level = getRegionDisplayLevel();
-    if (level === 'district') {
-        addDistrictPolygons();
-    } else {
-        addMajorRegionPolygons();
-    }
-}
-
-// 添加18區多邊形
-function addDistrictPolygons() {
-    // 清除舊的圖層
-    clearRegionLayers();
+    // 清除舊的 polygon
+    window._regionPolygons.forEach(function(p) {
+        if (map) map.removeLayer(p);
+    });
+    window._regionPolygons = [];
     
-    // 添加每個區域的 polygon
+    // 添加每個區域的 polygon（永遠顯示18區邊界）
     for (var key in REGION_POLYGONS) {
         var region = REGION_POLYGONS[key];
         var polygon = L.polygon(region.coords, {
@@ -2928,57 +3007,12 @@ function addDistrictPolygons() {
             className: 'region-polygon'
         }).addTo(map);
         
+        // 儲存引用
         window._regionPolygons.push(polygon);
-        
-        // 添加區域標籤
-        var center = getPolygonCenter(region.coords);
-        var label = createRegionLabel(region.label, '11px');
-        var labelMarker = L.marker([center.lat, center.lng], {
-            icon: label,
-            interactive: false,
-            keyboard: false
-        }).addTo(map);
-        
-        window._regionPolygons.push(labelMarker);
     }
     
-    currentRegionLevel = 'district';
-}
-
-// 添加三大區多邊形
-function addMajorRegionPolygons() {
-    // 清除舊的圖層
-    clearRegionLayers();
-    
-    // 添加三大區的 polygon
-    for (var key in MAJOR_REGION_POLYGONS) {
-        var region = MAJOR_REGION_POLYGONS[key];
-        var polygon = L.polygon(region.coords, {
-            color: region.borderColor,
-            weight: 2,
-            opacity: 0.8,
-            fillColor: region.color,
-            fillOpacity: 1,
-            interactive: false,
-            smoothFactor: 1,
-            className: 'major-region-polygon'
-        }).addTo(map);
-        
-        window._majorRegionPolygons.push(polygon);
-        
-        // 添加三大區標籤（字體更大）
-        var center = getPolygonCenter(region.coords);
-        var label = createRegionLabel(region.label, '14px');
-        var labelMarker = L.marker([center.lat, center.lng], {
-            icon: label,
-            interactive: false,
-            keyboard: false
-        }).addTo(map);
-        
-        window._majorRegionPolygons.push(labelMarker);
-    }
-    
-    currentRegionLevel = 'major';
+    // 根據當前 zoom 添加對應的標籤
+    updateRegionLabels();
 }
 
 // 計算多邊形中心點
