@@ -2706,13 +2706,10 @@ var REGION_POLYGONS = {
 window._regionPolygons = [];
 
 function addRegionPolygons() {
-    // 清除舊的 polygon
     if (window._regionPolygons && window._regionPolygons.length > 0) {
         window._regionPolygons.forEach(function(p) {
             if (map) {
-                try {
-                    map.removeLayer(p);
-                } catch (e) {}
+                try { map.removeLayer(p); } catch (e) {}
             }
         });
         window._regionPolygons = [];
@@ -2720,57 +2717,52 @@ function addRegionPolygons() {
     
     if (!map) return;
     
-    // 檢查格式
     if (REGION_POLYGONS.type !== "FeatureCollection" || !REGION_POLYGONS.features) {
         console.warn('⚠️ REGION_POLYGONS 格式錯誤');
         return;
     }
 
     // ============================================================
-    // 🎨 三大區顏色映射
+    // 🎨 三大區顏色映射 (提高填色透明度)
     // ============================================================
     function getRegionColor(regionName) {
-        // 港島區 (🔵 藍色)
         var hkIsland = ['中西區', '灣仔', '東區', '南區'];
-        // 九龍區 (🔴 紅色/粉紅)
         var kowloon = ['油尖旺', '深水埗', '九龍城', '黃大仙', '觀塘'];
         
         if (hkIsland.indexOf(regionName) !== -1) {
             return { 
-                border: 'rgba(59, 130, 246, 0.7)',   // 藍色邊框
-                fill: 'rgba(59, 130, 246, 0.08)',    // 藍色半透明填充
-                labelColor: 'rgba(59, 130, 246, 0.6)'
+                border: 'rgba(59, 130, 246, 0.9)',   // 藍色邊框
+                fill: 'rgba(59, 130, 246, 0.3)',     // 藍色填色 (更明顯)
+                labelColor: '#60A5FA'                // 亮藍色文字
             };
         } else if (kowloon.indexOf(regionName) !== -1) {
             return { 
-                border: 'rgba(255, 0, 127, 0.7)',    // 粉紅/紅色邊框
-                fill: 'rgba(255, 0, 127, 0.08)',     // 粉紅半透明填充
-                labelColor: 'rgba(255, 0, 127, 0.6)'
+                border: 'rgba(255, 0, 127, 0.9)',    // 粉紅邊框
+                fill: 'rgba(255, 0, 127, 0.3)',      // 粉紅填色 (更明顯)
+                labelColor: '#FF6B9D'                // 亮粉色文字
             };
         } else {
-            // 新界區 (🟢 綠色)
             return { 
-                border: 'rgba(0, 255, 0, 0.5)',      // 綠色邊框
-                fill: 'rgba(0, 255, 0, 0.06)',       // 綠色半透明填充
-                labelColor: 'rgba(0, 255, 0, 0.5)'
+                border: 'rgba(0, 255, 0, 0.8)',      // 綠色邊框
+                fill: 'rgba(0, 255, 0, 0.25)',       // 綠色填色 (更明顯)
+                labelColor: '#4ADE80'                // 亮綠色文字
             };
         }
     }
 
-    // 遍歷 features
-    REGION_POLYGONS.features.forEach(function(feature, index) {
+    REGION_POLYGONS.features.forEach(function(feature) {
         if (!feature.geometry || !feature.geometry.coordinates) return;
         
         var regionName = feature.properties?.地區 || feature.properties?.District || '未知區域';
         var colors = getRegionColor(regionName);
         
-        // 創建多邊形
+        // 創建多邊形 - fillOpacity 設為 1，讓 fillColor 的透明度完全生效
         var polygon = L.polygon(feature.geometry.coordinates, {
             color: colors.border,
-            weight: 1.5,
-            opacity: 0.7,
+            weight: 2,                           // 邊框加粗一點
+            opacity: 0.9,
             fillColor: colors.fill,
-            fillOpacity: 1,
+            fillOpacity: 1,                      // 設為 1，讓 fillColor 的 rgba 透明度生效
             interactive: false,
             smoothFactor: 1,
             className: 'region-polygon'
@@ -2778,14 +2770,13 @@ function addRegionPolygons() {
         
         window._regionPolygons.push(polygon);
         
-        // 計算中心點放置標籤
         var center = getPolygonCenter(feature.geometry.coordinates);
         if (center) {
             var label = L.divIcon({
                 className: 'region-label',
-                html: '<div style="font-size:10px;font-weight:700;color:' + colors.labelColor + ';text-shadow:0 0 12px rgba(0,0,0,0.95),0 0 24px rgba(0,0,0,0.9);letter-spacing:0.5px;pointer-events:none;background:rgba(0,0,0,0.4);padding:2px 8px;border-radius:4px;border:1px solid ' + colors.border + ';">' + regionName + '</div>',
-                iconSize: [80, 22],
-                iconAnchor: [40, 11]
+                html: '<div style="font-size:11px;font-weight:700;color:' + colors.labelColor + ';text-shadow:0 0 12px rgba(0,0,0,0.95),0 0 24px rgba(0,0,0,0.9);letter-spacing:0.5px;pointer-events:none;background:rgba(0,0,0,0.5);padding:3px 10px;border-radius:4px;border:1.5px solid ' + colors.border + ';">' + regionName + '</div>',
+                iconSize: [90, 24],
+                iconAnchor: [45, 12]
             });
             var labelMarker = L.marker([center.lat, center.lng], {
                 icon: label,
