@@ -417,26 +417,25 @@ var SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
 var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 var supabaseClientInstance = null;
 
-function initSupabaseClient() {
+async function initSupabaseClient() {
   try {
     if (typeof supabase !== 'undefined' && supabase.createClient) {
       supabaseClientInstance = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
-      supabaseClientInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else if (typeof window.supabaseJs !== 'undefined') {
-      supabaseClientInstance = window.supabaseJs.createClient(SUPABASE_URL, SUPABASE_KEY);
     } else {
-      import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2').then(function(module) {
-        supabaseClientInstance = module.createClient(SUPABASE_URL, SUPABASE_KEY);
-      }).catch(function(err) {
-        createFallbackClient();
-      });
-      return;
+      const module = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+      supabaseClientInstance = module.createClient(SUPABASE_URL, SUPABASE_KEY);
     }
+    console.log('✅ Supabase Client 初始化成功');
   } catch (e) {
     createFallbackClient();
+    console.warn('⚠️ Supabase Client 初始化失敗，使用 fallback');
   }
 }
+
+document.addEventListener('DOMContentLoaded', async function() {
+  await initSupabaseClient();
+  await checkOAuthCallback();
+});
 
 function createFallbackClient() {
   supabaseClientInstance = {
@@ -854,30 +853,58 @@ async function syncTaskProgress(progress) {
     if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
     
     var today = todayKey();
+    var userId = STATE.user.user_id;
+    var deviceId = STATE.user.device;
+    
     try {
-        await fetch(
-            SUPABASE_URL + "/rest/v1/task_progress?user_id=eq." + STATE.user.user_id + "&date=eq." + today,
-            {
-                method: 'PATCH',
-                headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                body: JSON.stringify({
-                    submit_store: progress.submit_store || 0,
-                    verify_store: progress.verify_store || 0,
-                    supplement: progress.supplement || 0,
-                    checkin: progress.checkin || 0,
-                    machine_checkin: progress.machine_checkin || 0,
-                    share: progress.share || 0,
-                    total_points: progress.total_points || 0,
-                    is_goal_reached: progress.goal_reached || false,
-                    updated_at: new Date().toISOString()
-                })
-            }
+        var body = {
+            user_id: userId,
+            device_id: deviceId,
+            date: today,
+            submit_store: progress.submit_store || 0,
+            verify_store: progress.verify_store || 0,
+            supplement: progress.supplement || 0,
+            checkin: progress.checkin || 0,
+            machine_checkin: progress.machine_checkin || 0,
+            share: progress.share || 0,
+            total_points: progress.total_points || 0,
+            is_goal_reached: progress.goal_reached || false,
+            updated_at: new Date().toISOString()
+        };
+        
+        // 先檢查是否存在
+        var checkResponse = await fetch(
+            SUPABASE_URL + "/rest/v1/task_progress?user_id=eq." + userId + "&date=eq." + today,
+            { headers: getSupabaseHeaders() }
         );
+        var existing = await checkResponse.json();
+        
+        if (existing && existing.length > 0) {
+            // 更新
+            await fetch(
+                SUPABASE_URL + "/rest/v1/task_progress?user_id=eq." + userId + "&date=eq." + today,
+                {
+                    method: 'PATCH',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify(body)
+                }
+            );
+        } else {
+            // 插入
+            await fetch(
+                SUPABASE_URL + "/rest/v1/task_progress",
+                {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([Object.assign({ created_at: new Date().toISOString() }, body)])
+                }
+            );
+        }
+        console.log('✅ 任務進度已同步到雲端');
     } catch (e) {
         console.warn('⚠️ 同步任務進度失敗:', e.message);
     }
 }
-
 // 從雲端加載任務進度
 async function loadTaskProgressFromCloud() {
     if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
@@ -1167,14 +1194,43 @@ async function cloudInsert(table, row) {
   if (!CLOUD_ON) return;
   try {
     let processedRow = { ...row };
-    if (table === 'claw_stores' && processedRow.id) {
-      processedRow.id = String(processedRow.id);
+    
+    // claw_stores 的 id 是 bigint IDENTITY，不應該手動傳入
+    if (table === 'claw_stores') {
+      delete processedRow.id;
+      delete processedRow._userVerified;
+      delete processedRow._userSupplemented;
+      delete processedRow._dist;
     }
-    if (table === 'user_achievements' && processedRow.user_id) {
-      if (typeof processedRow.user_id === 'string' && !processedRow.user_id.includes('-')) {
+    
+    // 處理 UUID 欄位：如果 user_id 不是有效 UUID，改存到 device_id
+    if (processedRow.user_id !== undefined && processedRow.user_id !== null && processedRow.user_id !== '') {
+      if (!isValidUUID(processedRow.user_id)) {
+        if (processedRow.device_id === undefined || processedRow.device_id === null) {
+          processedRow.device_id = processedRow.user_id;
+        }
         processedRow.user_id = null;
       }
     }
+    
+    // 處理 submitted_by 欄位（uuid 類型）
+    if (processedRow.submitted_by !== undefined && processedRow.submitted_by !== null && processedRow.submitted_by !== '') {
+      if (!isValidUUID(processedRow.submitted_by)) {
+        if (processedRow.submitted_by_device === undefined || processedRow.submitted_by_device === null) {
+          processedRow.submitted_by_device = processedRow.submitted_by;
+        }
+        processedRow.submitted_by = null;
+      }
+    }
+    
+    // 處理 author_user_id 欄位（uuid 類型）
+    if (processedRow.author_user_id !== undefined && processedRow.author_user_id !== null && processedRow.author_user_id !== '') {
+      if (!isValidUUID(processedRow.author_user_id)) {
+        processedRow.author_user_id = null;
+        // 保留 author_device 作為標識
+      }
+    }
+    
     await sbFetch(table, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
@@ -1183,6 +1239,11 @@ async function cloudInsert(table, row) {
   } catch (e) { 
     console.log("[v0] cloudInsert 失敗:", e.message); 
   }
+}
+
+function isValidUUID(str) {
+  var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
 }
 
 async function uploadImage(file, folder) {
@@ -1291,15 +1352,17 @@ async function toggleFav(type, id) {
   save();
   
   // 雲端同步收藏
-  if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
     try {
+      var numericFavId = parseInt(id);
       if (isAdding) {
         await fetch(`${SUPABASE_URL}/rest/v1/user_favorites`, {
           method: 'POST',
           headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
           body: JSON.stringify([{
             user_id: STATE.user.user_id,
-            store_id: type === "store" ? id : null,
+            device_id: STATE.user.device,
+            store_id: type === "store" ? numericFavId : null,
             machine_id: type === "machine" ? id : null,
             created_at: new Date().toISOString()
           }])
@@ -1307,7 +1370,7 @@ async function toggleFav(type, id) {
       } else {
         var query = `user_id=eq.${STATE.user.user_id}`;
         if (type === "store") {
-          query += `&store_id=eq.${id}`;
+          query += `&store_id=eq.${numericFavId}`;
         } else {
           query += `&machine_id=eq.${id}`;
         }
@@ -3885,8 +3948,11 @@ async function submitVerification(storeId) {
         }
     }
     
+        // 將 store_id 轉為數字
+    var numericStoreId = parseInt(storeId);
+    
     var verification = {
-        store_id: storeId,
+        store_id: numericStoreId,
         verifier_device: STATE.user.device,
         verifier_user_id: STATE.user.user_id || null,
         verifier_name: STATE.user.name || '匿名用戶',
@@ -3978,9 +4044,10 @@ async function submitVerification(storeId) {
     // 記錄任務進度
     await recordTaskCompletion('verify_store');
     
-    // 記錄貢獻
+        // 記錄貢獻
     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
         try {
+            var numericStoreIdForVerifyContribution = parseInt(storeId);
             await fetch(
                 SUPABASE_URL + "/rest/v1/user_contributions",
                 {
@@ -3989,13 +4056,14 @@ async function submitVerification(storeId) {
                     body: JSON.stringify([{
                         user_id: STATE.user.user_id,
                         device_id: STATE.user.device,
-                        store_id: storeId,
+                        store_id: numericStoreIdForVerifyContribution,
                         contribution_type: 'verify',
                         contribution_value: 1,
                         created_at: new Date().toISOString()
                     }])
                 }
             );
+            console.log('✅ 貢獻記錄已同步');
         } catch (e) {
             console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
         }
@@ -4150,56 +4218,94 @@ async function submitAllSupplement(storeId) {
     supplementFields.push('size');
     supplementFields.push('has_staff');
     supplementFields.push('has_e_coin');
-    
-    for (var i = 0; i < supplementFields.length; i++) {
-        var fieldName = supplementFields[i];
-        var fieldValue = s[fieldName];
-        if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-            await sb.from('field_status').upsert({
-                table_name: 'claw_stores',
-                record_id: storeId,
-                field_name: fieldName,
-                status: 'pending',
-                submitted_by: STATE.user.device,
-                submitted_type: 'supplement',
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'table_name, record_id, field_name' });
+        // 記錄 field_status（用於審核補充資料）
+    if (CLOUD_ON && supabaseClientInstance && typeof supabaseClientInstance.from === 'function') {
+        try {
+            var numericStoreIdForSupplement = parseInt(storeId);
+            for (var i = 0; i < supplementFields.length; i++) {
+                var fieldName = supplementFields[i];
+                var fieldValue = s[fieldName];
+                if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
+                    await supabaseClientInstance
+                        .from('field_status')
+                        .upsert(
+                            {
+                                table_name: 'claw_stores',
+                                record_id: numericStoreIdForSupplement,
+                                field_name: fieldName,
+                                status: 'pending',
+                                submitted_by: STATE.user.device,
+                                submitted_type: 'supplement',
+                                updated_at: new Date().toISOString()
+                            },
+                            { onConflict: 'table_name, record_id, field_name' }
+                        );
+                }
+            }
+            console.log('✅ field_status 同步成功');
+        } catch (e) {
+            console.warn('⚠️ field_status 同步失敗（不影響主流程）:', e.message);
         }
     }
     
     if (CLOUD_ON) {
-        var updates = {};
-        if (isStreet && address) updates.address_detail = address;
-        updates.size = size;
-        updates.has_staff = staff;
-        updates.has_e_coin = coin;
-        updates.supplemented_by = STATE.user.device;
-        cloudInsert('claw_stores', Object.assign({ id: storeId }, updates));
-        
-        if (currentGps) {
-            cloudInsert('store_supplements', {
-                store_id: storeId,
-                user_id: STATE.user.device,
-                user_name: STATE.user.name,
-                supplement_type: 'bulk_update',
-                new_value: JSON.stringify({
-                    address: address,
-                    size: size,
-                    has_staff: staff,
-                    has_e_coin: coin
-                }),
-                gps_lat: currentGps.lat,
-                gps_lng: currentGps.lng
-            });
+        try {
+            var numericStoreIdForUpdate = parseInt(storeId);
+            var updates = {};
+            if (isStreet && address) updates.address_detail = address;
+            updates.size = size;
+            updates.has_staff = staff;
+            updates.has_e_coin = coin;
+            updates.supplemented_by = STATE.user.device;
+            
+            // 使用 PATCH 更新現有店鋪（id 是 bigint）
+            await fetch(
+                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
+                {
+                    method: 'PATCH',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify(updates)
+                }
+            );
+            console.log('✅ 店鋪補充資料已同步到雲端');
+            
+            if (currentGps) {
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/store_supplements",
+                    {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            store_id: numericStoreIdForUpdate,
+                            user_id: STATE.user.device,
+                            user_name: STATE.user.name,
+                            supplement_type: 'bulk_update',
+                            new_value: JSON.stringify({
+                                address: address,
+                                size: size,
+                                has_staff: staff,
+                                has_e_coin: coin
+                            }),
+                            gps_lat: currentGps.lat,
+                            gps_lng: currentGps.lng,
+                            created_at: new Date().toISOString()
+                        }])
+                    }
+                );
+                console.log('✅ 補充記錄已同步到雲端');
+            }
+        } catch (e) {
+            console.warn('⚠️ 補充資料雲端同步失敗:', e.message);
         }
     }
     
     // 記錄任務進度
     await recordTaskCompletion('supplement');
     
-    // 記錄貢獻
+        // 記錄貢獻
     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
         try {
+            var numericStoreIdForVerifyContribution = parseInt(storeId);
             await fetch(
                 SUPABASE_URL + "/rest/v1/user_contributions",
                 {
@@ -4208,13 +4314,14 @@ async function submitAllSupplement(storeId) {
                     body: JSON.stringify([{
                         user_id: STATE.user.user_id,
                         device_id: STATE.user.device,
-                        store_id: storeId,
-                        contribution_type: 'supplement',
+                        store_id: numericStoreIdForVerifyContribution,
+                        contribution_type: 'verify',
                         contribution_value: 1,
                         created_at: new Date().toISOString()
                     }])
                 }
             );
+            console.log('✅ 貢獻記錄已同步');
         } catch (e) {
             console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
         }
@@ -4366,10 +4473,10 @@ async function submitPlayerPost() {
     }
     
     var content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
-    var post = {
+        var post = {
         id: 'p' + Date.now() + '_' + uid(),
         track: 'player',
-        store_id: storeId,
+        store_id: String(storeId),  // live_posts.store_id 是 text
         store_name: store ? store.name : '',
         store_region: store ? store.region : '',
         content: content,
@@ -4377,6 +4484,7 @@ async function submitPlayerPost() {
         photo: photoUrl,
         author: STATE.user.name,
         author_device: STATE.user.device,
+        author_user_id: STATE.user.user_id || null,
         ts: now(),
         expire: now() + DAY,
         likes: [],
@@ -4457,16 +4565,17 @@ async function submitOwnerPost() {
         await addPoints(-plan.cost, '連結機台宣傳 (' + plan.days + '天)');
     }
     
-    var post = {
+        var post = {
         id: 'p' + Date.now() + '_' + uid(),
         track: 'owner',
-        store_id: storeId,
+        store_id: String(storeId),  // live_posts.store_id 是 text
         store_name: store ? store.name : '',
         store_region: store ? store.region : '',
         content: content,
         photo: photoUrl,
         author: STATE.user.name,
         author_device: STATE.user.device,
+        author_user_id: STATE.user.user_id || null,
         ts: now(),
         expire: plan ? now() + DAY * plan.days : now() + DAY,
         is_linked: !!plan,
@@ -5401,25 +5510,30 @@ async function submitMachine(sid) {
   await recordTaskCompletion('machine_checkin');
   
   // 記錄貢獻 (機台共享)
-  if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+    var numericMachineStoreId = parseInt(sid);
+  
+  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats: featsArray, plays: playsArray, prize: "台主自報", updated: now(), photo: photoUrl });
+  
+  if (CLOUD_ON) {
     try {
       await fetch(
-        SUPABASE_URL + "/rest/v1/user_contributions",
+        SUPABASE_URL + "/rest/v1/claw_machines",
         {
           method: 'POST',
           headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
           body: JSON.stringify([{
-            user_id: STATE.user.user_id,
-            device_id: STATE.user.device,
-            store_id: sid,
-            contribution_type: 'machine',
-            contribution_value: 1,
+            store_id: numericMachineStoreId,
+            feats: featsArray,
+            plays: playsArray,
+            prize: '台主自報',
+            photo: photoUrl,
             created_at: new Date().toISOString()
           }])
         }
       );
+      console.log('✅ 機台已同步到雲端');
     } catch (e) {
-      console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+      console.warn('⚠️ 機台雲端同步失敗:', e.message);
     }
   }
   
@@ -5488,8 +5602,9 @@ async function doStoreCheckin(storeId) {
     await recordTaskCompletion('checkin');
     
     // 同步到雲端
-    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
         try {
+            var numericCheckinStoreId = parseInt(storeId);
             await fetch(
                 SUPABASE_URL + "/rest/v1/store_checkins",
                 {
@@ -5498,7 +5613,7 @@ async function doStoreCheckin(storeId) {
                     body: JSON.stringify([{
                         user_id: STATE.user.user_id,
                         device_id: STATE.user.device,
-                        store_id: storeId,
+                        store_id: numericCheckinStoreId,
                         store_name: s.name,
                         checkin_date: todayKey(),
                         lat: gpsLat,
@@ -5507,6 +5622,7 @@ async function doStoreCheckin(storeId) {
                     }])
                 }
             );
+            console.log('✅ 打卡已同步到雲端');
         } catch (e) {
             console.warn('⚠️ 打卡雲端同步失敗:', e.message);
         }
@@ -6178,8 +6294,7 @@ async function submitIntel() {
     }
   }
   
-  var newStore = {
-    id: String(Date.now()),
+      var newStore = {
     name: name,
     region: selectedRegion,
     addr: addr,
@@ -6195,7 +6310,8 @@ async function submitIntel() {
     lng: gpsLng,
     mall: selectedType === 'mall' ? selectedMall : '',
     floor: selectedType === 'mall' ? selectedFloor : '',
-    submitted_by: STATE.user.device,
+    submitted_by: STATE.user.user_id || null,
+    submitted_by_device: STATE.user.device,
     verification_count: 0,
     is_verified: false,
     address_detail: '',
@@ -6207,8 +6323,41 @@ async function submitIntel() {
     _userSupplemented: false
   };
   
+  // 先插入雲端，獲取自動生成的數字 ID
+  var insertedId = null;
+  if (CLOUD_ON) {
+    try {
+      var insertData = { ...newStore };
+      delete insertData._userVerified;
+      delete insertData._userSupplemented;
+      
+      var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
+        method: 'POST',
+        headers: getSupabaseHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify([insertData])
+      });
+      
+      if (!insertResponse.ok) {
+        throw new Error('HTTP ' + insertResponse.status);
+      }
+      
+      var insertedStores = await insertResponse.json();
+      if (insertedStores && insertedStores.length > 0) {
+        insertedId = String(insertedStores[0].id);
+        newStore.id = insertedId;
+        console.log('✅ 店鋪已插入雲端，ID:', insertedId);
+      }
+    } catch (e) {
+      console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
+      insertedId = 'local_' + Date.now() + '_' + uid();
+      newStore.id = insertedId;
+    }
+  } else {
+    insertedId = 'local_' + Date.now() + '_' + uid();
+    newStore.id = insertedId;
+  }
+  
   STORES.push(newStore);
-  if (CLOUD_ON) cloudInsert('claw_stores', newStore);
   
   if (selectedRegion) {
     var regionStat = getRegionStat(selectedRegion);
@@ -6223,15 +6372,42 @@ async function submitIntel() {
     try {
       var today = new Date().toISOString().slice(0, 10);
       var userId = STATE.user.user_id || STATE.user.device;
-      await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
-        method: 'POST',
-        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify([{
-          user_id: userId,
-          date: today,
-          submit_count: STATE._submitCount
-        }])
-      });
+      
+      // 先檢查今日是否已有記錄
+      var checkResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
+        { headers: getSupabaseHeaders() }
+      );
+      var existingLimits = await checkResponse.json();
+      
+      if (existingLimits && existingLimits.length > 0) {
+        // 更新現有記錄
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
+          {
+            method: 'PATCH',
+            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+            body: JSON.stringify({
+              submit_count: STATE._submitCount,
+              updated_at: new Date().toISOString()
+            })
+          }
+        );
+      } else {
+        // 插入新記錄
+        await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
+          method: 'POST',
+          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify([{
+            user_id: userId,
+            date: today,
+            submit_count: STATE._submitCount,
+            report_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+        });
+      }
       console.log('✅ 提交計數已同步到雲端');
     } catch (e) {
       console.warn('⚠️ 提交計數雲端同步失敗:', e.message);
@@ -6241,28 +6417,30 @@ async function submitIntel() {
   // 記錄任務進度
   await recordTaskCompletion('submit_store');
   
-  // 記錄貢獻
-  if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-    try {
-      await fetch(
-        SUPABASE_URL + "/rest/v1/user_contributions",
-        {
-          method: 'POST',
-          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify([{
-            user_id: STATE.user.user_id,
-            device_id: STATE.user.device,
-            store_id: newStore.id,
-            contribution_type: 'submit',
-            contribution_value: 1,
-            created_at: new Date().toISOString()
-          }])
+      // 記錄貢獻
+    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+        try {
+            var numericStoreIdForVerifyContribution = parseInt(storeId);
+            await fetch(
+                SUPABASE_URL + "/rest/v1/user_contributions",
+                {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([{
+                        user_id: STATE.user.user_id,
+                        device_id: STATE.user.device,
+                        store_id: numericStoreIdForVerifyContribution,
+                        contribution_type: 'verify',
+                        contribution_value: 1,
+                        created_at: new Date().toISOString()
+                    }])
+                }
+            );
+            console.log('✅ 貢獻記錄已同步');
+        } catch (e) {
+            console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
         }
-      );
-    } catch (e) {
-      console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
     }
-  }
   
   toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
   await addPoints(10, '提交店鋪情報');
