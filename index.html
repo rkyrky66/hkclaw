@@ -2707,23 +2707,54 @@ window._regionPolygons = [];
 
 function addRegionPolygons() {
     // 清除舊的 polygon
-    if (window._regionPolygons.length > 0) {
+    if (window._regionPolygons && window._regionPolygons.length > 0) {
         window._regionPolygons.forEach(function(p) {
-            if (map) map.removeLayer(p);
+            if (map) {
+                try {
+                    map.removeLayer(p);
+                } catch (e) {
+                    // 忽略移除時的錯誤
+                }
+            }
         });
         window._regionPolygons = [];
     }
     
     if (!map) return;
     
-    // 添加每個區域的 polygon
-    for (var key in REGION_POLYGONS) {
-        var region = REGION_POLYGONS[key];
-        var polygon = L.polygon(region.coords, {
-            color: region.borderColor,
+    // ============================================================
+    // 🔧 修正點：正確讀取 features 數組
+    // ============================================================
+    // 檢查 REGION_POLYGONS 是否為有效的 FeatureCollection
+    if (REGION_POLYGONS.type !== "FeatureCollection" || !REGION_POLYGONS.features) {
+        console.warn('⚠️ REGION_POLYGONS 格式錯誤，無法加載區域邊界');
+        return;
+    }
+
+    // 遍歷 features 數組，而不是對象屬性
+    REGION_POLYGONS.features.forEach(function(feature) {
+        // 確保 geometry 和 coordinates 存在
+        if (!feature.geometry || !feature.geometry.coordinates) return;
+        
+        // 獲取區域名稱（優先使用中文名稱）
+        var regionName = feature.properties?.地區 || feature.properties?.District || '未知區域';
+        
+        // 為了視覺效果，為每個區域生成不同的顏色
+        var colors = [
+            { border: 'rgba(212, 175, 55, 0.6)', fill: 'rgba(212, 175, 55, 0.05)' },
+            { border: 'rgba(0, 255, 0, 0.6)', fill: 'rgba(0, 255, 0, 0.05)' },
+            { border: 'rgba(255, 0, 127, 0.6)', fill: 'rgba(255, 0, 127, 0.05)' },
+            { border: 'rgba(59, 130, 246, 0.6)', fill: 'rgba(59, 130, 246, 0.05)' },
+            { border: 'rgba(255, 184, 0, 0.6)', fill: 'rgba(255, 184, 0, 0.05)' },
+        ];
+        var colorIndex = (REGION_POLYGONS.features.indexOf(feature) % colors.length);
+        
+        // 創建多邊形
+        var polygon = L.polygon(feature.geometry.coordinates, {
+            color: colors[colorIndex].border,
             weight: 1.5,
             opacity: 0.7,
-            fillColor: region.color,
+            fillColor: colors[colorIndex].fill,
             fillOpacity: 1,
             interactive: false,
             smoothFactor: 1,
@@ -2733,31 +2764,50 @@ function addRegionPolygons() {
         // 儲存引用
         window._regionPolygons.push(polygon);
         
-        // 添加區域標籤 (在中心位置)
-        var center = getPolygonCenter(region.coords);
-        var label = L.divIcon({
-            className: 'region-label',
-            html: '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-shadow:0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.8);letter-spacing:1px;pointer-events:none;">' + region.label + '</div>',
-            iconSize: [60, 20],
-            iconAnchor: [30, 10]
-        });
-        var labelMarker = L.marker([center.lat, center.lng], {
-            icon: label,
-            interactive: false,
-            keyboard: false
-        }).addTo(map);
-        window._regionPolygons.push(labelMarker);
-    }
+        // 計算中心點來放置區域標籤
+        var center = getPolygonCenter(feature.geometry.coordinates);
+        if (center) {
+            var label = L.divIcon({
+                className: 'region-label',
+                html: '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-shadow:0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.8);letter-spacing:1px;pointer-events:none;background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px;">' + regionName + '</div>',
+                iconSize: [80, 20],
+                iconAnchor: [40, 10]
+            });
+            var labelMarker = L.marker([center.lat, center.lng], {
+                icon: label,
+                interactive: false,
+                keyboard: false
+            }).addTo(map);
+            window._regionPolygons.push(labelMarker);
+        }
+    });
+    
+    console.log('✅ 已加載 ' + (REGION_POLYGONS.features ? REGION_POLYGONS.features.length : 0) + ' 個區域邊界');
 }
 
-// 計算多邊形中心點
+// 輔助函數：計算多邊形中心點（保持不變）
 function getPolygonCenter(coords) {
-    var latSum = 0, lngSum = 0, count = 0;
-    for (var i = 0; i < coords.length; i++) {
-        latSum += coords[i][0];
-        lngSum += coords[i][1];
-        count++;
+    // coords 可能是多邊形或多多邊形
+    var points = coords;
+    // 如果是多多邊形（數組內還有一層數組），取第一個環
+    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+        points = coords[0];
     }
+    // 如果是單個多邊形
+    if (Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
+        points = coords;
+    }
+    
+    var latSum = 0, lngSum = 0, count = 0;
+    for (var i = 0; i < points.length; i++) {
+        // 確保點是 [lng, lat] 格式（GeoJSON 標準）
+        if (Array.isArray(points[i]) && points[i].length === 2) {
+            latSum += points[i][1];
+            lngSum += points[i][0];
+            count++;
+        }
+    }
+    if (count === 0) return null;
     return { lat: latSum / count, lng: lngSum / count };
 }
 
