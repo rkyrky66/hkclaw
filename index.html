@@ -2712,9 +2712,7 @@ function addRegionPolygons() {
             if (map) {
                 try {
                     map.removeLayer(p);
-                } catch (e) {
-                    // 忽略移除時的錯誤
-                }
+                } catch (e) {}
             }
         });
         window._regionPolygons = [];
@@ -2722,56 +2720,72 @@ function addRegionPolygons() {
     
     if (!map) return;
     
-    // ============================================================
-    // 🔧 修正點：正確讀取 features 數組
-    // ============================================================
-    // 檢查 REGION_POLYGONS 是否為有效的 FeatureCollection
+    // 檢查格式
     if (REGION_POLYGONS.type !== "FeatureCollection" || !REGION_POLYGONS.features) {
-        console.warn('⚠️ REGION_POLYGONS 格式錯誤，無法加載區域邊界');
+        console.warn('⚠️ REGION_POLYGONS 格式錯誤');
         return;
     }
 
-    // 遍歷 features 數組，而不是對象屬性
-    REGION_POLYGONS.features.forEach(function(feature) {
-        // 確保 geometry 和 coordinates 存在
+    // ============================================================
+    // 🎨 三大區顏色映射
+    // ============================================================
+    function getRegionColor(regionName) {
+        // 港島區 (🔵 藍色)
+        var hkIsland = ['中西區', '灣仔', '東區', '南區'];
+        // 九龍區 (🔴 紅色/粉紅)
+        var kowloon = ['油尖旺', '深水埗', '九龍城', '黃大仙', '觀塘'];
+        
+        if (hkIsland.indexOf(regionName) !== -1) {
+            return { 
+                border: 'rgba(59, 130, 246, 0.7)',   // 藍色邊框
+                fill: 'rgba(59, 130, 246, 0.08)',    // 藍色半透明填充
+                labelColor: 'rgba(59, 130, 246, 0.6)'
+            };
+        } else if (kowloon.indexOf(regionName) !== -1) {
+            return { 
+                border: 'rgba(255, 0, 127, 0.7)',    // 粉紅/紅色邊框
+                fill: 'rgba(255, 0, 127, 0.08)',     // 粉紅半透明填充
+                labelColor: 'rgba(255, 0, 127, 0.6)'
+            };
+        } else {
+            // 新界區 (🟢 綠色)
+            return { 
+                border: 'rgba(0, 255, 0, 0.5)',      // 綠色邊框
+                fill: 'rgba(0, 255, 0, 0.06)',       // 綠色半透明填充
+                labelColor: 'rgba(0, 255, 0, 0.5)'
+            };
+        }
+    }
+
+    // 遍歷 features
+    REGION_POLYGONS.features.forEach(function(feature, index) {
         if (!feature.geometry || !feature.geometry.coordinates) return;
         
-        // 獲取區域名稱（優先使用中文名稱）
         var regionName = feature.properties?.地區 || feature.properties?.District || '未知區域';
-        
-        // 為了視覺效果，為每個區域生成不同的顏色
-        var colors = [
-            { border: 'rgba(212, 175, 55, 0.6)', fill: 'rgba(212, 175, 55, 0.05)' },
-            { border: 'rgba(0, 255, 0, 0.6)', fill: 'rgba(0, 255, 0, 0.05)' },
-            { border: 'rgba(255, 0, 127, 0.6)', fill: 'rgba(255, 0, 127, 0.05)' },
-            { border: 'rgba(59, 130, 246, 0.6)', fill: 'rgba(59, 130, 246, 0.05)' },
-            { border: 'rgba(255, 184, 0, 0.6)', fill: 'rgba(255, 184, 0, 0.05)' },
-        ];
-        var colorIndex = (REGION_POLYGONS.features.indexOf(feature) % colors.length);
+        var colors = getRegionColor(regionName);
         
         // 創建多邊形
         var polygon = L.polygon(feature.geometry.coordinates, {
-            color: colors[colorIndex].border,
+            color: colors.border,
             weight: 1.5,
             opacity: 0.7,
-            fillColor: colors[colorIndex].fill,
+            fillColor: colors.fill,
             fillOpacity: 1,
             interactive: false,
             smoothFactor: 1,
             className: 'region-polygon'
         }).addTo(map);
         
-        // 儲存引用
         window._regionPolygons.push(polygon);
         
-        // 計算中心點來放置區域標籤
+        // 計算中心點放置標籤
         var center = getPolygonCenter(feature.geometry.coordinates);
         if (center) {
             var label = L.divIcon({
                 className: 'region-label',
-                html: '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-shadow:0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.8);letter-spacing:1px;pointer-events:none;background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px;">' + regionName + '</div>',
-                iconSize: [80, 20],
-                iconAnchor: [40, 10]
+                html: '<div style="font-size:10px;font-weight:700;color:' + colors.labelColor + ';text-shadow:0 0 12px rgba(0,0,0,0.95),0 0 24px rgba(0,0,0,0.9);letter-spacing:0.5px;pointer-events:none;background:rgba(0,0,0,0.4);padding:2px 8px;border-radius:4px;border:1px solid ' + colors.border + ';">' + regionName + '</div>',
+                iconSize: [80, 22],
+                iconAnchor: [40, 11]
             });
             var labelMarker = L.marker([center.lat, center.lng], {
                 icon: label,
@@ -2782,7 +2796,7 @@ function addRegionPolygons() {
         }
     });
     
-    console.log('✅ 已加載 ' + (REGION_POLYGONS.features ? REGION_POLYGONS.features.length : 0) + ' 個區域邊界');
+    console.log('✅ 已加載 ' + REGION_POLYGONS.features.length + ' 個區域邊界 (🔵港島/🔴九龍/🟢新界)');
 }
 
 // 輔助函數：計算多邊形中心點（保持不變）
