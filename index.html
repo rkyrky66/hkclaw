@@ -2639,70 +2639,6 @@ var REGION_POLYGONS = {
 // ============================================================
 // 地圖功能
 // ============================================================
-function initMap(initialCenter, initialZoom) {
-  if (isInitializingMap) return;
-  var container = document.getElementById('map-container');
-  if (!container) return;
-  container.style.display = 'block';
-  container.style.width = '100%';
-  container.style.height = '100%';
-  void container.offsetHeight;
-  
-  if (mapInitialized && map && map.getContainer()) {
-    setTimeout(function() {
-      if (map && CURRENT === 'map') {
-        map.invalidateSize(true);
-        if (userLocation) {
-          map.setView([userLocation.lat, userLocation.lng], map.getZoom() || 15);
-        }
-        updateMapMarkers();
-        updateMapList();
-        updateRegionProgress();
-        ensureStoresVisible();
-      }
-    }, 200);
-    return;
-  }
-  
-  if (map) {
-    try { map.remove(); } catch (e) {}
-    map = null;
-    markerCluster = null;
-    userMarker = null;
-  }
-  
-  isInitializingMap = true;
-  var center = initialCenter || { lat: HK_CENTER.lat, lng: HK_CENTER.lng };
-  var zoom = initialZoom || 13;
-  if (userLocation) {
-    center = { lat: userLocation.lat, lng: userLocation.lng };
-    zoom = 15;
-  } else {
-    var storesWithCoords = STORES.filter(function(s) { return s.lat && s.lng; });
-    if (storesWithCoords.length > 0) {
-      var avgLat = storesWithCoords.reduce(function(sum, s) { return sum + parseFloat(s.lat); }, 0) / storesWithCoords.length;
-      var avgLng = storesWithCoords.reduce(function(sum, s) { return sum + parseFloat(s.lng); }, 0) / storesWithCoords.length;
-      center = { lat: avgLat, lng: avgLng };
-      zoom = 12;
-    }
-  }
-  
-  try {
-    map = L.map('map-container', {
-      center: [center.lat, center.lng],
-      zoom: zoom,
-      zoomControl: false,
-      attributionControl: true
-    });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
-      maxZoom: 19
-    }).addTo(map);
-    // 在 L.tileLayer 之後，map.on 之前添加：
-
-
-
 // 儲存 polygon 引用
 window._regionPolygons = [];
 
@@ -2728,9 +2664,7 @@ function addRegionPolygons() {
     // 🎨 三大區顏色映射
     // ============================================================
     function getRegionColor(regionName) {
-        // 港島區 (🔵 藍色)
         var hkIsland = ['中西區', '灣仔', '東區', '南區'];
-        // 九龍區 (🔴 紅色)
         var kowloon = ['油尖旺', '深水埗', '九龍城', '黃大仙', '觀塘'];
         
         if (hkIsland.indexOf(regionName) !== -1) {
@@ -2754,6 +2688,31 @@ function addRegionPolygons() {
         }
     }
 
+    // ✅ 座標轉換函數：GeoJSON [lng, lat] → Leaflet [lat, lng]
+    function convertCoords(coords) {
+        if (!Array.isArray(coords) || coords.length === 0) return null;
+        
+        // 如果是多邊形環 (包含多個點)
+        if (Array.isArray(coords[0]) && Array.isArray(coords[0][0]) && typeof coords[0][0][0] === 'number') {
+            // 多多邊形 (MultiPolygon) - 取第一個
+            var rings = coords[0];
+            return rings.map(function(ring) {
+                return ring.map(function(point) {
+                    return [point[1], point[0]]; // [lng, lat] → [lat, lng]
+                });
+            });
+        }
+        
+        // 如果是單個多邊形環
+        if (Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
+            return coords.map(function(point) {
+                return [point[1], point[0]]; // [lng, lat] → [lat, lng]
+            });
+        }
+        
+        return null;
+    }
+
     // ============================================================
     // 遍歷 18 個區域
     // ============================================================
@@ -2763,8 +2722,12 @@ function addRegionPolygons() {
         var regionName = feature.properties?.地區 || feature.properties?.District || '未知區域';
         var colors = getRegionColor(regionName);
         
-        // ✅ 創建多邊形 - 座標格式 [lng, lat] (GeoJSON 標準)
-        var polygon = L.polygon(feature.geometry.coordinates, {
+        // ✅ 轉換座標
+        var convertedCoords = convertCoords(feature.geometry.coordinates);
+        if (!convertedCoords) return;
+        
+        // ✅ 創建多邊形 - 使用轉換後的座標
+        var polygon = L.polygon(convertedCoords, {
             color: colors.border,
             weight: 2,
             opacity: 0.9,
@@ -2777,8 +2740,8 @@ function addRegionPolygons() {
         
         window._regionPolygons.push(polygon);
         
-        // ✅ 計算中心點 - 使用修正版的 getPolygonCenter
-        var center = getPolygonCenter(feature.geometry.coordinates);
+        // ✅ 計算中心點 - 使用轉換後的座標
+        var center = getPolygonCenter(convertedCoords);
         if (center) {
             var label = L.divIcon({
                 className: 'region-label',
@@ -2802,81 +2765,31 @@ function addRegionPolygons() {
 // ✅ 修正版 getPolygonCenter - 處理 GeoJSON [lng, lat] 格式
 // ============================================================
 function getPolygonCenter(coords) {
+    if (!coords || !Array.isArray(coords) || coords.length === 0) return null;
+    
     var points = coords;
     // 如果是多多邊形（數組內還有一層數組），取第一個環
-    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0]) && typeof coords[0][0][0] === 'number') {
         points = coords[0];
     }
-    // 如果是單個多邊形
+    // 如果是單個多邊形環
     if (Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
         points = coords;
     }
     
     var latSum = 0, lngSum = 0, count = 0;
     for (var i = 0; i < points.length; i++) {
-        // 確保點是 [lng, lat] 格式（GeoJSON 標準）
         if (Array.isArray(points[i]) && points[i].length === 2) {
-            latSum += points[i][1];  // 第二個是緯度
-            lngSum += points[i][0];  // 第一個是經度
+            latSum += points[i][0];  // 現在是 [lat, lng]
+            lngSum += points[i][1];
             count++;
         }
     }
     if (count === 0) return null;
     return { lat: latSum / count, lng: lngSum / count };
-}// 在 map 初始化完成後添加 polygon
-// 在 mapInitialized = true 之後調用
-    map.on('moveend zoomend', function() {
-      if (CURRENT === 'map') {
-        updateMapList();
-        updateRegionProgress();
-        ensureStoresVisible();
-      }
-    });
-    
-    markerCluster = L.markerClusterGroup({
-      iconCreateFunction: function(cluster) {
-        var totalStores = 0;
-        cluster.getAllChildMarkers().forEach(function(marker) {
-          totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
-        });
-        if (totalStores <= 1) {
-          return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
-        }
-        return L.divIcon({
-          html: '<div class="marker-cluster-custom">' + totalStores + '</div>',
-          className: '',
-          iconSize: L.point(36, 36)
-        });
-      },
-      maxClusterRadius: 60,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true
-    });
-    map.addLayer(markerCluster);
-    
-    if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
-    updateMapMarkers();
-    updateMapList();
-    updateRegionProgress();
-    if (CURRENT === 'map') {
-      ensureStoresVisible();
-    }
-    mapInitialized = true;
-    addRegionPolygons();
-    isInitializingMap = false;
-    if (CURRENT === 'map') {
-      setTimeout(function() {
-        if (map) map.invalidateSize();
-        updateRegionProgress();
-        ensureStoresVisible();
-      }, 500);
-    }
-  } catch (e) {
-    toast('地圖載入失敗，請重新整理', 'pink');
-    isInitializingMap = false;
-  }
 }
+
+
 
 function addUserMarker(lat, lng) {
   if (!map) return;
