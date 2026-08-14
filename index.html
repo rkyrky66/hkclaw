@@ -2828,14 +2828,45 @@ function addRegionPolygons() {
 }
 
 // 計算多邊形中心點
+// 計算多邊形的質心（考慮面積的加權平均）
 function getPolygonCenter(coords) {
-    var latSum = 0, lngSum = 0, count = 0;
+    var lat = 0, lng = 0, area = 0;
+    
+    for (var i = 0; i < coords.length - 1; i++) {
+        var lat1 = coords[i][0];
+        var lng1 = coords[i][1];
+        var lat2 = coords[i + 1][0];
+        var lng2 = coords[i + 1][1];
+        
+        var cross = (lng1 * lat2) - (lng2 * lat1);
+        area += cross;
+        lat += (lat1 + lat2) * cross;
+        lng += (lng1 + lng2) * cross;
+    }
+    
+    area *= 0.5;
+    if (Math.abs(area) < 0.00001) {
+        // 如果面積太小，退回算術平均
+        return getArithmeticCenter(coords);
+    }
+    
+    return {
+        lat: lat / (6 * area),
+        lng: lng / (6 * area)
+    };
+}
+
+// 算術平均（備用方法）
+function getArithmeticCenter(coords) {
+    var latSum = 0, lngSum = 0;
     for (var i = 0; i < coords.length; i++) {
         latSum += coords[i][0];
         lngSum += coords[i][1];
-        count++;
     }
-    return { lat: latSum / count, lng: lngSum / count };
+    return {
+        lat: latSum / coords.length,
+        lng: lngSum / coords.length
+    };
 }
 
 // 在 map 初始化完成後添加 polygon
