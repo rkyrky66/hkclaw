@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.Default.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data/hong-kong-districts.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -2677,77 +2678,12 @@ function initMap(initialCenter, initialZoom) {
 // ============================================================
 // 🌍 區域 Polygon 覆蓋層 (精準修正版)
 // ============================================================
-
-var REGION_POLYGONS = {
-    hk: {
-        label: '港島區',
-        color: 'rgba(59, 130, 246, 0.15)',
-        borderColor: 'rgba(59, 130, 246, 0.4)',
-        // 嚴格限制在維多利亞港以南，涵蓋南區、石澳
-        coords: [
-            [22.2850, 114.1120], // 堅尼地城
-            [22.2890, 114.1360], // 上環/中環
-            [22.2840, 114.1750], // 灣仔/銅鑼灣
-            [22.2900, 114.2150], // 鰂魚涌/太古
-            [22.2800, 114.2400], // 筲箕灣
-            [22.2750, 114.2600], // 柴灣
-            [22.2250, 114.2600], // 石澳
-            [22.2000, 114.2200], // 赤柱角
-            [22.2400, 114.1900], // 淺水灣
-            [22.2400, 114.1500], // 香港仔/鴨脷洲
-            [22.2600, 114.1200], // 薄扶林
-            [22.2850, 114.1120]  // 閉合回堅尼地城
-        ]
-    },
-    kl: {
-        label: '九龍區',
-        color: 'rgba(239, 68, 68, 0.12)',
-        borderColor: 'rgba(239, 68, 68, 0.35)',
-        // 南至維港北岸，北至獅子山/大老山脊線
-        coords: [
-            [22.3350, 114.1350], // 美孚/荔枝角
-            [22.3150, 114.1550], // 旺角/大角咀
-            [22.2950, 114.1600], // 尖沙咀天星碼頭
-            [22.3000, 114.1850], // 紅磡/土瓜灣
-            [22.3100, 114.2200], // 觀塘/茶果嶺
-            [22.2950, 114.2400], // 鯉魚門
-            [22.3250, 114.2600], // 藍田/油塘
-            [22.3450, 114.2400], // 飛鵝山
-            [22.3550, 114.2100], // 慈雲山/大老山
-            [22.3520, 114.1800], // 獅子山脊線
-            [22.3450, 114.1500], // 筆架山
-            [22.3350, 114.1350]  // 閉合回美孚
-        ]
-    },
-    nt: {
-        label: '新界區',
-        color: 'rgba(34, 197, 94, 0.10)',
-        borderColor: 'rgba(34, 197, 94, 0.30)',
-        // 包含新界大陸、大嶼山、青衣、西貢及外島
-        coords: [
-            [22.5450, 114.2200], // 沙頭角 (中港邊界東)
-            [22.5300, 114.1100], // 羅湖/上水
-            [22.5000, 113.9100], // 尖鼻咀/天水圍北
-            [22.3800, 113.8800], // 屯門龍鼓灘
-            [22.2150, 113.8400], // 大嶼山西 (大澳)
-            [22.1500, 113.9200], // 大嶼山南 (長沙)
-            [22.2100, 114.0400], // 梅窩/坪洲海域
-            [22.1500, 114.1500], // 南丫島南端
-            [22.2600, 114.3000], // 東龍洲
-            [22.3700, 114.3600], // 西貢清水灣
-            [22.4500, 114.4300], // 萬宜水庫東壩
-            [22.5400, 114.3400], // 塔門/大鵬灣
-            [22.5450, 114.2200]  // 閉合回沙頭角
-        ]
-    }
-};
-
 // 儲存 polygon 引用以便更新
 window._regionPolygons = [];
 
 function addRegionPolygons() {
     // 清除舊的 polygon
-    if (window._regionPolygons.length > 0) {
+    if (window._regionPolygons && window._regionPolygons.length > 0) {
         window._regionPolygons.forEach(function(p) {
             if (map) map.removeLayer(p);
         });
@@ -2756,14 +2692,25 @@ function addRegionPolygons() {
     
     if (!map) return;
     
+    // 從外部載入的資料取得
+    var regionData = window.HONG_KONG_DISTRICTS || {};
+    
+    // 如果資料不存在，顯示警告並跳過
+    if (Object.keys(regionData).length === 0) {
+        console.warn('⚠️ 未找到 HONG_KONG_DISTRICTS 資料，請確認 data/hong-kong-districts.js 已載入');
+        return;
+    }
+    
     // 添加每個區域的 polygon
-    for (var key in REGION_POLYGONS) {
-        var region = REGION_POLYGONS[key];
+    for (var key in regionData) {
+        var region = regionData[key];
+        if (!region.coords || region.coords.length === 0) continue;
+        
         var polygon = L.polygon(region.coords, {
-            color: region.borderColor,
+            color: region.borderColor || 'rgba(255,255,255,0.3)',
             weight: 1.5,
             opacity: 0.7,
-            fillColor: region.color,
+            fillColor: region.color || 'rgba(255,255,255,0.05)',
             fillOpacity: 1,
             interactive: false,
             smoothFactor: 1,
@@ -2771,6 +2718,7 @@ function addRegionPolygons() {
         }).addTo(map);
         
         // 儲存引用
+        if (!window._regionPolygons) window._regionPolygons = [];
         window._regionPolygons.push(polygon);
         
         // 添加區域標籤 (在中心位置)
@@ -2788,6 +2736,8 @@ function addRegionPolygons() {
         }).addTo(map);
         window._regionPolygons.push(labelMarker);
     }
+    
+    console.log('✅ 已載入 ' + Object.keys(regionData).length + ' 個區域 Polygon');
 }
 
 // 計算多邊形中心點
@@ -6410,6 +6360,23 @@ const UserFocus = {
 // ============================================================
 (async function initApp() {
   console.log('🚀 爪爪情報站啟動中...');
+  if (typeof window.HONG_KONG_DISTRICTS === 'undefined') {
+        try {
+            // 動態載入
+            await new Promise(function(resolve, reject) {
+                var script = document.createElement('script');
+                script.src = 'data/hong-kong-districts.js';
+                script.onload = resolve;
+                script.onerror = function() {
+                    console.warn('⚠️ 無法載入區域資料，使用內建預設值');
+                    resolve(); // 即使失敗也繼續
+                };
+                document.head.appendChild(script);
+            });
+        } catch (e) {
+            console.warn('⚠️ 載入區域資料失敗:', e.message);
+        }
+    }
   await loadCloud();
   await loadMalls();
   await loadLivePosts();
