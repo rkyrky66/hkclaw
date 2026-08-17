@@ -2395,61 +2395,74 @@ function openReportForm(targetType, targetId, targetName) {
   });
 }
 
+// ============================================================
+// 檢舉提交 (含防重鎖)
+// ============================================================
 async function submitReport(targetType, targetId) {
-  var category = document.getElementById('report-category')?.value;
-  var reason = document.getElementById('report-reason')?.value.trim() || '';
-  
-  if (!category) {
-    toast('請選擇檢舉類別', 'pink');
-    return;
-  }
-  
-  var reportData = {
-    target_type: targetType,
-    target_id: targetId,
-    reporter_device: STATE.user.device,
-    reporter_user_id: STATE.user.user_id || null,
-    category: category,
-    reason: reason,
-    status: 'pending',
-    created_at: new Date().toISOString()
-  };
-  
-  if (CLOUD_ON) {
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitReport')) return;
+    
+    var submitBtn = disableSubmitButton('report-submit-btn', '⏳ 提交中...');
+    
     try {
-      var response = await fetch(SUPABASE_URL + "/rest/v1/reports", {
-        method: 'POST',
-        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify([reportData])
-      });
-      
-      if (!response.ok) {
-        throw new Error('HTTP ' + response.status);
-      }
-      
-      STATE._reportCount = (STATE._reportCount || 0) + 1;
-      save();
-      
-      toast('✅ 檢舉已提交，感謝你的回報！', 'green');
-      closeModal();
-    } catch (e) {
-      console.error('❌ 檢舉提交失敗:', e);
-      // 離線儲存
-      if (!STATE._offlineReports) STATE._offlineReports = [];
-      STATE._offlineReports.push(reportData);
-      STATE._reportCount = (STATE._reportCount || 0) + 1;
-      save();
-      toast('⚠️ 檢舉已記錄（離線），連網後將自動提交', 'green');
-      closeModal();
+        var category = document.getElementById('report-category')?.value;
+        var reason = document.getElementById('report-reason')?.value.trim() || '';
+        
+        if (!category) {
+            toast('請選擇檢舉類別', 'pink');
+            enableSubmitButton(submitBtn, '🚨 提交檢舉');
+            return;
+        }
+        
+        var reportData = {
+            target_type: targetType,
+            target_id: targetId,
+            reporter_device: STATE.user.device,
+            reporter_user_id: STATE.user.user_id || null,
+            category: category,
+            reason: reason,
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };
+        
+        if (CLOUD_ON) {
+            try {
+                var response = await fetch(SUPABASE_URL + "/rest/v1/reports", {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([reportData])
+                });
+                
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                
+                STATE._reportCount = (STATE._reportCount || 0) + 1;
+                save();
+                
+                toast('✅ 檢舉已提交，感謝你的回報！', 'green');
+                closeModal();
+            } catch (e) {
+                console.error('❌ 檢舉提交失敗:', e);
+                // 離線儲存
+                if (!STATE._offlineReports) STATE._offlineReports = [];
+                STATE._offlineReports.push(reportData);
+                STATE._reportCount = (STATE._reportCount || 0) + 1;
+                save();
+                toast('⚠️ 檢舉已記錄（離線），連網後將自動提交', 'green');
+                closeModal();
+            }
+        } else {
+            if (!STATE._offlineReports) STATE._offlineReports = [];
+            STATE._offlineReports.push(reportData);
+            STATE._reportCount = (STATE._reportCount || 0) + 1;
+            save();
+            toast('✅ 檢舉已記錄（離線），連網後將自動提交', 'green');
+            closeModal();
+        }
+    } finally {
+        releaseSubmitLock('submitReport');
     }
-  } else {
-    if (!STATE._offlineReports) STATE._offlineReports = [];
-    STATE._offlineReports.push(reportData);
-    STATE._reportCount = (STATE._reportCount || 0) + 1;
-    save();
-    toast('✅ 檢舉已記錄（離線），連網後將自動提交', 'green');
-    closeModal();
-  }
 }
 
 // 處理離線檢舉自動上傳 (P3)
@@ -4161,173 +4174,189 @@ function getRegionStat(region) {
 }
 
 // ============================================================
-// 認證店鋪 (修正版 - 使用 status 欄位)
+// 認證店鋪 (修正版 - 使用 status 欄位 + 防重鎖)
 // ============================================================
 async function submitVerification(storeId) {
-    var s = STORES.find(function(x) { return x.id === storeId; });
-    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitVerification')) return;
     
-    var photoBlob = window._cam?.vf;
-    if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
+    var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
-    if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { 
-        toast('請等待 GPS 定位完成', 'pink'); 
-        return; 
-    }
-    
-    var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-    var limitDistance = isMallStore ? 0.5 : 0.3;
-    var storeTypeLabel = isMallStore ? '商場鋪 (GPS 可能不準確)' : '地鋪';
-    
-    if (s.lat && s.lng) {
-        var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
-        var distanceMeters = Math.round(distance * 1000);
-        var limitMeters = Math.round(limitDistance * 1000);
-        if (distance > limitDistance) {
-            toast('⚠️ 你距離該' + storeTypeLabel + ' ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內認證', 'pink');
-            return;
-        }
-        toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內 (' + storeTypeLabel + ')', 'green');
-    }
-    
-    var photoUrl = window._camPreview?.vf || '';
-    if (CLOUD_ON) {
-        try {
-            var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-            photoUrl = await uploadImage(file, 'verifications');
-        } catch (e) { 
-            toast('圖片上傳失敗', 'pink'); 
+    try {
+        var s = STORES.find(function(x) { return x.id === storeId; });
+        if (!s) { 
+            toast('找不到該店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
             return; 
         }
-    }
-    
-        // 將 store_id 轉為數字
-    var numericStoreId = parseInt(storeId);
-    
-    var verification = {
-        store_id: numericStoreId,
-        verifier_device: STATE.user.device,
-        verifier_user_id: STATE.user.user_id || null,
-        verifier_name: STATE.user.name || '匿名用戶',
-        photo_url: photoUrl,
-        lat: _vfGpsLat,
-        lng: _vfGpsLng,
-        note: document.getElementById('vf-note')?.value.trim() || '',
-        status: 'pending',
-        created_at: new Date().toISOString()
-    };
-    
-    if (CLOUD_ON) {
-        try {
-            await cloudInsert('store_verifications', verification);
-            console.log('✅ 認證已同步到雲端');
-        } catch (e) {
-            console.warn('⚠️ 認證雲端同步失敗:', e.message);
-            toast('⚠️ 認證記錄失敗，請稍後重試', 'pink');
-            return;
-        }
-    }
-    
-    s.verification_count = (s.verification_count || 0) + 1;
-    s._userVerified = true;
-    
-    if (s.verification_count >= 2) {
-        s.status = 'verified';
-        s.verified = 'verified';
-        s.is_verified = true;
         
-        if (s.submitted_by) {
-            await addPoints(35, '認證通過追加獎勵');
-            toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+        var photoBlob = window._cam?.vf;
+        if (!photoBlob) { 
+            toast('請先拍攝店鋪照片', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+            return; 
         }
-        updateAchievementStat('store_complete');
-        var regionStat = getRegionStat(s.region);
-        if (regionStat) updateAchievementStat(regionStat);
+        
+        if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { 
+            toast('請等待 GPS 定位完成', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+            return; 
+        }
+        
+        var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+        var limitDistance = isMallStore ? 0.5 : 0.3;
+        var storeTypeLabel = isMallStore ? '商場鋪 (GPS 可能不準確)' : '地鋪';
+        
+        if (s.lat && s.lng) {
+            var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
+            var distanceMeters = Math.round(distance * 1000);
+            var limitMeters = Math.round(limitDistance * 1000);
+            if (distance > limitDistance) {
+                toast('⚠️ 你距離該' + storeTypeLabel + ' ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內認證', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+                return;
+            }
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內 (' + storeTypeLabel + ')', 'green');
+        }
+        
+        var photoUrl = window._camPreview?.vf || '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'verifications');
+            } catch (e) { 
+                toast('圖片上傳失敗', 'pink'); 
+                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+                return; 
+            }
+        }
+        
+        var numericStoreId = parseInt(storeId);
+        
+        var verification = {
+            store_id: numericStoreId,
+            verifier_device: STATE.user.device,
+            verifier_user_id: STATE.user.user_id || null,
+            verifier_name: STATE.user.name || '匿名用戶',
+            photo_url: photoUrl,
+            lat: _vfGpsLat,
+            lng: _vfGpsLng,
+            note: document.getElementById('vf-note')?.value.trim() || '',
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };
         
         if (CLOUD_ON) {
             try {
-                var checkResponse = await fetch(
-                    SUPABASE_URL + "/rest/v1/verification_reviews?select=id&store_id=eq." + storeId + "&admin_status=eq.pending",
-                    {
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': 'Bearer ' + SUPABASE_KEY
-                        }
-                    }
-                );
-                var checkData = await checkResponse.json();
-                if (!checkData || checkData.length === 0) {
-                    toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
-                }
+                await cloudInsert('store_verifications', verification);
+                console.log('✅ 認證已同步到雲端');
             } catch (e) {
-                console.warn('⚠️ 檢查審核記錄失敗:', e.message);
+                console.warn('⚠️ 認證雲端同步失敗:', e.message);
+                toast('⚠️ 認證記錄失敗，請稍後重試', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+                return;
             }
         }
-    } else {
-        toast('✅ 認證提交成功！目前 ' + s.verification_count + '/2 人認證', 'green');
-    }
-    
-    save();
-    
-    if (CLOUD_ON) {
-        try {
-            await fetch(
-                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        verification_count: s.verification_count,
-                        status: s.status,
-                        verified: s.verified,
-                        is_verified: s.is_verified
-                    })
+        
+        s.verification_count = (s.verification_count || 0) + 1;
+        s._userVerified = true;
+        
+        if (s.verification_count >= 2) {
+            s.status = 'verified';
+            s.verified = 'verified';
+            s.is_verified = true;
+            
+            if (s.submitted_by) {
+                await addPoints(35, '認證通過追加獎勵');
+                toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+            }
+            updateAchievementStat('store_complete');
+            var regionStat = getRegionStat(s.region);
+            if (regionStat) updateAchievementStat(regionStat);
+            
+            if (CLOUD_ON) {
+                try {
+                    var checkResponse = await fetch(
+                        SUPABASE_URL + "/rest/v1/verification_reviews?select=id&store_id=eq." + storeId + "&admin_status=eq.pending",
+                        {
+                            headers: {
+                                'apikey': SUPABASE_KEY,
+                                'Authorization': 'Bearer ' + SUPABASE_KEY
+                            }
+                        }
+                    );
+                    var checkData = await checkResponse.json();
+                    if (!checkData || checkData.length === 0) {
+                        toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ 檢查審核記錄失敗:', e.message);
                 }
-            );
-            console.log('✅ 前台認證計數已同步');
-        } catch (e) {
-            console.warn('⚠️ 同步認證計數失敗:', e.message);
+            }
+        } else {
+            toast('✅ 認證提交成功！目前 ' + s.verification_count + '/2 人認證', 'green');
         }
-    }
-    
-    // 記錄任務進度
-    await recordTaskCompletion('verify_store');
-    
+        
+        save();
+        
+        if (CLOUD_ON) {
+            try {
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
+                    {
+                        method: 'PATCH',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify({
+                            verification_count: s.verification_count,
+                            status: s.status,
+                            verified: s.verified,
+                            is_verified: s.is_verified
+                        })
+                    }
+                );
+                console.log('✅ 前台認證計數已同步');
+            } catch (e) {
+                console.warn('⚠️ 同步認證計數失敗:', e.message);
+            }
+        }
+        
+        // 記錄任務進度
+        await recordTaskCompletion('verify_store');
+        
         // 記錄貢獻
-    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-        try {
-            var numericStoreIdForVerifyContribution = parseInt(storeId);
-            await fetch(
-                SUPABASE_URL + "/rest/v1/user_contributions",
-                {
-                    method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify([{
-                        user_id: STATE.user.user_id,
-                        device_id: STATE.user.device,
-                        store_id: numericStoreIdForVerifyContribution,
-                        contribution_type: 'verify',
-                        contribution_value: 1,
-                        created_at: new Date().toISOString()
-                    }])
-                }
-            );
-            console.log('✅ 貢獻記錄已同步');
-        } catch (e) {
-            console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            try {
+                var numericStoreIdForVerifyContribution = parseInt(storeId);
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/user_contributions",
+                    {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            user_id: STATE.user.user_id,
+                            device_id: STATE.user.device,
+                            store_id: numericStoreIdForVerifyContribution,
+                            contribution_type: 'verify',
+                            contribution_value: 1,
+                            created_at: new Date().toISOString()
+                        }])
+                    }
+                );
+                console.log('✅ 貢獻記錄已同步');
+            } catch (e) {
+                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+            }
         }
+        
+        await addPoints(15, '認證店鋪');
+        updateAchievementStat('verify_store');
+        updateStreak();
+        
+        closeModal();
+        openStore(storeId);
+    } finally {
+        releaseSubmitLock('submitVerification');
     }
-    
-    await addPoints(15, '認證店鋪');
-    updateAchievementStat('verify_store');
-    updateStreak();
-    
-    closeModal();
-    openStore(storeId);
 }
 // ============================================================
 // 補充資料表單
@@ -4421,186 +4450,212 @@ function selectCoinUI(value) {
 }
 
 // ============================================================
-// 補充資料 - 記錄補充者 (修復版 - 補充後重新出現在新店審核)
+// 補充資料 - 記錄補充者 (修復版 + 防重鎖)
 // ============================================================
 async function submitAllSupplement(storeId) {
-    var s = STORES.find(function(x) { return x.id === storeId; });
-    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitAllSupplement')) return;
     
-    var isStreet = s.type !== 'mall' && s.mall === '';
-    var address = '';
-    if (isStreet) {
-        var addrInput = document.getElementById('sf-address');
-        if (addrInput) address = addrInput.value.trim();
-    }
-    var size = window._sfSelections.size;
-    var staff = window._sfSelections.staff;
-    var coin = window._sfSelections.coin;
+    var submitBtn = disableSubmitButton('sf-submit-btn', '⏳ 提交中...');
     
-    if (isStreet && !address) { toast('請輸入詳細地址', 'pink'); return; }
-    if (!size) { toast('請選擇規模', 'pink'); return; }
-    if (staff === null || staff === undefined) { toast('請選擇是否有場務', 'pink'); return; }
-    if (coin === null || coin === undefined) { toast('請選擇是否有電子兌幣', 'pink'); return; }
-    
-    var hasAddress = s.address_detail && s.address_detail !== '';
-    var hasSize = s.size && s.size !== '中';
-    var hasStaff = s.has_staff !== undefined && s.has_staff !== null;
-    var hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
-    
-    if ((!isStreet || hasAddress) && hasSize && hasStaff && hasCoin) {
-        toast('此店鋪資料已完整，無需重複補充', 'gold');
-        return;
-    }
-    
-    var currentGps = null;
-    if (gpsLat && gpsLng) {
-        currentGps = { lat: gpsLat, lng: gpsLng };
-        console.log('📍 補充資料時 GPS 位置:', currentGps);
-    }
-    
-    if (isStreet && address) s.address_detail = address;
-    s.size = size;
-    s.has_staff = staff;
-    s.has_e_coin = coin;
-    s.supplement_count = (s.supplement_count || 0) + 1;
-    s.supplemented_by = STATE.user.device;
-    s._userSupplemented = true;
-    
-    var supplementFields = [];
-    if (isStreet && address) supplementFields.push('address_detail');
-    supplementFields.push('size');
-    supplementFields.push('has_staff');
-    supplementFields.push('has_e_coin');
-    
-    // 記錄 field_status（用於後台審核）
-    if (CLOUD_ON && supabaseClientInstance && typeof supabaseClientInstance.from === 'function') {
-        try {
-            var numericStoreIdForSupplement = parseInt(storeId);
-            for (var i = 0; i < supplementFields.length; i++) {
-                var fieldName = supplementFields[i];
-                var fieldValue = s[fieldName];
-                if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-                    await supabaseClientInstance
-                        .from('field_status')
-                        .upsert(
-                            {
-                                table_name: 'claw_stores',
-                                record_id: String(numericStoreIdForSupplement),
-                                field_name: fieldName,
-                                status: 'pending',
-                                submitted_by: STATE.user.device,
-                                submitted_type: 'supplement',
-                                updated_at: new Date().toISOString()
-                            },
-                            { onConflict: 'table_name, record_id, field_name' }
-                        );
-                }
-            }
-            console.log('✅ field_status 同步成功');
-        } catch (e) {
-            console.warn('⚠️ field_status 同步失敗（不影響主流程）:', e.message);
+    try {
+        var s = STORES.find(function(x) { return x.id === storeId; });
+        if (!s) { 
+            toast('找不到該店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return; 
         }
-    }
-    
-    if (CLOUD_ON) {
-        try {
-            var numericStoreIdForUpdate = parseInt(storeId);
-            var updates = {};
-            if (isStreet && address) updates.address_detail = address;
-            updates.size = size;
-            updates.has_staff = staff;
-            updates.has_e_coin = coin;
-            updates.supplemented_by = STATE.user.device;
-            
-            // 使用 PATCH 更新現有店鋪
-            await fetch(
-                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
-                {
-                    method: 'PATCH',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify(updates)
+        
+        var isStreet = s.type !== 'mall' && s.mall === '';
+        var address = '';
+        if (isStreet) {
+            var addrInput = document.getElementById('sf-address');
+            if (addrInput) address = addrInput.value.trim();
+        }
+        var size = window._sfSelections.size;
+        var staff = window._sfSelections.staff;
+        var coin = window._sfSelections.coin;
+        
+        if (isStreet && !address) { 
+            toast('請輸入詳細地址', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return; 
+        }
+        if (!size) { 
+            toast('請選擇規模', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return; 
+        }
+        if (staff === null || staff === undefined) { 
+            toast('請選擇是否有場務', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return; 
+        }
+        if (coin === null || coin === undefined) { 
+            toast('請選擇是否有電子兌幣', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return; 
+        }
+        
+        var hasAddress = s.address_detail && s.address_detail !== '';
+        var hasSize = s.size && s.size !== '中';
+        var hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+        var hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+        
+        if ((!isStreet || hasAddress) && hasSize && hasStaff && hasCoin) {
+            toast('此店鋪資料已完整，無需重複補充', 'gold');
+            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            return;
+        }
+        
+        var currentGps = null;
+        if (gpsLat && gpsLng) {
+            currentGps = { lat: gpsLat, lng: gpsLng };
+            console.log('📍 補充資料時 GPS 位置:', currentGps);
+        }
+        
+        if (isStreet && address) s.address_detail = address;
+        s.size = size;
+        s.has_staff = staff;
+        s.has_e_coin = coin;
+        s.supplement_count = (s.supplement_count || 0) + 1;
+        s.supplemented_by = STATE.user.device;
+        s._userSupplemented = true;
+        
+        var supplementFields = [];
+        if (isStreet && address) supplementFields.push('address_detail');
+        supplementFields.push('size');
+        supplementFields.push('has_staff');
+        supplementFields.push('has_e_coin');
+        
+        // 記錄 field_status（用於後台審核）
+        if (CLOUD_ON && supabaseClientInstance && typeof supabaseClientInstance.from === 'function') {
+            try {
+                var numericStoreIdForSupplement = parseInt(storeId);
+                for (var i = 0; i < supplementFields.length; i++) {
+                    var fieldName = supplementFields[i];
+                    var fieldValue = s[fieldName];
+                    if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
+                        await supabaseClientInstance
+                            .from('field_status')
+                            .upsert(
+                                {
+                                    table_name: 'claw_stores',
+                                    record_id: String(numericStoreIdForSupplement),
+                                    field_name: fieldName,
+                                    status: 'pending',
+                                    submitted_by: STATE.user.device,
+                                    submitted_type: 'supplement',
+                                    updated_at: new Date().toISOString()
+                                },
+                                { onConflict: 'table_name, record_id, field_name' }
+                            );
+                    }
                 }
-            );
-            console.log('✅ 店鋪補充資料已同步到雲端');
-            
-            // ============================================================
-            // ✅ 新增：將店鋪重新設為待審核，出現在後台新店審核
-            // ============================================================
-            await fetch(
-                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
-                {
-                    method: 'PATCH',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify({ admin_overall_status: 'pending' })
-                }
-            );
-            console.log('✅ 店鋪已重新設為待審核，將出現在後台新店審核');
-            
-            if (currentGps) {
+                console.log('✅ field_status 同步成功');
+            } catch (e) {
+                console.warn('⚠️ field_status 同步失敗（不影響主流程）:', e.message);
+            }
+        }
+        
+        if (CLOUD_ON) {
+            try {
+                var numericStoreIdForUpdate = parseInt(storeId);
+                var updates = {};
+                if (isStreet && address) updates.address_detail = address;
+                updates.size = size;
+                updates.has_staff = staff;
+                updates.has_e_coin = coin;
+                updates.supplemented_by = STATE.user.device;
+                
                 await fetch(
-                    SUPABASE_URL + "/rest/v1/store_supplements",
+                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
+                    {
+                        method: 'PATCH',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify(updates)
+                    }
+                );
+                console.log('✅ 店鋪補充資料已同步到雲端');
+                
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
+                    {
+                        method: 'PATCH',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify({ admin_overall_status: 'pending' })
+                    }
+                );
+                console.log('✅ 店鋪已重新設為待審核');
+                
+                if (currentGps) {
+                    await fetch(
+                        SUPABASE_URL + "/rest/v1/store_supplements",
+                        {
+                            method: 'POST',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify([{
+                                store_id: numericStoreIdForUpdate,
+                                user_id: STATE.user.device,
+                                user_name: STATE.user.name,
+                                supplement_type: 'bulk_update',
+                                new_value: JSON.stringify({
+                                    address: address,
+                                    size: size,
+                                    has_staff: staff,
+                                    has_e_coin: coin
+                                }),
+                                gps_lat: currentGps.lat,
+                                gps_lng: currentGps.lng,
+                                created_at: new Date().toISOString()
+                            }])
+                        }
+                    );
+                    console.log('✅ 補充記錄已同步到雲端');
+                }
+            } catch (e) {
+                console.warn('⚠️ 補充資料雲端同步失敗:', e.message);
+            }
+        }
+        
+        // 記錄任務進度
+        await recordTaskCompletion('supplement');
+        
+        // 記錄貢獻
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            try {
+                var numericStoreIdForContribution = parseInt(storeId);
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/user_contributions",
                     {
                         method: 'POST',
                         headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
                         body: JSON.stringify([{
-                            store_id: numericStoreIdForUpdate,
-                            user_id: STATE.user.device,
-                            user_name: STATE.user.name,
-                            supplement_type: 'bulk_update',
-                            new_value: JSON.stringify({
-                                address: address,
-                                size: size,
-                                has_staff: staff,
-                                has_e_coin: coin
-                            }),
-                            gps_lat: currentGps.lat,
-                            gps_lng: currentGps.lng,
+                            user_id: STATE.user.user_id,
+                            device_id: STATE.user.device,
+                            store_id: numericStoreIdForContribution,
+                            contribution_type: 'supplement',
+                            contribution_value: 1,
                             created_at: new Date().toISOString()
                         }])
                     }
                 );
-                console.log('✅ 補充記錄已同步到雲端');
+                console.log('✅ 貢獻記錄已同步');
+            } catch (e) {
+                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
             }
-        } catch (e) {
-            console.warn('⚠️ 補充資料雲端同步失敗:', e.message);
         }
+        
+        await addPoints(15, '補充資料完成');
+        updateAchievementStat('supplement');
+        checkPerfectFile(storeId);
+        updateStreak();
+        toast('✅ 全部資料補充完成！獲得 15 積分', 'green');
+        closeModal();
+        setTimeout(function() { return openStore(storeId); }, 500);
+    } finally {
+        releaseSubmitLock('submitAllSupplement');
     }
-    
-    // 記錄任務進度
-    await recordTaskCompletion('supplement');
-    
-    // 記錄貢獻
-    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-        try {
-            var numericStoreIdForContribution = parseInt(storeId);
-            await fetch(
-                SUPABASE_URL + "/rest/v1/user_contributions",
-                {
-                    method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify([{
-                        user_id: STATE.user.user_id,
-                        device_id: STATE.user.device,
-                        store_id: numericStoreIdForContribution,
-                        contribution_type: 'supplement',
-                        contribution_value: 1,
-                        created_at: new Date().toISOString()
-                    }])
-                }
-            );
-            console.log('✅ 貢獻記錄已同步');
-        } catch (e) {
-            console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
-        }
-    }
-    
-    await addPoints(15, '補充資料完成');
-    updateAchievementStat('supplement');
-    checkPerfectFile(storeId);
-    updateStreak();
-    toast('✅ 全部資料補充完成！獲得 15 積分', 'green');
-    closeModal();
-    setTimeout(function() { return openStore(storeId); }, 500);
 }
 
 function checkPerfectFile(storeId) {
@@ -4690,187 +4745,236 @@ function viewLive() {
 
 function setLiveTrack(track) { liveTrack = track; showView('live'); }
 // ============================================================
-// 發布戰報 (夾客) - 加入 GPS 限區 + 顯示店鋪地區
+// 發布戰報 (夾客) - 加入防重鎖
 // ============================================================
 async function submitPlayerPost() {
-    var storeId = document.getElementById('lp-store-id')?.value;
-    if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitPlayerPost')) return;
     
-    var photoBlob = window._cam?.lp;
-    if (!photoBlob) { toast('請先拍照', 'pink'); return; }
+    var submitBtn = disableSubmitButton('lp-submit-btn', '⏳ 發布中...');
     
-    var store = STORES.find(function(s) { return s.id === storeId; });
-    if (!store) { toast('找不到該店鋪', 'pink'); return; }
-    
-    toast('📍 已選擇：' + store.name + ' (' + store.region + ')', 'gold');
-    
-    if (!gpsLat || !gpsLng) {
-        toast('📍 請先開啟 GPS 定位，以確保實況資訊的真實性', 'pink');
-        return;
-    }
-    
-    if (store.lat && store.lng) {
-        var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
-        var distanceMeters = Math.round(distance * 1000);
-        if (distance > 0.5) {
-            toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布戰報\n\n實況資訊的真實性是我們的核心價值', 'pink');
+    try {
+        var storeId = document.getElementById('lp-store-id')?.value;
+        if (!storeId) { 
+            toast('請選擇店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            return; 
+        }
+        
+        var photoBlob = window._cam?.lp;
+        if (!photoBlob) { 
+            toast('請先拍照', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            return; 
+        }
+        
+        var store = STORES.find(function(s) { return s.id === storeId; });
+        if (!store) { 
+            toast('找不到該店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            return; 
+        }
+        
+        toast('📍 已選擇：' + store.name + ' (' + store.region + ')', 'gold');
+        
+        if (!gpsLat || !gpsLng) {
+            toast('📍 請先開啟 GPS 定位，以確保實況資訊的真實性', 'pink');
+            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
             return;
         }
-        toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
-    } else {
-        toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
-    }
-    
-    var selectedTags = [];
-    document.querySelectorAll('[data-tag].chip-active-gold').forEach(function(btn) {
-        selectedTags.push(btn.dataset.tag);
-    });
-    
-    var photoUrl = '';
-    if (CLOUD_ON) {
-        try {
-            var file = new File([photoBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-            photoUrl = await uploadImage(file, 'posts');
-        } catch (e) {
-            toast('圖片上傳失敗: ' + e.message, 'pink');
-            return;
+        
+        if (store.lat && store.lng) {
+            var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
+            var distanceMeters = Math.round(distance * 1000);
+            if (distance > 0.5) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布戰報\n\n實況資訊的真實性是我們的核心價值', 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                return;
+            }
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
+        } else {
+            toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
         }
-    } else {
-        photoUrl = window._camPreview?.lp || '';
-    }
-    
-    var content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
+        
+        var selectedTags = [];
+        document.querySelectorAll('[data-tag].chip-active-gold').forEach(function(btn) {
+            selectedTags.push(btn.dataset.tag);
+        });
+        
+        var photoUrl = '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'posts');
+            } catch (e) {
+                toast('圖片上傳失敗: ' + e.message, 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                return;
+            }
+        } else {
+            photoUrl = window._camPreview?.lp || '';
+        }
+        
+        var content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
         var post = {
-        id: 'p' + Date.now() + '_' + uid(),
-        track: 'player',
-        store_id: String(storeId),  // live_posts.store_id 是 text
-        store_name: store ? store.name : '',
-        store_region: store ? store.region : '',
-        content: content,
-        tags: selectedTags,
-        photo: photoUrl,
-        author: STATE.user.name,
-        author_device: STATE.user.device,
-        author_user_id: STATE.user.user_id || null,
-        ts: now(),
-        expire: now() + DAY,
-        likes: [],
-        likeCount: 0,
-        is_linked: false,
-        gps_lat: gpsLat,
-        gps_lng: gpsLng
-    };
-    
-    if (!STATE.livePosts) STATE.livePosts = [];
-    STATE.livePosts.unshift(post);
-    save();
-    
-    await syncLivePost(post);
-    await addPoints(5, '發布出貨戰報');
-    updateStreak();
-    
-    // 記錄任務進度 (分享戰績)
-    await recordTaskCompletion('share');
-    
-    toast('✅ 戰報發布成功！+5 分', 'green');
-    closeModal();
-    showView('live');
+            id: 'p' + Date.now() + '_' + uid(),
+            track: 'player',
+            store_id: String(storeId),
+            store_name: store ? store.name : '',
+            store_region: store ? store.region : '',
+            content: content,
+            tags: selectedTags,
+            photo: photoUrl,
+            author: STATE.user.name,
+            author_device: STATE.user.device,
+            author_user_id: STATE.user.user_id || null,
+            ts: now(),
+            expire: now() + DAY,
+            likes: [],
+            likeCount: 0,
+            is_linked: false,
+            gps_lat: gpsLat,
+            gps_lng: gpsLng
+        };
+        
+        if (!STATE.livePosts) STATE.livePosts = [];
+        STATE.livePosts.unshift(post);
+        save();
+        
+        await syncLivePost(post);
+        await addPoints(5, '發布出貨戰報');
+        updateStreak();
+        
+        // 記錄任務進度 (分享戰績)
+        await recordTaskCompletion('share');
+        
+        toast('✅ 戰報發布成功！+5 分', 'green');
+        closeModal();
+        showView('live');
+    } finally {
+        releaseSubmitLock('submitPlayerPost');
+    }
 }
 
 // ============================================================
-// 發布台主宣傳 - 加入 GPS 限區 + 顯示店鋪地區
+// 發布台主宣傳 - 加入防重鎖
 // ============================================================
 async function submitOwnerPost() {
-    var storeId = document.getElementById('lo-store-id')?.value;
-    if (!storeId) { toast('請選擇店鋪', 'pink'); return; }
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitOwnerPost')) return;
     
-    var photoBlob = window._cam?.lo;
-    if (!photoBlob) { toast('請先拍照', 'pink'); return; }
+    var submitBtn = disableSubmitButton('lo-submit-btn', '⏳ 發布中...');
     
-    var store = STORES.find(function(s) { return s.id === storeId; });
-    if (!store) { toast('找不到該店鋪', 'pink'); return; }
-    
-    toast('📍 已選擇：' + store.name + ' (' + store.region + ')', 'gold');
-    
-    if (!gpsLat || !gpsLng) {
-        toast('📍 請先開啟 GPS 定位，以確保宣傳資訊的真實性', 'pink');
-        return;
-    }
-    
-    if (store.lat && store.lng) {
-        var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
-        var distanceMeters = Math.round(distance * 1000);
-        if (distance > 0.5) {
-            toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布宣傳\n\n實況資訊的真實性是我們的核心價值', 'pink');
+    try {
+        var storeId = document.getElementById('lo-store-id')?.value;
+        if (!storeId) { 
+            toast('請選擇店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
+            return; 
+        }
+        
+        var photoBlob = window._cam?.lo;
+        if (!photoBlob) { 
+            toast('請先拍照', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
+            return; 
+        }
+        
+        var store = STORES.find(function(s) { return s.id === storeId; });
+        if (!store) { 
+            toast('找不到該店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
+            return; 
+        }
+        
+        toast('📍 已選擇：' + store.name + ' (' + store.region + ')', 'gold');
+        
+        if (!gpsLat || !gpsLng) {
+            toast('📍 請先開啟 GPS 定位，以確保宣傳資訊的真實性', 'pink');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return;
         }
-        toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
-    } else {
-        toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
-    }
-    
-    var content = document.getElementById('lo-content')?.value.trim() || '🏬 新機台上架！';
-    var plan = window._loLinkPlan || null;
-    
-    if (plan && STATE.points < plan.cost) {
-        toast('積分不足 ' + plan.cost + '，無法使用連結功能', 'pink');
-        return;
-    }
-    
-    var photoUrl = '';
-    if (CLOUD_ON) {
-        try {
-            var file = new File([photoBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-            photoUrl = await uploadImage(file, 'posts');
-        } catch (e) {
-            toast('圖片上傳失敗', 'pink');
+        
+        if (store.lat && store.lng) {
+            var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
+            var distanceMeters = Math.round(distance * 1000);
+            if (distance > 0.5) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布宣傳\n\n實況資訊的真實性是我們的核心價值', 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
+                return;
+            }
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
+        } else {
+            toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
+        }
+        
+        var content = document.getElementById('lo-content')?.value.trim() || '🏬 新機台上架！';
+        var plan = window._loLinkPlan || null;
+        
+        if (plan && STATE.points < plan.cost) {
+            toast('積分不足 ' + plan.cost + '，無法使用連結功能', 'pink');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return;
         }
-    }
-    
-    if (plan) {
-        await addPoints(-plan.cost, '連結機台宣傳 (' + plan.days + '天)');
-    }
-    
+        
+        var photoUrl = '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'posts');
+            } catch (e) {
+                toast('圖片上傳失敗', 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
+                return;
+            }
+        }
+        
+        if (plan) {
+            await addPoints(-plan.cost, '連結機台宣傳 (' + plan.days + '天)');
+        }
+        
         var post = {
-        id: 'p' + Date.now() + '_' + uid(),
-        track: 'owner',
-        store_id: String(storeId),  // live_posts.store_id 是 text
-        store_name: store ? store.name : '',
-        store_region: store ? store.region : '',
-        content: content,
-        photo: photoUrl,
-        author: STATE.user.name,
-        author_device: STATE.user.device,
-        author_user_id: STATE.user.user_id || null,
-        ts: now(),
-        expire: plan ? now() + DAY * plan.days : now() + DAY,
-        is_linked: !!plan,
-        link_days: plan ? plan.days : 0,
-        likes: [],
-        likeCount: 0,
-        gps_lat: gpsLat,
-        gps_lng: gpsLng
-    };
-    
-    if (!STATE.livePosts) STATE.livePosts = [];
-    STATE.livePosts.unshift(post);
-    save();
-    
-    await syncLivePost(post);
-    
-    if (!plan) {
-        await addPoints(5, '發布台主宣傳');
+            id: 'p' + Date.now() + '_' + uid(),
+            track: 'owner',
+            store_id: String(storeId),
+            store_name: store ? store.name : '',
+            store_region: store ? store.region : '',
+            content: content,
+            photo: photoUrl,
+            author: STATE.user.name,
+            author_device: STATE.user.device,
+            author_user_id: STATE.user.user_id || null,
+            ts: now(),
+            expire: plan ? now() + DAY * plan.days : now() + DAY,
+            is_linked: !!plan,
+            link_days: plan ? plan.days : 0,
+            likes: [],
+            likeCount: 0,
+            gps_lat: gpsLat,
+            gps_lng: gpsLng
+        };
+        
+        if (!STATE.livePosts) STATE.livePosts = [];
+        STATE.livePosts.unshift(post);
+        save();
+        
+        await syncLivePost(post);
+        
+        if (!plan) {
+            await addPoints(5, '發布台主宣傳');
+        }
+        
+        updateStreak();
+        
+        // 記錄任務進度 (分享戰績)
+        await recordTaskCompletion('share');
+        
+        toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+5 分', 'green');
+        closeModal();
+        showView('live');
+    } finally {
+        releaseSubmitLock('submitOwnerPost');
     }
-    
-    updateStreak();
-    
-    // 記錄任務進度 (分享戰績)
-    await recordTaskCompletion('share');
-    
-    toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+5 分', 'green');
-    closeModal();
-    showView('live');
 }
 
 async function toggleLike(postId) {
@@ -5733,86 +5837,158 @@ function openMachineForm(sid) {
   setTimeout(function() { return clearInterval(checkInterval); }, 60000);
 }
 
+// ============================================================
+// 機台上架 (含防重鎖)
+// ============================================================
 async function submitMachine(sid) {
-  var photoBlob = window._cam?.mf;
-  if (!photoBlob) return toast("請先拍照", "pink");
-  
-  if (!gpsLat || !gpsLng) {
-    toast('📍 請先點擊「開啟相機拍照」以獲取位置', 'pink');
-    return;
-  }
-  
-  var photoUrl = window._camPreview?.mf || '';
-  if (CLOUD_ON) {
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitMachine')) return;
+    
+    var submitBtn = disableSubmitButton('mf-submit-btn', '⏳ 提交中...');
+    
     try {
-      var file = new File([photoBlob], Date.now() + ".jpg", { type: 'image/jpeg' });
-      photoUrl = await uploadImage(file, 'machines');
-    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-  }
-  
-  var s = STORES.find(function(x) { return x.id === sid; });
-  if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  
-  if (s.lat && s.lng) {
-    var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
-    if (distance > 0.2) {
-      toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內上架機台', 'pink');
-      return;
-    }
-  }
-  
-  var feats = document.querySelectorAll('#mf-feats .chip-active-green');
-  var featsArray = [];
-  feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
-  if (!featsArray.length) return toast("請至少選一個台性標籤", "pink");
-  
-  var playsArray = [];
-  document.querySelectorAll('#mf-plays .chip-active-green').forEach(function(b) { return playsArray.push(b.dataset.tag); });
-  
-  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats: featsArray, plays: playsArray, prize: "台主自報", updated: now(), photo: photoUrl });
-  cloudInsert("claw_machines", { store_id: sid, feats: featsArray, photo: photoUrl });
-  toast("機台已上架", "green");
-  
-  // 記錄任務進度 (機台打卡)
-  await recordTaskCompletion('machine_checkin');
-  
-  // 記錄貢獻 (機台共享)
-    var numericMachineStoreId = parseInt(sid);
-  
-  s.machines.unshift({ id: sid + "_u" + uid(), no: "新" + (s.machines.length + 1), feats: featsArray, plays: playsArray, prize: "台主自報", updated: now(), photo: photoUrl });
-  
-  if (CLOUD_ON) {
-    try {
-      await fetch(
-        SUPABASE_URL + "/rest/v1/claw_machines",
-        {
-          method: 'POST',
-          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify([{
-            store_id: numericMachineStoreId,
-            feats: featsArray,
-            plays: playsArray,
-            prize: '台主自報',
-            photo: photoUrl,
-            created_at: new Date().toISOString()
-          }])
+        var photoBlob = window._cam?.mf;
+        if (!photoBlob) { 
+            toast("請先拍照", "pink"); 
+            enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            return; 
         }
-      );
-      console.log('✅ 機台已同步到雲端');
-    } catch (e) {
-      console.warn('⚠️ 機台雲端同步失敗:', e.message);
+        
+        if (!gpsLat || !gpsLng) {
+            toast('📍 請先點擊「開啟相機拍照」以獲取位置', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            return;
+        }
+        
+        var photoUrl = window._camPreview?.mf || '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'machines');
+            } catch (e) { 
+                toast('圖片上傳失敗', 'pink'); 
+                enableSubmitButton(submitBtn, '✅ 提交機台情報');
+                return; 
+            }
+        }
+        
+        var s = STORES.find(function(x) { return x.id === sid; });
+        if (!s) { 
+            toast('找不到該店鋪', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            return; 
+        }
+        
+        if (s.lat && s.lng) {
+            var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+            if (distance > 0.2) {
+                toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內上架機台', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交機台情報');
+                return;
+            }
+        }
+        
+        var feats = document.querySelectorAll('#mf-feats .chip-active-green');
+        var featsArray = [];
+        feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
+        if (!featsArray.length) { 
+            toast("請至少選一個台性標籤", "pink"); 
+            enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            return; 
+        }
+        
+        var playsArray = [];
+        document.querySelectorAll('#mf-plays .chip-active-green').forEach(function(b) { return playsArray.push(b.dataset.tag); });
+        
+        // 只添加一次機台
+        var newMachine = { 
+            id: sid + "_u" + uid(), 
+            no: "新" + (s.machines.length + 1), 
+            feats: featsArray, 
+            plays: playsArray, 
+            prize: "台主自報", 
+            updated: now(), 
+            photo: photoUrl 
+        };
+        s.machines.unshift(newMachine);
+        
+        if (CLOUD_ON) {
+            try {
+                var numericMachineStoreId = parseInt(sid);
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/claw_machines",
+                    {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            store_id: numericMachineStoreId,
+                            feats: featsArray,
+                            plays: playsArray,
+                            prize: '台主自報',
+                            photo: photoUrl,
+                            created_at: new Date().toISOString()
+                        }])
+                    }
+                );
+                console.log('✅ 機台已同步到雲端');
+            } catch (e) {
+                console.warn('⚠️ 機台雲端同步失敗:', e.message);
+            }
+        }
+        
+        // 通知收藏者
+        var followers = STATE.favStores.filter(function(storeId) { return storeId === sid; });
+        if (followers.length > 0) {
+            if (!STATE.notifications) STATE.notifications = [];
+            STATE.notifications.unshift({ 
+                id: 'n' + Date.now(), 
+                type: 'machine_update', 
+                store_id: sid, 
+                store_name: s.name, 
+                message: '📢 ' + s.name + ' 有新的機台上架！', 
+                read: false, 
+                created_at: now() 
+            });
+            save();
+            toast('📢 已通知 ' + followers.length + ' 位收藏者', 'gold');
+        }
+        
+        toast("機台已上架", "green");
+        
+        // 記錄任務進度 (機台打卡)
+        await recordTaskCompletion('machine_checkin');
+        
+        // 記錄貢獻 (機台共享)
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            try {
+                var numericMachineStoreIdForContribution = parseInt(sid);
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/user_contributions",
+                    {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            user_id: STATE.user.user_id,
+                            device_id: STATE.user.device,
+                            store_id: numericMachineStoreIdForContribution,
+                            contribution_type: 'machine',
+                            contribution_value: 1,
+                            created_at: new Date().toISOString()
+                        }])
+                    }
+                );
+                console.log('✅ 貢獻記錄已同步');
+            } catch (e) {
+                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+            }
+        }
+        
+        save();
+        closeModal();
+        openStore(sid);
+    } finally {
+        releaseSubmitLock('submitMachine');
     }
-  }
-  
-  var followers = STATE.favStores.filter(function(storeId) { return storeId === sid; });
-  if (followers.length > 0) {
-    if (!STATE.notifications) STATE.notifications = [];
-    STATE.notifications.unshift({ id: 'n' + Date.now(), type: 'machine_update', store_id: sid, store_name: s.name, message: '📢 ' + s.name + ' 有新的機台上架！', read: false, created_at: now() });
-    save();
-    toast('📢 已通知 ' + followers.length + ' 位收藏者', 'gold');
-  }
-  closeModal();
-  openStore(sid);
 }
 // ============================================================
 // 📍 店鋪打卡功能
@@ -5832,73 +6008,85 @@ function hasCheckedInToday(storeId) {
     return checkins.indexOf(storeId) !== -1;
 }
 
-// 店鋪打卡
+// ============================================================
+// 店鋪打卡 (含防重鎖)
+// ============================================================
 async function doStoreCheckin(storeId) {
-    var s = STORES.find(function(x) { return x.id === storeId; });
-    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('doStoreCheckin')) return;
     
-    // 檢查是否已打卡
-    if (hasCheckedInToday(storeId)) {
-        toast('📍 今日已在「' + s.name + '」打卡，明天再來吧！', 'gold');
-        return;
-    }
-    
-    // 檢查 GPS
-    if (!gpsLat || !gpsLng) {
-        toast('📍 請先開啟 GPS 定位', 'pink');
-        return;
-    }
-    
-    // GPS 距離檢查 (300米)
-    if (s.lat && s.lng) {
-        var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
-        var distanceMeters = Math.round(distance * 1000);
-        if (distance > 0.3) {
-            toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 300 米內打卡', 'pink');
+    try {
+        var s = STORES.find(function(x) { return x.id === storeId; });
+        if (!s) { 
+            toast('找不到該店鋪', 'pink'); 
+            return; 
+        }
+        
+        // 檢查是否已打卡
+        if (hasCheckedInToday(storeId)) {
+            toast('📍 今日已在「' + s.name + '」打卡，明天再來吧！', 'gold');
             return;
         }
-        toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
-    }
-    
-    // 記錄打卡
-    var checkins = getTodayCheckins();
-    checkins.push(storeId);
-    save();
-    
-    // 記錄任務進度
-    await recordTaskCompletion('checkin');
-    
-    // 同步到雲端
-     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-        try {
-            var numericCheckinStoreId = parseInt(storeId);
-            await fetch(
-                SUPABASE_URL + "/rest/v1/store_checkins",
-                {
-                    method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify([{
-                        user_id: STATE.user.user_id,
-                        device_id: STATE.user.device,
-                        store_id: numericCheckinStoreId,
-                        store_name: s.name,
-                        checkin_date: todayKey(),
-                        lat: gpsLat,
-                        lng: gpsLng,
-                        created_at: new Date().toISOString()
-                    }])
-                }
-            );
-            console.log('✅ 打卡已同步到雲端');
-        } catch (e) {
-            console.warn('⚠️ 打卡雲端同步失敗:', e.message);
+        
+        // 檢查 GPS
+        if (!gpsLat || !gpsLng) {
+            toast('📍 請先開啟 GPS 定位', 'pink');
+            return;
         }
+        
+        // GPS 距離檢查 (300米)
+        if (s.lat && s.lng) {
+            var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+            var distanceMeters = Math.round(distance * 1000);
+            if (distance > 0.3) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 300 米內打卡', 'pink');
+                return;
+            }
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
+        }
+        
+        // 記錄打卡
+        var checkins = getTodayCheckins();
+        checkins.push(storeId);
+        save();
+        
+        // 記錄任務進度
+        await recordTaskCompletion('checkin');
+        
+        // 同步到雲端
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            try {
+                var numericCheckinStoreId = parseInt(storeId);
+                await fetch(
+                    SUPABASE_URL + "/rest/v1/store_checkins",
+                    {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            user_id: STATE.user.user_id,
+                            device_id: STATE.user.device,
+                            store_id: numericCheckinStoreId,
+                            store_name: s.name,
+                            checkin_date: todayKey(),
+                            lat: gpsLat,
+                            lng: gpsLng,
+                            created_at: new Date().toISOString()
+                        }])
+                    }
+                );
+                console.log('✅ 打卡已同步到雲端');
+            } catch (e) {
+                console.warn('⚠️ 打卡雲端同步失敗:', e.message);
+            }
+        }
+        
+        toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
+        
+        // 更新店鋪詳情 (刷新按鈕狀態)
+        updateStoreContent(storeId);
+    } finally {
+        releaseSubmitLock('doStoreCheckin');
     }
-    
-    toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
-    
-    // 更新店鋪詳情 (刷新按鈕狀態)
-    updateStoreContent(storeId);
 }
 // ============================================================
 // 提交店鋪情報表單 (開頭部分)
@@ -6467,254 +6655,323 @@ function updateSubmitButton() {
     }
 }
 // ============================================================
-// 提交店鋪 (含雲端同步)
+// 🔒 通用防重鎖機制
+// ============================================================
+var _submitLocks = {};
+
+function acquireSubmitLock(key) {
+    if (_submitLocks[key]) {
+        toast('⏳ 正在處理中，請稍候...', 'gold');
+        return false;
+    }
+    _submitLocks[key] = true;
+    return true;
+}
+
+function releaseSubmitLock(key) {
+    _submitLocks[key] = false;
+}
+
+// 禁用按鈕輔助函數
+function disableSubmitButton(btnId, loadingText) {
+    var btn = document.getElementById(btnId);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = loadingText || '⏳ 處理中...';
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    }
+    return btn;
+}
+
+function enableSubmitButton(btn, successText, btnId) {
+    if (!btn) btn = document.getElementById(btnId);
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = successText;
+        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+    }
+}
+// ============================================================
+// 提交店鋪 (含雲端同步 + 防重鎖)
 // ============================================================
 async function submitIntel() {
-  if (!await checkDailySubmitLimit()) { return; }
-  if (!isFormComplete()) { toast('請完成所有必填欄位', 'pink'); return; }
-  
-  var name = document.getElementById('nt-name')?.value.trim();
-  if (!name) { toast('請輸入店名', 'pink'); return; }
-  
-  var photoBlob = window._cam?.nt;
-  if (!photoBlob) { toast('請先拍攝店鋪照片', 'pink'); return; }
-  
-  var addr = '';
-  if (selectedType === 'mall' && selectedMall && selectedFloor) {
-    var mallStore = STORES.find(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
-    if (mallStore && mallStore.addr) addr = mallStore.addr;
-    addr = selectedRegion + addr + selectedMall + selectedFloor + '樓';
-  } else if (selectedType === 'street') {
-    addr = document.getElementById('nt-addr')?.value.trim() || '';
-  }
-  
-  var photoUrl = '';
-  if (CLOUD_ON) {
+    // 🔒 防重鎖
+    if (!acquireSubmitLock('submitIntel')) return;
+    
+    // 禁用按鈕
+    var submitBtn = disableSubmitButton('nt-submit-btn', '⏳ 提交中...');
+    
     try {
-      var file = new File([photoBlob], "store_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-      photoUrl = await uploadImage(file, 'stores');
-    } catch (e) { toast('圖片上傳失敗', 'pink'); return; }
-  } else {
-    photoUrl = window._camPreview?.nt || '';
-  }
-  
-  var data = {
-    name: name,
-    region: selectedRegion,
-    type: selectedType,
-    mall: selectedType === 'mall' ? selectedMall : '',
-    floor: selectedType === 'mall' ? selectedFloor : '',
-    addr: addr,
-    lat: gpsLat,
-    lng: gpsLng,
-    accuracy: gpsAccuracy,
-    photo: photoUrl
-  };
-  
-  // 處理商場
-  if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
-    var existsInCache = false;
-    if (MALLS_CACHE) {
-      var regionKey = '';
-      if (selectedRegion === '港島區') regionKey = 'hk';
-      else if (selectedRegion === '九龍區') regionKey = 'kl';
-      else if (selectedRegion === '新界區') regionKey = 'nt';
-      else {
-        Object.keys(REGIONS).forEach(function(key) {
-          var group = REGIONS[key];
-          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey = key;
-        });
-      }
-      if (regionKey && MALLS_CACHE[regionKey]) {
-        existsInCache = MALLS_CACHE[regionKey].some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
-      }
-      if (!regionKey) {
-        existsInCache = Object.values(MALLS_CACHE).flat().some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
-      }
-    }
-    var existsInStores = STORES.some(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
-    if (!existsInCache && !existsInStores) {
-      var regionKey2 = '';
-      if (selectedRegion === '港島區') regionKey2 = 'hk';
-      else if (selectedRegion === '九龍區') regionKey2 = 'kl';
-      else if (selectedRegion === '新界區') regionKey2 = 'nt';
-      else {
-        Object.keys(REGIONS).forEach(function(key) {
-          var group = REGIONS[key];
-          if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey2 = key;
-        });
-      }
-      if (!regionKey2) regionKey2 = 'kl';
-      var newMall = {
-        name: selectedMall,
-        region: selectedRegion === '港島區' ? '港島區' : selectedRegion === '九龍區' ? '九龍區' : '新界區',
-        district: selectedRegion,
-        address: addr || '',
-        lat: gpsLat || 0,
-        lng: gpsLng || 0,
-        created_at: new Date().toISOString()
-      };
-      if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
-      MALLS_CACHE[regionKey2].push(newMall);
-      cloudInsert('malls', newMall);
-      console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
-    }
-  }
-  
-      var newStore = {
-    name: name,
-    region: selectedRegion,
-    addr: addr,
-    status: 'pending',
-    size: '中',
-    token: false,
-    hour24: false,
-    staff: false,
-    machines: [],
-    photo: photoUrl,
-    lat: gpsLat,
-    lng: gpsLng,
-    mall: selectedType === 'mall' ? selectedMall : '',
-    floor: selectedType === 'mall' ? selectedFloor : '',
-    submitted_by: STATE.user.user_id || null,
-    submitted_by_device: STATE.user.device,
-    verification_count: 0,
-    is_verified: false,
-    address_detail: '',
-    has_staff: null,
-    has_e_coin: null,
-    supplement_count: 0,
-    supplemented_by: null
-};
-  
-  // 先插入雲端，獲取自動生成的數字 ID
-  var insertedId = null;
-  if (CLOUD_ON) {
-    try {
-           
-      var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
-        method: 'POST',
-        headers: getSupabaseHeaders({ 'Prefer': 'return=representation' }),
-        body: JSON.stringify([insertData])
-      });
-      
-      if (!insertResponse.ok) {
-        throw new Error('HTTP ' + insertResponse.status);
-      }
-      
-      var insertedStores = await insertResponse.json();
-      if (insertedStores && insertedStores.length > 0) {
-        insertedId = String(insertedStores[0].id);
-        newStore.id = insertedId;
-        console.log('✅ 店鋪已插入雲端，ID:', insertedId);
-      }
-    } catch (e) {
-      if (e.message && e.message.includes('400')) {
-    console.warn('⚠️ 雲端插入失敗(400)，可能是欄位不匹配:', e.message);
-} else {
-    console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
-}
-      insertedId = 'local_' + Date.now() + '_' + uid();
-      newStore.id = insertedId;
-    }
-  } else {
-    insertedId = 'local_' + Date.now() + '_' + uid();
-    newStore.id = insertedId;
-  }
-  
-  STORES.push(newStore);
-  
-  if (selectedRegion) {
-    var regionStat = getRegionStat(selectedRegion);
-    if (regionStat) setTimeout(function() { return updateAchievementStat(regionStat); }, 200);
-  }
-  updateStreak();
-  
-  STATE._submitCount = (STATE._submitCount || 0) + 1;
-  save();
-  
-  if (CLOUD_ON) {
-    try {
-      var today = new Date().toISOString().slice(0, 10);
-      var userId = STATE.user.user_id || STATE.user.device;
-      
-      // 先檢查今日是否已有記錄
-      var checkResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
-        { headers: getSupabaseHeaders() }
-      );
-      var existingLimits = await checkResponse.json();
-      
-      if (existingLimits && existingLimits.length > 0) {
-        // 更新現有記錄
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
-          {
-            method: 'PATCH',
-            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-            body: JSON.stringify({
-              submit_count: STATE._submitCount,
-              updated_at: new Date().toISOString()
-            })
-          }
-        );
-      } else {
-        // 插入新記錄
-        await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
-          method: 'POST',
-          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify([{
-            user_id: userId,
-            date: today,
-            submit_count: STATE._submitCount,
-            report_count: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-        });
-      }
-      console.log('✅ 提交計數已同步到雲端');
-    } catch (e) {
-      console.warn('⚠️ 提交計數雲端同步失敗:', e.message);
-    }
-  }
-  
-  // 記錄任務進度
-  await recordTaskCompletion('submit_store');
-  
-      // 記錄貢獻
-    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-        try {
-            var numericStoreIdForVerifyContribution = parseInt(storeId);
-            await fetch(
-                SUPABASE_URL + "/rest/v1/user_contributions",
-                {
-                    method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify([{
-                        user_id: STATE.user.user_id,
-                        device_id: STATE.user.device,
-                        store_id: numericStoreIdForVerifyContribution,
-                        contribution_type: 'verify',
-                        contribution_value: 1,
-                        created_at: new Date().toISOString()
-                    }])
-                }
-            );
-            console.log('✅ 貢獻記錄已同步');
-        } catch (e) {
-            console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+        if (!await checkDailySubmitLimit()) { 
+            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+            return; 
         }
+        if (!isFormComplete()) { 
+            toast('請完成所有必填欄位', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+            return; 
+        }
+        
+        var name = document.getElementById('nt-name')?.value.trim();
+        if (!name) { 
+            toast('請輸入店名', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+            return; 
+        }
+        
+        var photoBlob = window._cam?.nt;
+        if (!photoBlob) { 
+            toast('請先拍攝店鋪照片', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+            return; 
+        }
+        
+        var addr = '';
+        if (selectedType === 'mall' && selectedMall && selectedFloor) {
+            var mallStore = STORES.find(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
+            if (mallStore && mallStore.addr) addr = mallStore.addr;
+            addr = selectedRegion + addr + selectedMall + selectedFloor + '樓';
+        } else if (selectedType === 'street') {
+            addr = document.getElementById('nt-addr')?.value.trim() || '';
+        }
+        
+        var photoUrl = '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], "store_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'stores');
+            } catch (e) { 
+                toast('圖片上傳失敗', 'pink'); 
+                enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+                return; 
+            }
+        } else {
+            photoUrl = window._camPreview?.nt || '';
+        }
+        
+        var data = {
+            name: name,
+            region: selectedRegion,
+            type: selectedType,
+            mall: selectedType === 'mall' ? selectedMall : '',
+            floor: selectedType === 'mall' ? selectedFloor : '',
+            addr: addr,
+            lat: gpsLat,
+            lng: gpsLng,
+            accuracy: gpsAccuracy,
+            photo: photoUrl
+        };
+        
+        // 處理商場
+        if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
+            var existsInCache = false;
+            if (MALLS_CACHE) {
+                var regionKey = '';
+                if (selectedRegion === '港島區') regionKey = 'hk';
+                else if (selectedRegion === '九龍區') regionKey = 'kl';
+                else if (selectedRegion === '新界區') regionKey = 'nt';
+                else {
+                    Object.keys(REGIONS).forEach(function(key) {
+                        var group = REGIONS[key];
+                        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey = key;
+                    });
+                }
+                if (regionKey && MALLS_CACHE[regionKey]) {
+                    existsInCache = MALLS_CACHE[regionKey].some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
+                }
+                if (!regionKey) {
+                    existsInCache = Object.values(MALLS_CACHE).flat().some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
+                }
+            }
+            var existsInStores = STORES.some(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
+            if (!existsInCache && !existsInStores) {
+                var regionKey2 = '';
+                if (selectedRegion === '港島區') regionKey2 = 'hk';
+                else if (selectedRegion === '九龍區') regionKey2 = 'kl';
+                else if (selectedRegion === '新界區') regionKey2 = 'nt';
+                else {
+                    Object.keys(REGIONS).forEach(function(key) {
+                        var group = REGIONS[key];
+                        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey2 = key;
+                    });
+                }
+                if (!regionKey2) regionKey2 = 'kl';
+                var newMall = {
+                    name: selectedMall,
+                    region: selectedRegion === '港島區' ? '港島區' : selectedRegion === '九龍區' ? '九龍區' : '新界區',
+                    district: selectedRegion,
+                    address: addr || '',
+                    lat: gpsLat || 0,
+                    lng: gpsLng || 0,
+                    created_at: new Date().toISOString()
+                };
+                if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
+                MALLS_CACHE[regionKey2].push(newMall);
+                cloudInsert('malls', newMall);
+                console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
+            }
+        }
+        
+        var newStore = {
+            name: name,
+            region: selectedRegion,
+            addr: addr,
+            status: 'pending',
+            size: '中',
+            token: false,
+            hour24: false,
+            staff: false,
+            machines: [],
+            photo: photoUrl,
+            lat: gpsLat,
+            lng: gpsLng,
+            mall: selectedType === 'mall' ? selectedMall : '',
+            floor: selectedType === 'mall' ? selectedFloor : '',
+            submitted_by: STATE.user.user_id || null,
+            submitted_by_device: STATE.user.device,
+            verification_count: 0,
+            is_verified: false,
+            address_detail: '',
+            has_staff: null,
+            has_e_coin: null,
+            supplement_count: 0,
+            supplemented_by: null
+        };
+        
+        // 先插入雲端，獲取自動生成的數字 ID
+        var insertedId = null;
+        if (CLOUD_ON) {
+            try {
+                var insertData = { ...newStore };
+                delete insertData.id;
+                delete insertData._userVerified;
+                delete insertData._userSupplemented;
+                delete insertData._dist;
+                
+                // 處理 UUID 欄位
+                if (insertData.submitted_by !== undefined && insertData.submitted_by !== null && insertData.submitted_by !== '') {
+                    if (!isValidUUID(insertData.submitted_by)) {
+                        insertData.submitted_by = null;
+                    }
+                }
+                
+                var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=representation' }),
+                    body: JSON.stringify([insertData])
+                });
+                
+                if (!insertResponse.ok) {
+                    throw new Error('HTTP ' + insertResponse.status);
+                }
+                
+                var insertedStores = await insertResponse.json();
+                if (insertedStores && insertedStores.length > 0) {
+                    insertedId = String(insertedStores[0].id);
+                    newStore.id = insertedId;
+                    console.log('✅ 店鋪已插入雲端，ID:', insertedId);
+                }
+            } catch (e) {
+                console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
+                insertedId = 'local_' + Date.now() + '_' + uid();
+                newStore.id = insertedId;
+            }
+        } else {
+            insertedId = 'local_' + Date.now() + '_' + uid();
+            newStore.id = insertedId;
+        }
+        
+        STORES.push(newStore);
+        
+        if (selectedRegion) {
+            var regionStat = getRegionStat(selectedRegion);
+            if (regionStat) setTimeout(function() { return updateAchievementStat(regionStat); }, 200);
+        }
+        updateStreak();
+        
+        STATE._submitCount = (STATE._submitCount || 0) + 1;
+        save();
+        
+        if (CLOUD_ON) {
+            try {
+                var today = new Date().toISOString().slice(0, 10);
+                var userId = STATE.user.user_id || STATE.user.device;
+                
+                var checkResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
+                    { headers: getSupabaseHeaders() }
+                );
+                var existingLimits = await checkResponse.json();
+                
+                if (existingLimits && existingLimits.length > 0) {
+                    await fetch(
+                        `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
+                        {
+                            method: 'PATCH',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify({
+                                submit_count: STATE._submitCount,
+                                updated_at: new Date().toISOString()
+                            })
+                        }
+                    );
+                } else {
+                    await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
+                        method: 'POST',
+                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                        body: JSON.stringify([{
+                            user_id: userId,
+                            date: today,
+                            submit_count: STATE._submitCount,
+                            report_count: 0,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }])
+                    });
+                }
+                console.log('✅ 提交計數已同步到雲端');
+            } catch (e) {
+                console.warn('⚠️ 提交計數雲端同步失敗:', e.message);
+            }
+        }
+        
+        // 記錄任務進度
+        await recordTaskCompletion('submit_store');
+        
+        // 記錄貢獻
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id && insertedId) {
+            try {
+                var numericStoreIdForContribution = parseInt(insertedId);
+                if (!isNaN(numericStoreIdForContribution)) {
+                    await fetch(
+                        SUPABASE_URL + "/rest/v1/user_contributions",
+                        {
+                            method: 'POST',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify([{
+                                user_id: STATE.user.user_id,
+                                device_id: STATE.user.device,
+                                store_id: numericStoreIdForContribution,
+                                contribution_type: 'submit',
+                                contribution_value: 1,
+                                created_at: new Date().toISOString()
+                            }])
+                        }
+                    );
+                    console.log('✅ 貢獻記錄已同步');
+                }
+            } catch (e) {
+                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+            }
+        }
+        
+        toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
+        await addPoints(10, '提交店鋪情報');
+        closeModal();
+    } finally {
+        releaseSubmitLock('submitIntel');
     }
-  
-  toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
-  await addPoints(10, '提交店鋪情報');
-  closeModal();
 }
-
-// [由於篇幅限制，省略 renderRegionSelectorTab、switchTab、toggleMoreRegionsTab、updateTabHighlight 等輔助函數 - 它們與原代碼相同]
-// [省略 updateNameSuggestions、selectNameSuggestion、selectRegion、reselectRegion、selectType、renderMallOptions、switchToMallInput、onMallCustomInput、confirmMallInput、selectMall、reselectMall、onFloorInput、updateAddressPreview、onStreetAddressInput、grabGPS、retryGPS、updateFormState、isFormComplete、updateSubmitButton 等函數 - 它們與原代碼相同]
-
 // ============================================================
 // 導航與視圖切換
 // ============================================================
