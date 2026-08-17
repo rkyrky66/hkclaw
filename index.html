@@ -3236,48 +3236,47 @@ function updateMapMarkers() {
       totalStores: count
     });
     
-    var statusText = isAllVerified ? '✅ 已認證' : '⏳ 審核中';
+    var statusText = isAllVerified ? '✅ 已認證' : '⏳ 部分審核中';
+    var statusColor = isAllVerified ? '#00FF00' : '#FFB800';
     
-    // 使用 DOM 元素創建 popup 內容，避免 inline onclick 作用域問題
-    var popupContainer = document.createElement('div');
-    popupContainer.innerHTML = 
-      '<div>' +
-        '<div style="display:flex;align-items:center;gap:6px;">' +
-          '<span style="color:#D4AF37;font-weight:700;font-size:14px;">🏬 ' + key + '</span>' +
-          '<span style="font-size:10px;color:' + (isAllVerified ? '#00FF00' : '#FFB800') + ';">' + statusText + '</span>' +
-        '</div>' +
-        '<div style="color:#aaa;font-size:11px;margin-top:2px;">' + count + ' 間店鋪</div>' +
-        '<button id="mall-btn-' + key.replace(/[^a-zA-Z0-9]/g, '_') + '" ' +
-          'style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">' +
-          '📋 查看全部 ' + count + ' 間店鋪' +
-        '</button>' +
+    // 創建 popup 內容（使用 DOM 元素避免 inline onclick 問題）
+    var popupContent = document.createElement('div');
+    popupContent.style.cssText = 'text-align:center;padding:4px 0;';
+    popupContent.innerHTML = 
+      '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">🏬 ' + key + '</div>' +
+      '<div style="color:#aaa;font-size:11px;margin-bottom:2px;">' + count + ' 間店鋪</div>' +
+      '<div style="color:' + statusColor + ';font-size:10px;margin-bottom:6px;">' + statusText + '</div>' +
+      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
+        '👆 點擊查看店鋪列表' +
       '</div>';
     
-    // 綁定按鈕點擊事件
-    var btn = popupContainer.querySelector('button');
-    if (btn) {
-      btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var mallName = key;
-        if (map) map.closePopup();
-        // 延遲執行，確保 popup 關閉動畫完成
-        setTimeout(function() {
-          openMallModal(mallName);
-        }, 100);
-      });
-    }
-    
-    marker.bindPopup(popupContainer, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
-    
-    // 添加標記本身點擊事件 - 直接打開商場視圖
-    marker.on('click', function() {
-      if (map) map.closePopup();
-      setTimeout(function() {
-        openMallModal(key);
-      }, 100);
+    // 綁定 popup
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false
     });
     
+    // 點擊 popup 本身打開商場視圖
+    marker.on('popupopen', function() {
+      var popup = marker.getPopup();
+      if (popup && popup.getElement()) {
+        var popupEl = popup.getElement();
+        popupEl.style.cursor = 'pointer';
+        popupEl.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var mallName = key;
+          if (map) map.closePopup();
+          setTimeout(function() {
+            openMallModal(mallName);
+          }, 100);
+        });
+      }
+    });
+    
+    // 點擊標記本身也打開 popup（默認行為）
     markerCluster.addLayer(marker);
   });
   
@@ -3291,48 +3290,46 @@ function updateMapMarkers() {
     });
     
     var isVerified = s.verified === "verified";
-    var statusBadge = isVerified ? 
-      '<span class="status-badge verified">✅ 已認證</span>' : 
-      '<span class="status-badge pending">⏳ 審核中</span>';
+    var statusText = isVerified ? '✅ 已認證' : '⏳ 審核中';
+    var statusColor = isVerified ? '#00FF00' : '#FFB800';
+    var machineCount = s.machines ? s.machines.length : 0;
     
-    // 使用 DOM 元素創建 popup 內容
-    var popupContainer = document.createElement('div');
-    popupContainer.innerHTML = 
-      '<div>' +
-        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-          '<span style="color:#D4AF37;font-weight:700;font-size:14px;">' + s.name + '</span>' +
-          statusBadge +
-        '</div>' +
-        '<div style="color:#aaa;font-size:11px;margin-top:2px;">' + s.addr + '</div>' +
-        '<button id="store-btn-' + s.id.replace(/[^a-zA-Z0-9]/g, '_') + '" ' +
-          'style="background:#D4AF37;color:#000;font-weight:700;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;width:100%;margin-top:6px;">' +
-          '📍 查看詳情' +
-        '</button>' +
+    // 創建 popup 內容
+    var popupContent = document.createElement('div');
+    popupContent.style.cssText = 'text-align:center;padding:4px 0;';
+    popupContent.innerHTML = 
+      '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">' + s.name + '</div>' +
+      '<div style="color:#aaa;font-size:11px;margin-bottom:2px;">' + s.region + '</div>' +
+      '<div style="color:' + statusColor + ';font-size:10px;margin-bottom:2px;">' + statusText + '</div>' +
+      '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + machineCount + ' 部機台</div>' +
+      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
+        '👆 點擊查看詳情' +
       '</div>';
     
-    // 綁定按鈕點擊事件
-    var btn = popupContainer.querySelector('button');
-    if (btn) {
-      btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var storeId = s.id;
-        if (map) map.closePopup();
-        // 延遲執行，確保 popup 關閉動畫完成
-        setTimeout(function() {
-          openStoreFromMap(storeId);
-        }, 100);
-      });
-    }
+    // 綁定 popup
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false
+    });
     
-    marker.bindPopup(popupContainer, { maxWidth: 260, minWidth: 200, className: 'custom-popup' });
-    
-    // 添加標記本身點擊事件 - 直接打開店鋪詳情
-    marker.on('click', function() {
-      if (map) map.closePopup();
-      setTimeout(function() {
-        openStoreFromMap(s.id);
-      }, 100);
+    // 點擊 popup 本身打開店鋪詳情
+    marker.on('popupopen', function() {
+      var popup = marker.getPopup();
+      if (popup && popup.getElement()) {
+        var popupEl = popup.getElement();
+        popupEl.style.cursor = 'pointer';
+        popupEl.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var storeId = s.id;
+          if (map) map.closePopup();
+          setTimeout(function() {
+            openStoreFromMap(storeId);
+          }, 100);
+        });
+      }
     });
     
     markerCluster.addLayer(marker);
