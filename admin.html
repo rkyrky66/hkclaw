@@ -1198,7 +1198,7 @@ function loadStores() {
 }
 
 // ============================================================
-// 詳細檢視 (新店審核) - 最終修正版
+// 詳細檢視 (新店審核) - 最終修正版 (fetch 強制字串)
 // ============================================================
 function viewStoreDetail(storeId) {
     currentViewStoreId = storeId;
@@ -1360,69 +1360,81 @@ function viewStoreDetail(storeId) {
                         statusClass = 'confirmed';
                     }
                     
-                    var verifierHtml = '';
-                    sb
-                        .from('store_verifications')
-                        .select('verifier_device, verifier_name')
-                        .eq('store_id', String(storeId))
-                        .eq('status', 'pending')
-                        .then(function(verResult) {
-                            var verifications = verResult.data || [];
-                            if (verifications.length > 0) {
-                                verifierHtml = '<div class="section-header">📌 認證記錄</div>';
-                                for (var i = 0; i < verifications.length; i++) {
-                                    var v = verifications[i];
-                                    var label = i === 0 ? '認證1' : '認證2';
-                                    verifierHtml += 
-                                        '<div class="field-item">' +
-                                            '<span class="field-name">' + label + '</span>' +
-                                            '<span class="field-value">' + (v.verifier_name || v.verifier_device) + '</span>' +
-                                            '<div class="field-actions">' +
-                                                '<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_name || v.verifier_device) + '\')">🗑️ 撤銷</button>' +
-                                            '</div>' +
-                                        '</div>';
-                                }
-                            }
-                            
-                            var modalHtml = 
-                                '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-                                    '<div>' +
-                                        '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
-                                        '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
-                                            '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-                                            '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
-                                            '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || store.verified || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
+                    // ============================================================
+                    // 使用 fetch 查詢 store_verifications（強制字串）
+                    // ============================================================
+                    var verificationsUrl = SUPABASE_URL + "/rest/v1/store_verifications?select=verifier_device,verifier_name&store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending";
+                    
+                    fetch(verificationsUrl, {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY
+                        }
+                    })
+                    .then(function(res) {
+                        if (!res.ok) {
+                            console.warn('store_verifications 查詢返回:', res.status);
+                            return [];
+                        }
+                        return res.json();
+                    })
+                    .then(function(verifications) {
+                        var verifierHtml = '';
+                        if (verifications && verifications.length > 0) {
+                            verifierHtml = '<div class="section-header">📌 認證記錄</div>';
+                            for (var i = 0; i < verifications.length; i++) {
+                                var v = verifications[i];
+                                var label = i === 0 ? '認證1' : '認證2';
+                                verifierHtml += 
+                                    '<div class="field-item">' +
+                                        '<span class="field-name">' + label + '</span>' +
+                                        '<span class="field-value">' + (v.verifier_name || v.verifier_device) + '</span>' +
+                                        '<div class="field-actions">' +
+                                            '<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_name || v.verifier_device) + '\')">🗑️ 撤銷</button>' +
                                         '</div>' +
+                                    '</div>';
+                            }
+                        }
+                        
+                        var modalHtml = 
+                            '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                                '<div>' +
+                                    '<h3 style="font-size:18px;">📋 ' + store.name + '</h3>' +
+                                    '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
+                                        '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+                                        '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
+                                        '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || store.verified || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
                                     '</div>' +
-                                    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-                                        '<button class="btn-sm primary" onclick="confirmReviewed(\'' + storeId + '\')">✅ 已查閱</button>' +
-                                        '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中為存疑</button>' +
-                                    '</div>' +
                                 '</div>' +
-                                '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
-                                    '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
-                                    (supplementerDevice ? '<span>📌 補充者: ' + supplementerDevice + '</span>' : '') +
+                                '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                                    '<button class="btn-sm primary" onclick="confirmReviewed(\'' + storeId + '\')">✅ 已查閱</button>' +
+                                    '<button class="btn-sm warning" onclick="applyFieldFlags(\'' + storeId + '\')">⚠️ 標記選中為存疑</button>' +
                                 '</div>' +
-                                '<div style="margin-top:12px;">' +
-                                    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +
-                                    renderFields(firstSubmitFields, '📌 首發者提交', true) +
-                                    renderFields(supplementFields, '📌 補充者提交', false) +
-                                    verifierHtml +
+                            '</div>' +
+                            '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">' +
+                                '<span>📌 提交時間: ' + new Date(store.created_at).toLocaleString() + '</span>' +
+                                (supplementerDevice ? '<span>📌 補充者: ' + supplementerDevice + '</span>' : '') +
+                            '</div>' +
+                            '<div style="margin-top:12px;">' +
+                                '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">💡 勾選欄位後點擊「標記選中為存疑」 | 確認後所有「待查閱」變為「已確認」</div>' +
+                                renderFields(firstSubmitFields, '📌 首發者提交', true) +
+                                renderFields(supplementFields, '📌 補充者提交', false) +
+                                verifierHtml +
+                            '</div>' +
+                            '<div class="admin-actions-bar">' +
+                                '<span class="action-label">⚠️ 管理員操作</span>' +
+                                (hasSupplement ? '<button class="btn-sm danger" onclick="revokeSupplement(\'' + storeId + '\', \'' + supplementerDevice + '\', \'補充者\')">🗑️ 撤銷補充</button>' : '') +
+                                '<button class="btn-sm danger" onclick="if(confirm(\'確定要隱藏此店鋪嗎？\')) hideStore(\'' + storeId + '\')">🚫 隱藏店鋪</button>' +
+                                '<button class="btn-sm danger" onclick="if(confirm(\'確定要標記此店鋪為可疑嗎？\')) markStoreSuspicious(\'' + storeId + '\')">⚠️ 標記可疑</button>' +
+                            '</div>' +
+                            '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
+                                '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
+                                    (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
                                 '</div>' +
-                                '<div class="admin-actions-bar">' +
-                                    '<span class="action-label">⚠️ 管理員操作</span>' +
-                                    (hasSupplement ? '<button class="btn-sm danger" onclick="revokeSupplement(\'' + storeId + '\', \'' + supplementerDevice + '\', \'補充者\')">🗑️ 撤銷補充</button>' : '') +
-                                    '<button class="btn-sm danger" onclick="if(confirm(\'確定要隱藏此店鋪嗎？\')) hideStore(\'' + storeId + '\')">🚫 隱藏店鋪</button>' +
-                                    '<button class="btn-sm danger" onclick="if(confirm(\'確定要標記此店鋪為可疑嗎？\')) markStoreSuspicious(\'' + storeId + '\')">⚠️ 標記可疑</button>' +
-                                '</div>' +
-                                '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
-                                    '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
-                                        (store.photo ? '<a href="' + store.photo + '" target="_blank" style="font-size:12px;color:var(--primary);">🔍 查看原圖</a>' : '') +
-                                    '</div>' +
-                                '</div>';
-                            
-                            openModal('📋 店鋪詳情', modalHtml, '關閉');
-                        });
+                            '</div>';
+                        
+                        openModal('📋 店鋪詳情', modalHtml, '關閉');
+                    });
                 });
         })
         .catch(function(error) {
@@ -1611,7 +1623,7 @@ function applyFieldFlags(storeId) {
 }
 
 // ============================================================
-// ⭐ 撤銷認證 (管理員操作)
+// ⭐ 撤銷認證 (使用 fetch 強制字串)
 // ============================================================
 async function revokeVerification(storeId, verifierDevice, verifierName) {
     if (!confirm('確定要撤銷 ' + (verifierName || verifierDevice) + ' 的認證嗎？\n\n此操作將：\n1. 認證數減少 1\n2. 如果少於 2 人認證，店鋪回到「未審核」狀態\n3. 該認證記錄被標記為「已撤銷」')) {
@@ -1633,17 +1645,28 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
         var newStatus = newCount >= 2 ? 'verified' : 'pending';
         var newIsVerified = newCount >= 2 ? true : false;
         
-        await sb
-            .from('store_verifications')
-            .update({
+        // 使用 fetch 更新 store_verifications（強制字串）
+        var updateUrl = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&verifier_device=eq.%22" + encodeURIComponent(verifierDevice) + "%22&status=eq.pending";
+        
+        var updateResponse = await fetch(updateUrl, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
                 status: 'revoked',
                 revoked_by: currentUser.display_name,
                 revoked_at: new Date().toISOString(),
                 revoke_reason: reason || '管理員撤銷'
             })
-            .eq('store_id', String(storeId))
-            .eq('verifier_device', verifierDevice)
-            .eq('status', 'pending');
+        });
+        
+        if (!updateResponse.ok && updateResponse.status !== 204) {
+            console.warn('store_verifications 更新返回:', updateResponse.status);
+        }
         
         await sb
             .from('claw_stores')
@@ -1710,7 +1733,6 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
         toast('操作失敗: ' + error.message, 'error');
     }
 }
-
 // ============================================================
 // ⭐ 撤銷補充 (最終修正版)
 // ============================================================
@@ -1978,7 +2000,7 @@ function loadVerifications() {
 }
 
 // ============================================================
-// 確認認證審核
+// 確認認證審核 (使用 fetch 強制字串)
 // ============================================================
 function confirmVerification(reviewId) {
     var flagFirst = document.getElementById('flag-first-' + reviewId);
@@ -2009,23 +2031,46 @@ function confirmVerification(reviewId) {
             if (result.error) throw result.error;
             
             var storeId = result.data ? result.data.store_id : null;
+            if (!storeId) return;
+            
+            // 使用 fetch 更新 store_verifications（強制字串）
+            var pendingUpdates = [];
+            
             if (flagV1 && flagV1.checked) {
-                sb.from('store_verifications')
-                    .update({ status: 'suspicious' })
-                    .eq('store_id', String(storeId))
-                    .order('created_at', { ascending: true })
-                    .limit(1)
-                    .then(function() {});
-            }
-            if (flagV2 && flagV2.checked) {
-                sb.from('store_verifications')
-                    .update({ status: 'suspicious' })
-                    .eq('store_id', String(storeId))
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .then(function() {});
+                var url1 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending&order=created_at.asc&limit=1";
+                pendingUpdates.push(
+                    fetch(url1, {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({ status: 'suspicious' })
+                    })
+                );
             }
             
+            if (flagV2 && flagV2.checked) {
+                var url2 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending&order=created_at.desc&limit=1";
+                pendingUpdates.push(
+                    fetch(url2, {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({ status: 'suspicious' })
+                    })
+                );
+            }
+            
+            return Promise.all(pendingUpdates);
+        })
+        .then(function() {
             toast('✅ 認證審核完成');
             loadVerifications();
             loadDashboard();
