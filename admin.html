@@ -688,6 +688,10 @@
                 <li class="nav-item" data-tab="admin-actions" onclick="switchTab('admin-actions')">
                     <i class="fas fa-gavel"></i><span>操作記錄</span>
                 </li>
+                <li class="nav-item" data-tab="bounty-reviews" onclick="switchTab('bounty-reviews')">
+    <i class="fas fa-trophy"></i><span>懸賞審核</span>
+    <span class="badge badge-warning" id="badge-bounty-reviews">0</span>
+</li>
             </ul>
         </nav>
         <div class="sidebar-footer">
@@ -2000,7 +2004,7 @@ function loadVerifications() {
 }
 
 // ============================================================
-// 確認認證審核 (使用 fetch 強制字串)
+// 確認認證審核 (修正版 - 精確更新 store_verifications)
 // ============================================================
 function confirmVerification(reviewId) {
     var flagFirst = document.getElementById('flag-first-' + reviewId);
@@ -2023,21 +2027,29 @@ function confirmVerification(reviewId) {
         flag_verifier_2: flagV2 ? flagV2.checked : false
     };
     
-    sb
-        .from('verification_reviews')
-        .update(updates)
+    // 先獲取 review 資料，取得 verifier_device
+    sb.from('verification_reviews')
+        .select('store_id, verifier_1_device, verifier_2_device')
         .eq('id', reviewId)
-        .then(function(result) {
-            if (result.error) throw result.error;
+        .single()
+        .then(function(reviewResult) {
+            if (reviewResult.error) throw reviewResult.error;
+            var review = reviewResult.data;
             
-            var storeId = result.data ? result.data.store_id : null;
-            if (!storeId) return;
-            
-            // 使用 fetch 更新 store_verifications（強制字串）
+            return sb.from('verification_reviews')
+                .update(updates)
+                .eq('id', reviewId)
+                .then(function(updateResult) {
+                    if (updateResult.error) throw updateResult.error;
+                    return review;
+                });
+        })
+        .then(function(review) {
             var pendingUpdates = [];
             
-            if (flagV1 && flagV1.checked) {
-                var url1 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending&order=created_at.asc&limit=1";
+            // ✅ 修正：使用 verifier_device 精確更新
+            if (flagV1 && flagV1.checked && review.verifier_1_device) {
+                var url1 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(review.store_id) + "%22&verifier_device=eq.%22" + encodeURIComponent(review.verifier_1_device) + "%22&status=eq.pending";
                 pendingUpdates.push(
                     fetch(url1, {
                         method: 'PATCH',
@@ -2052,8 +2064,8 @@ function confirmVerification(reviewId) {
                 );
             }
             
-            if (flagV2 && flagV2.checked) {
-                var url2 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending&order=created_at.desc&limit=1";
+            if (flagV2 && flagV2.checked && review.verifier_2_device) {
+                var url2 = SUPABASE_URL + "/rest/v1/store_verifications?store_id=eq.%22" + encodeURIComponent(review.store_id) + "%22&verifier_device=eq.%22" + encodeURIComponent(review.verifier_2_device) + "%22&status=eq.pending";
                 pendingUpdates.push(
                     fetch(url2, {
                         method: 'PATCH',
@@ -2081,19 +2093,18 @@ function confirmVerification(reviewId) {
 }
 
 // ============================================================
-// 存疑清單 (含懸賞功能)
+// 存疑清單 (含懸賞功能) - 修正 storeNames 匹配
 // ============================================================
 function loadFlagged() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
-    // 獲取存疑欄位 + 懸賞任務狀態
     Promise.all([
         sb.from('field_status')
-    .select('*')
-    .eq('status', 'suspicious')
-    .or('resolved.eq.false,resolved.is.null')
-    .order('flagged_at', { ascending: false, nullsFirst: false }),
+            .select('*')
+            .eq('status', 'suspicious')
+            .or('resolved.eq.false,resolved.is.null')
+            .order('flagged_at', { ascending: false, nullsFirst: false }),
         sb.from('bounty_tasks')
             .select('field_status_id, status, admin_decision')
             .in('status', ['open', 'in_progress', 'completed'])
@@ -2102,7 +2113,6 @@ function loadFlagged() {
         var data = results[0].data || [];
         var bountyTasks = results[1].data || [];
         
-        // 建立 bounty 狀態對照
         var bountyMap = {};
         for (var i = 0; i < bountyTasks.length; i++) {
             var task = bountyTasks[i];
@@ -2112,12 +2122,12 @@ function loadFlagged() {
         }
         
         var storeIds = [];
-for (var i = 0; i < data.length; i++) {
-    var sid = parseInt(data[i].record_id);
-    if (storeIds.indexOf(sid) === -1) {
-        storeIds.push(sid);
-    }
-}
+        for (var i = 0; i < data.length; i++) {
+            var sid = parseInt(data[i].record_id);
+            if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
+                storeIds.push(sid);
+            }
+        }
         
         if (storeIds.length === 0) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有存疑項目</p></div>';
@@ -2129,10 +2139,11 @@ for (var i = 0; i < data.length; i++) {
             .select('id, name')
             .in('id', storeIds)
             .then(function(storeResult) {
+                // ✅ 修正：使用 String(key) 確保匹配
                 var storeNames = {};
                 var stores = storeResult.data || [];
                 for (var i = 0; i < stores.length; i++) {
-                    storeNames[stores[i].id] = stores[i].name;
+                    storeNames[String(stores[i].id)] = stores[i].name;
                 }
                 
                 var html = 
@@ -2162,9 +2173,12 @@ for (var i = 0; i < data.length; i++) {
                          bounty.status === 'completed' ? 'confirmed' : 'rejected') : 
                         'pending';
                     
+                    // ✅ 修正：使用 String() 確保匹配
+                    var storeName = storeNames[String(f.record_id)] || f.record_id;
+                    
                     html += '<tr>' +
                         '<td><input type="checkbox" class="flagged-checkbox" data-id="' + f.id + '"></td>' +
-                        '<td><strong>' + (storeNames[f.record_id] || f.record_id) + '</strong></td>' +
+                        '<td><strong>' + storeName + '</strong></td>' +
                         '<td><span class="status-badge field-suspicious">' + f.field_name + '</span></td>' +
                         '<td>' + (f.flagged_by || '未知') + '</td>' +
                         '<td>' + (f.note || '無說明') + '</td>' +

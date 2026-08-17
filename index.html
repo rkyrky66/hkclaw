@@ -4174,7 +4174,7 @@ function getRegionStat(region) {
 }
 
 // ============================================================
-// 認證店鋪 (修正版 - 使用 status 欄位 + 防重鎖)
+// 認證店鋪 (修正版 - 使用 status 欄位 + 防重鎖 + verifier_id)
 // ============================================================
 async function submitVerification(storeId) {
     // 🔒 防重鎖
@@ -4236,8 +4236,7 @@ async function submitVerification(storeId) {
         var verification = {
             store_id: numericStoreId,
             verifier_device: STATE.user.device,
-            verifier_user_id: STATE.user.user_id || null,
-            verifier_name: STATE.user.name || '匿名用戶',
+            verifier_id: STATE.user.user_id || STATE.user.device,
             photo_url: photoUrl,
             lat: _vfGpsLat,
             lng: _vfGpsLng,
@@ -5690,54 +5689,115 @@ function closeCamera(key) {
   if (container) container.innerHTML = '<button onclick="openCamera(\'' + key + '\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>';
 }
 
+// ============================================================
+// 拍照功能 (含圖片壓縮 - 800px + 0.6品質 + 100KB限制)
+// ============================================================
 async function capturePhoto(key) {
-  var videoEl = document.getElementById(key + "-video");
-  if (!videoEl) return toast('請先開啟相機', 'pink');
-  var canvas = document.createElement('canvas');
-  canvas.width = videoEl.videoWidth || 800;
-  canvas.height = videoEl.videoHeight || 600;
-  var ctx = canvas.getContext('2d');
-  ctx.drawImage(videoEl, 0, 0);
-  var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-  var img = document.getElementById(key + "-preview");
-  if (img) { img.src = dataUrl; img.classList.remove('hidden'); img.style.display = 'block'; }
-  var blob = await new Promise(function(resolve) { return canvas.toBlob(resolve, 'image/jpeg', 0.8); });
-  window._cam[key] = blob;
-  window._camPreview[key] = dataUrl;
-  
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      gpsLat = pos.coords.latitude;
-      gpsLng = pos.coords.longitude;
-      isGpsReady = true;
-      if (document.getElementById('nt-gps')) {
-        var el = document.getElementById('nt-gps');
-        el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-        el.className = 'text-neongreen text-xs';
-      }
-      if (document.getElementById('vf-gps')) {
-        var el = document.getElementById('vf-gps');
-        el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-        el.className = 'text-neongreen text-xs';
-        _vfGpsReady = true;
-        _vfGpsLat = gpsLat;
-        _vfGpsLng = gpsLng;
-      }
-      updateFormState();
-    }, function() { console.log('⚠️ 拍照完成時定位失敗，使用上次位置'); }, { enableHighAccuracy: true, timeout: 3000 });
-  }
-  
-  closeCamera(key);
-  var container = document.getElementById(key + "-camera-container");
-  if (container) {
-    container.innerHTML = '<div class="relative"><img src="' + dataUrl + '" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto(\'' + key + '\')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>';
-  }
-  
-  if (typeof checkPostForm === 'function') {
-    var prefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
-    if (prefix) checkPostForm(prefix);
-  }
-  toast('✅ 已拍照！', 'green');
+    var videoEl = document.getElementById(key + "-video");
+    if (!videoEl) return toast('請先開啟相機', 'pink');
+    
+    // 創建 canvas 並縮小尺寸
+    var canvas = document.createElement('canvas');
+    var MAX_WIDTH = 800;
+    var MAX_HEIGHT = 800;
+    
+    var videoWidth = videoEl.videoWidth || 800;
+    var videoHeight = videoEl.videoHeight || 600;
+    
+    // 計算縮放比例
+    var scale = Math.min(1, MAX_WIDTH / videoWidth, MAX_HEIGHT / videoHeight);
+    canvas.width = Math.round(videoWidth * scale);
+    canvas.height = Math.round(videoHeight * scale);
+    
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    
+    // 先以 0.6 品質輸出
+    var quality = 0.6;
+    var dataUrl = canvas.toDataURL('image/jpeg', quality);
+    
+    // 如果超過 100KB，逐步降低品質
+    while (dataUrl.length > 100 * 1024 && quality > 0.2) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+    
+    // 如果還是太大，進一步縮小尺寸
+    if (dataUrl.length > 100 * 1024) {
+        var smallerCanvas = document.createElement('canvas');
+        smallerCanvas.width = Math.round(canvas.width * 0.5);
+        smallerCanvas.height = Math.round(canvas.height * 0.5);
+        var smallerCtx = smallerCanvas.getContext('2d');
+        smallerCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
+        dataUrl = smallerCanvas.toDataURL('image/jpeg', 0.5);
+        canvas = smallerCanvas;
+        quality = 0.5;
+    }
+    
+    var img = document.getElementById(key + "-preview");
+    if (img) { 
+        img.src = dataUrl; 
+        img.classList.remove('hidden'); 
+        img.style.display = 'block'; 
+    }
+    
+    // 生成 blob
+    var blob = await new Promise(function(resolve) { 
+        canvas.toBlob(function(b) { resolve(b); }, 'image/jpeg', quality); 
+    });
+    
+    // 如果 blob 太大，使用縮小後的 canvas 重新生成
+    if (blob && blob.size > 100 * 1024) {
+        var smallerCanvas2 = document.createElement('canvas');
+        smallerCanvas2.width = Math.round(canvas.width * 0.5);
+        smallerCanvas2.height = Math.round(canvas.height * 0.5);
+        var smallerCtx2 = smallerCanvas2.getContext('2d');
+        smallerCtx2.drawImage(canvas, 0, 0, smallerCanvas2.width, smallerCanvas2.height);
+        dataUrl = smallerCanvas2.toDataURL('image/jpeg', 0.5);
+        blob = await new Promise(function(resolve) { 
+            smallerCanvas2.toBlob(function(b) { resolve(b); }, 'image/jpeg', 0.5); 
+        });
+        if (img) img.src = dataUrl;
+    }
+    
+    window._cam[key] = blob;
+    window._camPreview[key] = dataUrl;
+    
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            gpsLat = pos.coords.latitude;
+            gpsLng = pos.coords.longitude;
+            isGpsReady = true;
+            if (document.getElementById('nt-gps')) {
+                var el = document.getElementById('nt-gps');
+                el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
+                el.className = 'text-neongreen text-xs';
+            }
+            if (document.getElementById('vf-gps')) {
+                var el = document.getElementById('vf-gps');
+                el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
+                el.className = 'text-neongreen text-xs';
+                _vfGpsReady = true;
+                _vfGpsLat = gpsLat;
+                _vfGpsLng = gpsLng;
+            }
+            updateFormState();
+        }, function() { 
+            console.log('⚠️ 拍照完成時定位失敗，使用上次位置'); 
+        }, { enableHighAccuracy: true, timeout: 3000 });
+    }
+    
+    closeCamera(key);
+    var container = document.getElementById(key + "-camera-container");
+    if (container) {
+        container.innerHTML = '<div class="relative"><img src="' + dataUrl + '" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto(\'' + key + '\')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>';
+    }
+    
+    if (typeof checkPostForm === 'function') {
+        var prefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
+        if (prefix) checkPostForm(prefix);
+    }
+    toast('✅ 已拍照！', 'green');
 }
 
 function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = null; openCamera(key); }
@@ -6692,7 +6752,7 @@ function enableSubmitButton(btn, successText, btnId) {
     }
 }
 // ============================================================
-// 提交店鋪 (含雲端同步 + 防重鎖)
+// 提交店鋪 (含雲端同步 + 防重鎖 + 修正插入)
 // ============================================================
 async function submitIntel() {
     // 🔒 防重鎖
@@ -6749,19 +6809,6 @@ async function submitIntel() {
             photoUrl = window._camPreview?.nt || '';
         }
         
-        var data = {
-            name: name,
-            region: selectedRegion,
-            type: selectedType,
-            mall: selectedType === 'mall' ? selectedMall : '',
-            floor: selectedType === 'mall' ? selectedFloor : '',
-            addr: addr,
-            lat: gpsLat,
-            lng: gpsLng,
-            accuracy: gpsAccuracy,
-            photo: photoUrl
-        };
-        
         // 處理商場
         if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
             var existsInCache = false;
@@ -6807,11 +6854,15 @@ async function submitIntel() {
                 };
                 if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
                 MALLS_CACHE[regionKey2].push(newMall);
-                cloudInsert('malls', newMall);
-                console.log('🏬 新商場已存入 MALLS_CACHE:', selectedMall);
+                try {
+                    await cloudInsert('malls', newMall);
+                } catch (e) {
+                    console.warn('⚠️ 商場插入失敗（不影響主流程）:', e.message);
+                }
             }
         }
         
+        // 構建插入資料（只包含確認存在的欄位）
         var newStore = {
             name: name,
             region: selectedRegion,
@@ -6827,7 +6878,7 @@ async function submitIntel() {
             lng: gpsLng,
             mall: selectedType === 'mall' ? selectedMall : '',
             floor: selectedType === 'mall' ? selectedFloor : '',
-            submitted_by: STATE.user.user_id || null,
+            submitted_by: (STATE.user.user_id && isValidUUID(STATE.user.user_id)) ? STATE.user.user_id : null,
             submitted_by_device: STATE.user.device,
             verification_count: 0,
             is_verified: false,
@@ -6835,52 +6886,64 @@ async function submitIntel() {
             has_staff: null,
             has_e_coin: null,
             supplement_count: 0,
-            supplemented_by: null
+            supplemented_by: null,
+            device: STATE.user.device
         };
         
         // 先插入雲端，獲取自動生成的數字 ID
         var insertedId = null;
         if (CLOUD_ON) {
             try {
-                var insertData = { ...newStore };
-                delete insertData.id;
-                delete insertData._userVerified;
-                delete insertData._userSupplemented;
-                delete insertData._dist;
-                
-                // 處理 UUID 欄位
-                if (insertData.submitted_by !== undefined && insertData.submitted_by !== null && insertData.submitted_by !== '') {
-                    if (!isValidUUID(insertData.submitted_by)) {
-                        insertData.submitted_by = null;
-                    }
-                }
-                
                 var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
                     method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=representation' }),
-                    body: JSON.stringify([insertData])
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_KEY,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify([newStore])
                 });
                 
                 if (!insertResponse.ok) {
-                    throw new Error('HTTP ' + insertResponse.status);
+                    var errorText = await insertResponse.text();
+                    console.error('❌ 插入失敗，狀態碼:', insertResponse.status, '回應:', errorText);
+                    throw new Error('HTTP ' + insertResponse.status + ': ' + errorText);
                 }
                 
-                var insertedStores = await insertResponse.json();
-                if (insertedStores && insertedStores.length > 0) {
-                    insertedId = String(insertedStores[0].id);
-                    newStore.id = insertedId;
-                    console.log('✅ 店鋪已插入雲端，ID:', insertedId);
+                console.log('✅ 店鋪已插入雲端');
+                
+                // 查詢剛插入的店鋪 ID
+                var queryResponse = await fetch(
+                    SUPABASE_URL + "/rest/v1/claw_stores?select=id&name=eq." + encodeURIComponent(name) + "&submitted_by_device=eq." + encodeURIComponent(STATE.user.device) + "&order=created_at.desc&limit=1",
+                    {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY
+                        }
+                    }
+                );
+                
+                if (queryResponse.ok) {
+                    var queryData = await queryResponse.json();
+                    if (queryData && queryData.length > 0) {
+                        insertedId = String(queryData[0].id);
+                        newStore.id = insertedId;
+                        console.log('✅ 獲取插入的店鋪 ID:', insertedId);
+                    }
                 }
             } catch (e) {
-                console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
-                insertedId = 'local_' + Date.now() + '_' + uid();
-                newStore.id = insertedId;
+                console.error('❌ 雲端插入失敗:', e.message);
+                toast('⚠️ 雲端同步失敗，請檢查網路後重試', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+                return;
             }
         } else {
             insertedId = 'local_' + Date.now() + '_' + uid();
             newStore.id = insertedId;
         }
         
+        // 添加到本地 STORES
         STORES.push(newStore);
         
         if (selectedRegion) {
