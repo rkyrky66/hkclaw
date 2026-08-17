@@ -1363,7 +1363,7 @@ function viewStoreDetail(storeId) {
                     // ============================================================
                     // 使用 fetch 查詢 store_verifications（強制字串）
                     // ============================================================
-                    var verificationsUrl = SUPABASE_URL + "/rest/v1/store_verifications?select=verifier_device,verifier_name&store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending";
+                    var verificationsUrl = SUPABASE_URL + "/rest/v1/store_verifications?select=verifier_device&store_id=eq.%22" + encodeURIComponent(storeId) + "%22&status=eq.pending";
                     
                     fetch(verificationsUrl, {
                         headers: {
@@ -1388,9 +1388,8 @@ function viewStoreDetail(storeId) {
                                 verifierHtml += 
                                     '<div class="field-item">' +
                                         '<span class="field-name">' + label + '</span>' +
-                                        '<span class="field-value">' + (v.verifier_name || v.verifier_device) + '</span>' +
-                                        '<div class="field-actions">' +
-                                            '<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_name || v.verifier_device) + '\')">🗑️ 撤銷</button>' +
+                                        '<span class="field-value">' + (v.verifier_device || '未知裝置') + '</span>' +
+'<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_device || '未知裝置') + '\')">🗑️ 撤銷</button>' +
                                         '</div>' +
                                     '</div>';
                             }
@@ -1720,7 +1719,7 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
                 }
             });
         
-        toast('✅ 已撤銷 ' + (verifierName || verifierDevice) + ' 的認證 (目前 ' + newCount + '/2 人認證)');
+        toast('✅ 已撤銷 ' + (verifierDevice || '未知裝置') + ' 的認證 (目前 ' + newCount + '/2 人認證)');
         
         if (currentTab === 'verifications') {
             loadVerifications();
