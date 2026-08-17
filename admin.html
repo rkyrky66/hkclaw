@@ -1133,7 +1133,7 @@ function loadStores() {
                     .from('field_status')
                     .select('status')
                     .eq('table_name', 'claw_stores')
-                    .eq('record_id', s.id)
+                    .eq('record_id', parseInt(s.id))
                     .then(function(fsResult) {
                         var statuses = fsResult.data || [];
                         var hasSuspicious = false;
@@ -1206,17 +1206,17 @@ function viewStoreDetail(storeId) {
     sb
         .from('claw_stores')
         .select('*')
-        .eq('id', storeId)
+        .eq('id', parseInt(storeId))
         .single()
         .then(function(result) {
             if (result.error) throw result.error;
             var store = result.data;
             
             return sb
-                .from('field_status')
-                .select('*')
-                .eq('table_name', 'claw_stores')
-                .eq('record_id', storeId)
+    .from('field_status')
+    .select('*')
+    .eq('table_name', 'claw_stores')
+    .eq('record_id', parseInt(storeId))
                 .then(function(fsResult) {
                     var fieldStatuses = fsResult.data || [];
                     var fieldStatusMap = {};
@@ -1357,23 +1357,21 @@ function viewStoreDetail(storeId) {
 }
                     
                     // ============================================================
-                    // 判斷整體狀態
-                    // ============================================================
-                    var hasSuspicious = false;
-                    var hasPending = false;
-                    var hasMissing = false;
-                    var allFields = firstSubmitFields.concat(supplementFields);
-                    for (var i = 0; i < allFields.length; i++) {
-                        var f = allFields[i];
-                        var isFirst = i < firstSubmitFields.length;
-                        var status = getFieldStatus(f.key, f.value, isFirst);
-                        if (fieldStatusMap[f.key]) {
-                            status = fieldStatusMap[f.key];
-                        }
-                        if (status === 'suspicious') hasSuspicious = true;
-                        if (status === 'pending') hasPending = true;
-                        if (status === 'missing') hasMissing = true;
-                    }
+// 判斷整體狀態
+// ============================================================
+var hasSuspicious = false;
+var hasPending = false;
+var hasMissing = false;
+var allFields = firstSubmitFields.concat(supplementFields);
+for (var i = 0; i < allFields.length; i++) {
+    var f = allFields[i];
+    var isFirst = i < firstSubmitFields.length;
+    var status = getFieldStatus(f.key, f.value, isFirst);
+    // ✅ 移除重複覆蓋，getFieldStatus 已處理優先級
+    if (status === 'suspicious') hasSuspicious = true;
+    if (status === 'pending') hasPending = true;
+    if (status === 'missing') hasMissing = true;
+}
                     
                     var statusText = '⏳ 待查閱';
                     var statusClass = 'pending';
@@ -1393,10 +1391,10 @@ function viewStoreDetail(storeId) {
                     // ============================================================
                     var verifierHtml = '';
                     sb
-                        .from('store_verifications')
-                        .select('verifier_device, verifier_name')
-                        .eq('store_id', storeId)
-                        .eq('status', 'pending')
+    .from('store_verifications')
+    .select('verifier_device, verifier_name')
+    .eq('store_id', parseInt(storeId))
+    .eq('status', 'pending')
                         .then(function(verResult) {
                             var verifications = verResult.data || [];
                             if (verifications.length > 0) {
@@ -1465,10 +1463,12 @@ function viewStoreDetail(storeId) {
 }
 
 // ============================================================
-// 已查閱 (修復版 - 支持首發欄位標記存疑)
+// 已查閱 (修復版 v3 - 支持首發欄位 + 類型修正)
 // ============================================================
 function confirmReviewed(storeId) {
     if (!confirm('確定要將所有「待查閱」欄位標記為「已確認」嗎？\n(被勾選存疑的欄位將保持存疑，待填欄位保持待填)')) return;
+    
+    var numericStoreId = parseInt(storeId);
     
     // 收集所有渲染的欄位 checkbox
     var checkboxes = document.querySelectorAll('.field-checkbox');
@@ -1485,7 +1485,7 @@ function confirmReviewed(storeId) {
     sb.from('field_status')
         .select('*')
         .eq('table_name', 'claw_stores')
-        .eq('record_id', storeId)
+        .eq('record_id', numericStoreId)
         .then(function(result) {
             if (result.error) throw result.error;
             var existingFields = result.data || [];
@@ -1507,7 +1507,7 @@ function confirmReviewed(storeId) {
                 var newStatus = null;
                 
                 if (isFlagged) {
-                    // 勾選了 → 標記為存疑
+                    // 勾選了 → 標記為存疑（不管之前是什麼狀態）
                     newStatus = 'suspicious';
                     suspiciousCount++;
                 } else if (existing && existing.status === 'pending') {
@@ -1534,7 +1534,7 @@ function confirmReviewed(storeId) {
                 promises.push(
                     sb.from('field_status').upsert({
                         table_name: 'claw_stores',
-                        record_id: storeId,
+                        record_id: numericStoreId,
                         field_name: fieldKey,
                         status: newStatus,
                         flagged_by: (newStatus === 'suspicious') ? (currentUser ? currentUser.display_name : 'admin') : null,
@@ -1543,7 +1543,14 @@ function confirmReviewed(storeId) {
                         resolved_at: (newStatus === 'confirmed') ? new Date().toISOString() : null,
                         note: (newStatus === 'suspicious') ? '管理員標記存疑' : null,
                         updated_at: new Date().toISOString()
-                    }, { onConflict: 'table_name, record_id, field_name' })
+                    }, { onConflict: 'table_name,record_id,field_name' })
+                    .then(function(res) {
+                        if (res.error) {
+                            console.error('field_status upsert 失敗:', fieldKey, res.error);
+                            throw res.error;
+                        }
+                        return res;
+                    })
                 );
             }
             
@@ -1552,7 +1559,6 @@ function confirmReviewed(storeId) {
             if (suspiciousCount > 0) {
                 overallStatus = 'suspicious';
             } else {
-                // 檢查是否還有 pending 的欄位
                 var hasPending = false;
                 for (var i = 0; i < allFieldKeys.length; i++) {
                     var fieldKey = allFieldKeys[i];
@@ -1561,19 +1567,17 @@ function confirmReviewed(storeId) {
                         hasPending = true;
                         break;
                     }
-                    if (!existing) {
-                        // 不在 field_status 中，可能是首發欄位，檢查是否需要標記
-                        // 這裡先跳過，因為首發欄位未勾選時不需要處理
-                    }
                 }
                 if (hasPending) {
                     overallStatus = 'pending';
                 }
             }
             
-            // 更新 claw_stores 的 admin_overall_status
+            // 更新 claw_stores
             promises.push(
-                sb.from('claw_stores').update({ admin_overall_status: overallStatus }).eq('id', storeId)
+                sb.from('claw_stores')
+                    .update({ admin_overall_status: overallStatus })
+                    .eq('id', numericStoreId)
             );
             
             return Promise.all(promises);
@@ -1594,7 +1598,7 @@ function confirmReviewed(storeId) {
 }
 
 // ============================================================
-// 標記選中欄位為存疑 (修復版)
+// 標記選中欄位為存疑 (修復版 v3 - 類型修正)
 // ============================================================
 function applyFieldFlags(storeId) {
     var checkboxes = document.querySelectorAll('.field-checkbox:checked');
@@ -1610,13 +1614,15 @@ function applyFieldFlags(storeId) {
     
     if (!confirm('確定要將 ' + selectedFields.length + ' 個欄位標記為「存疑」嗎？')) return;
     
-    // 使用 Promise 串聯確保每個寫入都完成
+    var numericStoreId = parseInt(storeId);
     var writePromises = [];
+    
     for (var i = 0; i < selectedFields.length; i++) {
         var fieldKey = selectedFields[i];
+        
         var writePromise = sb.from('field_status').upsert({
             table_name: 'claw_stores',
-            record_id: storeId,
+            record_id: numericStoreId,
             field_name: fieldKey,
             status: 'suspicious',
             flagged_by: currentUser ? currentUser.display_name : 'admin',
@@ -1624,7 +1630,7 @@ function applyFieldFlags(storeId) {
             note: '管理員標記存疑',
             resolved: false,
             updated_at: new Date().toISOString()
-        }, { onConflict: 'table_name, record_id, field_name' })
+        }, { onConflict: 'table_name,record_id,field_name' })
         .then(function(res) {
             if (res.error) {
                 console.error('寫入 field_status 失敗:', fieldKey, res.error);
@@ -1633,15 +1639,15 @@ function applyFieldFlags(storeId) {
             console.log('✅ field_status 寫入成功:', fieldKey, '→ suspicious');
             return res;
         });
+        
         writePromises.push(writePromise);
     }
     
     Promise.all(writePromises)
         .then(function() {
-            // 更新 claw_stores
             return sb.from('claw_stores')
                 .update({ admin_overall_status: 'suspicious' })
-                .eq('id', storeId);
+                .eq('id', numericStoreId);
         })
         .then(function() {
             toast('⚠️ 已將 ' + selectedFields.length + ' 個欄位標記為存疑');
@@ -1668,7 +1674,7 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
         var { data: store } = await sb
             .from('claw_stores')
             .select('verification_count, status, is_verified')
-            .eq('id', storeId)
+            .eq('id', parseInt(storeId))
             .single();
         
         if (!store) { toast('找不到該店鋪', 'error'); return; }
@@ -1685,7 +1691,7 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
                 revoked_at: new Date().toISOString(),
                 revoke_reason: reason || '管理員撤銷'
             })
-            .eq('store_id', storeId)
+            .eq('store_id', parseInt(storeId))
             .eq('verifier_device', verifierDevice)
             .eq('status', 'pending');
         
@@ -1696,12 +1702,12 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
                 status: newStatus,
                 is_verified: newIsVerified
             })
-            .eq('id', storeId);
+            .eq('id', parseInt(storeId));
         
         var { data: review } = await sb
             .from('verification_reviews')
             .select('*')
-            .eq('store_id', storeId)
+            .eq('store_id', parseInt(storeId))
             .eq('admin_status', 'pending')
             .maybeSingle();
         
@@ -1729,7 +1735,7 @@ async function revokeVerification(storeId, verifierDevice, verifierName) {
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'revoke_verification',
                 target_type: 'verification',
                 target_id: verifierDevice,
@@ -1770,7 +1776,7 @@ async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
             .from('field_status')
             .select('field_name')
             .eq('table_name', 'claw_stores')
-            .eq('record_id', storeId)
+            .eq('record_id', parseInt(storeId))
             .eq('submitted_by', supplementerDevice)
             .eq('submitted_type', 'supplement');
         
@@ -1782,7 +1788,7 @@ async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
         var { data: store } = await sb
             .from('claw_stores')
             .select('*')
-            .eq('id', storeId)
+            .eq('id', parseInt(storeId))
             .single();
         
         var updates = {};
@@ -1803,14 +1809,14 @@ async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
         await sb
             .from('claw_stores')
             .update(updates)
-            .eq('id', storeId);
+            .eq('id', parseInt(storeId));
         
         for (var i = 0; i < fields.length; i++) {
             await sb
                 .from('field_status')
                 .upsert({
                     table_name: 'claw_stores',
-                    record_id: storeId,
+                    record_id: parseInt(storeId),
                     field_name: fields[i].field_name,
                     status: 'missing',
                     submitted_by: null,
@@ -1822,7 +1828,7 @@ async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'revoke_supplement',
                 target_type: 'supplement',
                 target_id: supplementerDevice,
@@ -1865,12 +1871,12 @@ async function hideStore(storeId) {
                 locked_at: new Date().toISOString(),
                 locked_by: currentUser.display_name
             })
-            .eq('id', storeId);
+            .eq('id', parseInt(storeId));
         
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'hide_store',
                 target_type: 'store',
                 target_id: storeId,
@@ -1906,12 +1912,12 @@ async function markStoreSuspicious(storeId) {
                 locked_at: new Date().toISOString(),
                 locked_by: currentUser.display_name
             })
-            .eq('id', storeId);
+            .eq('id', parseInt(storeId));
         
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'mark_suspicious',
                 target_type: 'store',
                 target_id: storeId,
@@ -2056,7 +2062,7 @@ function confirmVerification(reviewId) {
             if (flagV1 && flagV1.checked) {
                 sb.from('store_verifications')
                     .update({ status: 'suspicious' })
-                    .eq('store_id', storeId)
+                    .eq('store_id', parseInt(storeId))
                     .order('created_at', { ascending: true })
                     .limit(1)
                     .then(function() {});
@@ -2064,7 +2070,7 @@ function confirmVerification(reviewId) {
             if (flagV2 && flagV2.checked) {
                 sb.from('store_verifications')
                     .update({ status: 'suspicious' })
-                    .eq('store_id', storeId)
+                    .eq('store_id', parseInt(storeId))
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .then(function() {});
@@ -2091,7 +2097,7 @@ function loadFlagged() {
         sb.from('field_status')
     .select('*')
     .eq('status', 'suspicious')
-    .neq('resolved', true)  // 使用 neq 確保 null 和 false 都能查到
+    .or('resolved.eq.false,resolved.is.null')
     .order('flagged_at', { ascending: false, nullsFirst: false }),
         sb.from('bounty_tasks')
             .select('field_status_id, status, admin_decision')
@@ -2111,11 +2117,12 @@ function loadFlagged() {
         }
         
         var storeIds = [];
-        for (var i = 0; i < data.length; i++) {
-            if (storeIds.indexOf(data[i].record_id) === -1) {
-                storeIds.push(data[i].record_id);
-            }
-        }
+for (var i = 0; i < data.length; i++) {
+    var sid = parseInt(data[i].record_id);
+    if (storeIds.indexOf(sid) === -1) {
+        storeIds.push(sid);
+    }
+}
         
         if (storeIds.length === 0) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有存疑項目</p></div>';
@@ -2225,7 +2232,7 @@ async function publishBounty(fieldStatusId, storeId, fieldName) {
             .from('bounty_tasks')
             .insert({
                 field_status_id: fieldStatusId,
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 field_name: fieldName,
                 description: description || '請協助驗證 ' + fieldName + ' 欄位資料',
                 reward_points: points,
@@ -2278,7 +2285,7 @@ async function batchPublishBounty() {
                     .from('bounty_tasks')
                     .insert({
                         field_status_id: fieldStatusId,
-                        store_id: fieldStatus.record_id,
+                        store_id: parseInt(fieldStatus.record_id),  // ✅ 確保是數字
                         field_name: fieldStatus.field_name,
                         description: '請協助驗證 ' + fieldStatus.field_name + ' 欄位資料',
                         reward_points: points,
@@ -2509,11 +2516,14 @@ function loadAdminActions() {
             
             // 獲取店鋪名稱
             var storeIds = [];
-            for (var i = 0; i < data.length; i++) {
-                if (data[i].store_id && storeIds.indexOf(data[i].store_id) === -1) {
-                    storeIds.push(data[i].store_id);
-                }
-            }
+for (var i = 0; i < data.length; i++) {
+    if (data[i].store_id) {
+        var sid = parseInt(data[i].store_id);
+        if (storeIds.indexOf(sid) === -1) {
+            storeIds.push(sid);  // ✅ 轉為數字
+        }
+    }
+}
             
             var storeNames = {};
             if (storeIds.length > 0) {
@@ -2548,7 +2558,7 @@ async function approveBounty(taskId, storeId, fieldName, newValue, newPhoto, rew
             .from('field_status')
             .select('id, record_id, field_name')
             .eq('table_name', 'claw_stores')
-            .eq('record_id', storeId)
+            .eq('record_id', parseInt(storeId))
             .eq('field_name', fieldName)
             .single();
         
@@ -2612,7 +2622,7 @@ async function approveBounty(taskId, storeId, fieldName, newValue, newPhoto, rew
             await sb
                 .from('claw_stores')
                 .update(updateData)
-                .eq('id', storeId);
+                .eq('id', parseInt(storeId));
         }
         
         // 6. 記錄到 field_history
@@ -2654,7 +2664,7 @@ async function approveBounty(taskId, storeId, fieldName, newValue, newPhoto, rew
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'approve_bounty',
                 target_type: 'bounty_task',
                 target_id: taskId,
@@ -2703,7 +2713,7 @@ async function rejectBounty(taskId, storeId) {
             .from('field_status')
             .select('id')
             .eq('table_name', 'claw_stores')
-            .eq('record_id', storeId)
+            .eq('record_id', parseInt(storeId))
             .eq('field_name', bountyTask.field_name)
             .maybeSingle();
         
@@ -2743,7 +2753,7 @@ async function rejectBounty(taskId, storeId) {
         await sb
             .from('admin_actions')
             .insert({
-                store_id: storeId,
+                store_id: parseInt(storeId),
                 action_type: 'reject_bounty',
                 target_type: 'bounty_task',
                 target_id: taskId,
@@ -2769,7 +2779,7 @@ async function recalcAdminStatus(storeId) {
             .from('field_status')
             .select('status')
             .eq('table_name', 'claw_stores')
-            .eq('record_id', storeId);
+            .eq('record_id', parseInt(storeId));
         
         if (!fields || fields.length === 0) return;
         
@@ -2797,7 +2807,7 @@ async function recalcAdminStatus(storeId) {
         await sb
             .from('claw_stores')
             .update({ admin_overall_status: newStatus })
-            .eq('id', storeId);
+            .eq('id', parseInt(storeId));
         
     } catch (e) {
         console.warn('重新計算狀態失敗:', e.message);
