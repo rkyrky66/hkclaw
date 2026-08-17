@@ -1379,21 +1379,22 @@ function viewStoreDetail(storeId) {
                         return res.json();
                     })
                     .then(function(verifications) {
-                        var verifierHtml = '';
-                        if (verifications && verifications.length > 0) {
-                            verifierHtml = '<div class="section-header">📌 認證記錄</div>';
-                            for (var i = 0; i < verifications.length; i++) {
-                                var v = verifications[i];
-                                var label = i === 0 ? '認證1' : '認證2';
-                                verifierHtml += 
-                                    '<div class="field-item">' +
-                                        '<span class="field-name">' + label + '</span>' +
-                                        '<span class="field-value">' + (v.verifier_device || '未知裝置') + '</span>' +
-'<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_device || '未知裝置') + '\')">🗑️ 撤銷</button>' +
-                                        '</div>' +
-                                    '</div>';
-                            }
-                        }
+    var verifierHtml = '';
+    if (verifications && verifications.length > 0) {
+        verifierHtml = '<div class="section-header">📌 認證記錄</div>';
+        for (var i = 0; i < verifications.length; i++) {
+            var v = verifications[i];
+            var label = i === 0 ? '認證1' : '認證2';
+            verifierHtml += 
+                '<div class="field-item">' +
+                    '<span class="field-name">' + label + '</span>' +
+                    '<span class="field-value">' + (v.verifier_device || '未知裝置') + '</span>' +
+                    '<div class="field-actions">' +
+                        '<button class="btn-sm danger" onclick="revokeVerification(\'' + storeId + '\', \'' + v.verifier_device + '\', \'' + (v.verifier_device || '未知裝置') + '\')">🗑️ 撤銷</button>' +
+                    '</div>' +
+                '</div>';
+        }
+    }
                         
                         var modalHtml = 
                             '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
@@ -2894,7 +2895,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 });
-injectManifest();
 
 // ============================================================
 // 🔧 一鍵複製 Console 錯誤訊息（調試用）
@@ -3004,7 +3004,6 @@ injectManifest();
     }
 })();
 
-</script>
 </script>
 
 </body>
