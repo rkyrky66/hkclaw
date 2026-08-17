@@ -2894,6 +2894,117 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 });
+injectManifest();
+
+// ============================================================
+// 🔧 一鍵複製 Console 錯誤訊息（調試用）
+// ============================================================
+(function() {
+    var originalConsoleError = console.error;
+    var originalConsoleWarn = console.warn;
+    var originalConsoleLog = console.log;
+    
+    window._debugLogs = [];
+    var MAX_LOGS = 200;
+    
+    function addLog(type, args) {
+        try {
+            var message = args.map(function(arg) {
+                if (typeof arg === 'string') return arg;
+                if (arg instanceof Error) return arg.message + '\n' + arg.stack;
+                try {
+                    return JSON.stringify(arg, null, 2);
+                } catch(e) {
+                    return String(arg);
+                }
+            }).join(' ');
+            
+            window._debugLogs.push({
+                time: new Date().toISOString(),
+                type: type,
+                message: message
+            });
+            
+            if (window._debugLogs.length > MAX_LOGS) {
+                window._debugLogs.shift();
+            }
+        } catch(e) {}
+    }
+    
+    console.error = function() {
+        addLog('ERROR', Array.from(arguments));
+        originalConsoleError.apply(console, arguments);
+    };
+    
+    console.warn = function() {
+        addLog('WARN', Array.from(arguments));
+        originalConsoleWarn.apply(console, arguments);
+    };
+    
+    console.log = function() {
+        addLog('LOG', Array.from(arguments));
+        originalConsoleLog.apply(console, arguments);
+    };
+    
+    window.addEventListener('error', function(e) {
+        addLog('UNCAUGHT', [e.message + ' at ' + e.filename + ':' + e.lineno + ':' + e.colno]);
+    });
+    
+    window.addEventListener('unhandledrejection', function(e) {
+        addLog('PROMISE', [e.reason]);
+    });
+    
+    var btn = document.createElement('button');
+    btn.textContent = '📋 複製錯誤';
+    btn.style.cssText = 'position:fixed;bottom:100px;right:8px;z-index:9999;background:#D4AF37;color:#000;border:none;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0.85;';
+    btn.onclick = function() {
+        var logs = window._debugLogs;
+        if (logs.length === 0) {
+            toast('沒有可複製的錯誤訊息', 'pink');
+            return;
+        }
+        
+        var importantLogs = logs.filter(function(l) { return l.type === 'ERROR' || l.type === 'WARN' || l.type === 'UNCAUGHT' || l.type === 'PROMISE'; });
+        
+        if (importantLogs.length === 0) {
+            toast('沒有錯誤訊息（只有一般日誌）', 'gold');
+            return;
+        }
+        
+        var text = importantLogs.map(function(l) {
+            return '[' + l.time + '] [' + l.type + ']\n' + l.message;
+        }).join('\n\n---\n\n');
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                toast('✅ 已複製 ' + importantLogs.length + ' 條錯誤訊息', 'green');
+            }).catch(function() {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    };
+    document.body.appendChild(btn);
+    
+    function fallbackCopy(text) {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            toast('✅ 已複製錯誤訊息', 'green');
+        } catch(e) {
+            toast('❌ 複製失敗，請手動截圖', 'pink');
+        }
+        textarea.remove();
+    }
+})();
+
+</script>
 </script>
 
 </body>
