@@ -1136,8 +1136,148 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem("claw_state", JSON.stringify(STATE));
+  try {
+    // 清理過期資料
+    cleanupExpiredData();
+    
+    var json = JSON.stringify(STATE);
+    localStorage.setItem("claw_state", json);
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      console.warn('⚠️ localStorage 超出配額，嘗試緊急清理...');
+      emergencyCleanup();
+      try {
+        var json2 = JSON.stringify(STATE);
+        localStorage.setItem("claw_state", json2);
+        console.log('✅ 清理後儲存成功');
+      } catch(e2) {
+        console.error('❌ 清理後仍無法儲存:', e2.message);
+        // 最終手段：只保留最基本的資料
+        try {
+          var minimalState = {
+            user: STATE.user,
+            points: STATE.points,
+            total_xp: STATE.total_xp || 0,
+            favStores: STATE.favStores || [],
+            favMachines: STATE.favMachines || [],
+            achievements: STATE.achievements || { unlocked: [], stats: {} },
+            weeklyCheckin: STATE.weeklyCheckin || {},
+            taskProgress: STATE.taskProgress || {},
+            daily: STATE.daily || {}
+          };
+          localStorage.setItem("claw_state", JSON.stringify(minimalState));
+          STATE = minimalState;
+          console.log('✅ 極端清理後儲存成功');
+        } catch(e3) {
+          console.error('❌ 完全無法儲存:', e3.message);
+        }
+      }
+    } else {
+      console.error('save 失敗:', e);
+    }
+  }
   renderPoints();
+}
+
+// 清理過期資料
+function cleanupExpiredData() {
+  var now = Date.now();
+  
+  // 清理過期貼文（只保留 7 天內的和自己的）
+  if (STATE.livePosts && Array.isArray(STATE.livePosts)) {
+    STATE.livePosts = STATE.livePosts.filter(function(p) {
+      return p.expire > now || (p.author_device === STATE.user.device);
+    });
+    // 最多保留 30 篇
+    if (STATE.livePosts.length > 30) {
+      STATE.livePosts = STATE.livePosts.slice(0, 30);
+    }
+    // 移除 base64 照片，只保留 URL
+    STATE.livePosts.forEach(function(p) {
+      if (p.photo && p.photo.startsWith('data:')) {
+        p.photo = '';
+      }
+    });
+  }
+  
+  // 清理待同步貼文（最多保留 5 篇，移除 base64 照片）
+  if (STATE._pendingPosts && STATE._pendingPosts.length > 5) {
+    STATE._pendingPosts = STATE._pendingPosts.slice(0, 5);
+  }
+  if (STATE._pendingPosts) {
+    STATE._pendingPosts.forEach(function(p) {
+      if (p.photo && p.photo.startsWith('data:')) {
+        p.photo = '';
+      }
+    });
+  }
+  
+  // 清理離線檢舉（最多保留 10 筆）
+  if (STATE._offlineReports && STATE._offlineReports.length > 10) {
+    STATE._offlineReports = STATE._offlineReports.slice(0, 10);
+  }
+  
+  // 清理舊通知（最多保留 20 條）
+  if (STATE.notifications && STATE.notifications.length > 20) {
+    STATE.notifications = STATE.notifications.slice(0, 20);
+  }
+  
+  // 清理舊的簽到記錄（只保留最近 4 週）
+  if (STATE.weeklyCheckin) {
+    var keys = Object.keys(STATE.weeklyCheckin);
+    if (keys.length > 4) {
+      keys.sort();
+      for (var i = 0; i < keys.length - 4; i++) {
+        delete STATE.weeklyCheckin[keys[i]];
+      }
+    }
+  }
+  
+  // 清理舊的任務進度（只保留最近 14 天）
+  if (STATE.taskProgress) {
+    var taskKeys = Object.keys(STATE.taskProgress);
+    if (taskKeys.length > 14) {
+      taskKeys.sort();
+      for (var i = 0; i < taskKeys.length - 14; i++) {
+        delete STATE.taskProgress[taskKeys[i]];
+      }
+    }
+  }
+  
+  // 清理舊的每日記錄（只保留最近 7 天）
+  if (STATE.daily) {
+    var dailyKeys = Object.keys(STATE.daily);
+    if (dailyKeys.length > 7) {
+      dailyKeys.sort();
+      for (var i = 0; i < dailyKeys.length - 7; i++) {
+        delete STATE.daily[dailyKeys[i]];
+      }
+    }
+  }
+}
+
+// 緊急清理
+function emergencyCleanup() {
+  // 完全移除貼文和待同步資料
+  STATE.livePosts = [];
+  STATE.myPosts = [];
+  STATE._pendingPosts = [];
+  STATE._offlineReports = [];
+  STATE.notifications = [];
+  
+  // 保留用戶自己的貼文（只保留最近 5 篇的文字內容）
+  if (STATE.myPosts && STATE.myPosts.length > 0) {
+    STATE.myPosts = STATE.myPosts.slice(0, 5).map(function(p) {
+      return {
+        id: p.id,
+        content: p.content || '',
+        ts: p.ts,
+        expire: p.expire,
+        track: p.track,
+        is_linked: p.is_linked
+      };
+    });
+  }
 }
 
 function renderPoints() {
@@ -1545,8 +1685,14 @@ async function loadLivePosts() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const posts = await response.json();
     
-    STATE.livePosts = posts;
-    save();
+    // 移除任何 base64 照片，只保留 URL
+STATE.livePosts = posts.map(function(p) {
+    if (p.photo && p.photo.startsWith('data:')) {
+        p.photo = '';
+    }
+    return p;
+});
+save();
     return posts;
   } catch (e) {
     console.warn('⚠️ 載入雲端貼文失敗，使用本地快取:', e.message);
@@ -1583,9 +1729,29 @@ async function syncLivePost(post) {
     console.log('✅ 貼文已同步到雲端:', post.id);
     return true;
   } catch (e) {
+    if (e.message && e.message.includes('401')) {
+    console.log('ℹ️ 未登入或 token 過期，貼文將在登入後同步');
+} else {
     console.warn('⚠️ 貼文雲端同步失敗:', e.message);
+}
     if (!STATE._pendingPosts) STATE._pendingPosts = [];
-    STATE._pendingPosts.push(post);
+// 只儲存文字內容，照片不儲存 base64
+var pendingPost = {
+    id: post.id,
+    track: post.track,
+    store_id: post.store_id,
+    store_name: post.store_name || '',
+    content: post.content || '',
+    photo: (post.photo && !post.photo.startsWith('data:')) ? post.photo : '',
+    author: post.author || STATE.user.name,
+    author_device: post.author_device || STATE.user.device,
+    ts: post.ts,
+    expire: post.expire,
+    likes: post.likes || [],
+    is_linked: post.is_linked || false,
+    link_days: post.link_days || 0
+};
+STATE._pendingPosts.push(pendingPost);
     save();
     return false;
   }
@@ -6400,7 +6566,6 @@ async function submitIntel() {
     region: selectedRegion,
     addr: addr,
     status: 'pending',
-    verified: 'pending',
     size: '中',
     token: false,
     hour24: false,
@@ -6419,19 +6584,14 @@ async function submitIntel() {
     has_staff: null,
     has_e_coin: null,
     supplement_count: 0,
-    supplemented_by: null,
-    _userVerified: false,
-    _userSupplemented: false
-  };
+    supplemented_by: null
+};
   
   // 先插入雲端，獲取自動生成的數字 ID
   var insertedId = null;
   if (CLOUD_ON) {
     try {
-      var insertData = { ...newStore };
-      delete insertData._userVerified;
-      delete insertData._userSupplemented;
-      
+           
       var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
         method: 'POST',
         headers: getSupabaseHeaders({ 'Prefer': 'return=representation' }),
@@ -6449,7 +6609,11 @@ async function submitIntel() {
         console.log('✅ 店鋪已插入雲端，ID:', insertedId);
       }
     } catch (e) {
-      console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
+      if (e.message && e.message.includes('400')) {
+    console.warn('⚠️ 雲端插入失敗(400)，可能是欄位不匹配:', e.message);
+} else {
+    console.warn('⚠️ 雲端插入失敗，使用本地臨時 ID:', e.message);
+}
       insertedId = 'local_' + Date.now() + '_' + uid();
       newStore.id = insertedId;
     }
