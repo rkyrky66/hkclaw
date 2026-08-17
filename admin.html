@@ -1052,7 +1052,7 @@ function loadDashboard() {
     
     Promise.all([
         sb.from('claw_stores').select('*', { count: 'exact', head: true })
-    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.eq.suspicious,admin_overall_status.is.null'),
+    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.is.null'),
         sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
         sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed'),
         sb.from('verification_reviews').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending')
@@ -1122,7 +1122,7 @@ function loadStores() {
     
     sb.from('claw_stores')
     .select('*')
-    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.eq.suspicious,admin_overall_status.is.null')
+    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.is.null')
     .order('created_at', { ascending: false })
         .then(function(result) {
             if (result.error) throw result.error;
@@ -1463,10 +1463,10 @@ for (var i = 0; i < allFields.length; i++) {
 }
 
 // ============================================================
-// 已查閱 (修復版 v3 - 支持首發欄位 + 類型修正)
+// 已查閱 (修復版 v5 - 已查閱後不再出現在新店審核)
 // ============================================================
 function confirmReviewed(storeId) {
-    if (!confirm('確定要將所有「待查閱」欄位標記為「已確認」嗎？\n(被勾選存疑的欄位將保持存疑，待填欄位保持待填)')) return;
+    if (!confirm('確定要將所有「待查閱」欄位標記為「已確認」嗎？\n(被勾選存疑的欄位將保持存疑，待填欄位保持待填)\n\n查閱後此店鋪將從「新店審核」中移除。')) return;
     
     var numericStoreId = parseInt(storeId);
     
@@ -1554,39 +1554,37 @@ function confirmReviewed(storeId) {
                 );
             }
             
-            // 計算整體狀態
-            var overallStatus = 'confirmed';
-            if (suspiciousCount > 0) {
-                overallStatus = 'suspicious';
-            } else {
-                var hasPending = false;
-                for (var i = 0; i < allFieldKeys.length; i++) {
-                    var fieldKey = allFieldKeys[i];
-                    var existing = existingMap[fieldKey];
-                    if (existing && existing.status === 'pending') {
-                        hasPending = true;
-                        break;
-                    }
-                }
-                if (hasPending) {
-                    overallStatus = 'pending';
-                }
-            }
+            // ✅ 已查閱後，無論是否有存疑，都設為 reviewed
+            // 存疑欄位會出現在「存疑清單」中
+            // 但店鋪本身不再出現在「新店審核」
+            var overallStatus = 'reviewed';
             
             // 更新 claw_stores
             promises.push(
                 sb.from('claw_stores')
-                    .update({ admin_overall_status: overallStatus })
+                    .update({ 
+                        admin_overall_status: overallStatus,
+                        admin_reviewed_at: new Date().toISOString(),
+                        admin_reviewed_by: currentUser ? currentUser.display_name : 'admin'
+                    })
                     .eq('id', numericStoreId)
             );
             
-            return Promise.all(promises);
+            // ✅ 返回 Promise.all 和計數結果，解決變數作用域問題
+            return Promise.all(promises).then(function() {
+                return {
+                    suspiciousCount: suspiciousCount,
+                    confirmedCount: confirmedCount,
+                    missingCount: missingCount
+                };
+            });
         })
-        .then(function() {
+        .then(function(counts) {
+            // ✅ 在外層 .then() 使用返回的計數
             var summary = [];
-            if (confirmedCount > 0) summary.push(confirmedCount + ' 個已確認');
-            if (suspiciousCount > 0) summary.push(suspiciousCount + ' 個存疑');
-            if (missingCount > 0) summary.push(missingCount + ' 個待填');
+            if (counts.confirmedCount > 0) summary.push(counts.confirmedCount + ' 個已確認');
+            if (counts.suspiciousCount > 0) summary.push(counts.suspiciousCount + ' 個存疑');
+            if (counts.missingCount > 0) summary.push(counts.missingCount + ' 個待填');
             toast('✅ 已查閱完成：' + (summary.length > 0 ? summary.join('、') : '無變更'));
             closeModal();
             loadStores();
