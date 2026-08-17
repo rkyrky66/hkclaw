@@ -1052,7 +1052,7 @@ function loadDashboard() {
     
     Promise.all([
         sb.from('claw_stores').select('*', { count: 'exact', head: true })
-    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.is.null'),
+    .or('admin_overall_status.eq.pending,admin_overall_status.is.null'),
         sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
         sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed'),
         sb.from('verification_reviews').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending')
@@ -1122,7 +1122,7 @@ function loadStores() {
     
     sb.from('claw_stores')
     .select('*')
-    .or('admin_overall_status.eq.pending,admin_overall_status.eq.partial,admin_overall_status.is.null')
+    .or('admin_overall_status.eq.pending,admin_overall_status.is.null')
     .order('created_at', { ascending: false })
         .then(function(result) {
             if (result.error) throw result.error;

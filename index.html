@@ -4255,7 +4255,7 @@ function selectCoinUI(value) {
 }
 
 // ============================================================
-// 補充資料 - 記錄補充者
+// 補充資料 - 記錄補充者 (修復版 - 補充後重新出現在新店審核)
 // ============================================================
 async function submitAllSupplement(storeId) {
     var s = STORES.find(function(x) { return x.id === storeId; });
@@ -4305,7 +4305,8 @@ async function submitAllSupplement(storeId) {
     supplementFields.push('size');
     supplementFields.push('has_staff');
     supplementFields.push('has_e_coin');
-        // 記錄 field_status（用於審核補充資料）
+    
+    // 記錄 field_status（用於後台審核）
     if (CLOUD_ON && supabaseClientInstance && typeof supabaseClientInstance.from === 'function') {
         try {
             var numericStoreIdForSupplement = parseInt(storeId);
@@ -4318,7 +4319,7 @@ async function submitAllSupplement(storeId) {
                         .upsert(
                             {
                                 table_name: 'claw_stores',
-                                record_id: numericStoreIdForSupplement,
+                                record_id: String(numericStoreIdForSupplement),
                                 field_name: fieldName,
                                 status: 'pending',
                                 submitted_by: STATE.user.device,
@@ -4345,7 +4346,7 @@ async function submitAllSupplement(storeId) {
             updates.has_e_coin = coin;
             updates.supplemented_by = STATE.user.device;
             
-            // 使用 PATCH 更新現有店鋪（id 是 bigint）
+            // 使用 PATCH 更新現有店鋪
             await fetch(
                 SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
                 {
@@ -4355,6 +4356,19 @@ async function submitAllSupplement(storeId) {
                 }
             );
             console.log('✅ 店鋪補充資料已同步到雲端');
+            
+            // ============================================================
+            // ✅ 新增：將店鋪重新設為待審核，出現在後台新店審核
+            // ============================================================
+            await fetch(
+                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
+                {
+                    method: 'PATCH',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify({ admin_overall_status: 'pending' })
+                }
+            );
+            console.log('✅ 店鋪已重新設為待審核，將出現在後台新店審核');
             
             if (currentGps) {
                 await fetch(
@@ -4389,10 +4403,10 @@ async function submitAllSupplement(storeId) {
     // 記錄任務進度
     await recordTaskCompletion('supplement');
     
-        // 記錄貢獻
+    // 記錄貢獻
     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
         try {
-            var numericStoreIdForVerifyContribution = parseInt(storeId);
+            var numericStoreIdForContribution = parseInt(storeId);
             await fetch(
                 SUPABASE_URL + "/rest/v1/user_contributions",
                 {
@@ -4401,8 +4415,8 @@ async function submitAllSupplement(storeId) {
                     body: JSON.stringify([{
                         user_id: STATE.user.user_id,
                         device_id: STATE.user.device,
-                        store_id: numericStoreIdForVerifyContribution,
-                        contribution_type: 'verify',
+                        store_id: numericStoreIdForContribution,
+                        contribution_type: 'supplement',
                         contribution_value: 1,
                         created_at: new Date().toISOString()
                     }])
