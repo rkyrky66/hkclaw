@@ -4043,7 +4043,7 @@ function openStoreFromMap(id) {
   openStore(id);
 }
 // ============================================================
-// 認證表單 (GPS 每2秒更新版 + 移除備註欄)
+// 店鋪實證表單 (雙向驗證版)
 // ============================================================
 function openVerifyForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
@@ -4052,13 +4052,18 @@ function openVerifyForm(storeId) {
         toast('此店鋪已認證', 'gold'); 
         return; 
     }
-  if (s.submitted_by_device && s.submitted_by_device === STATE.user.device) { toast('你不能認證自己提交的店鋪', 'pink'); return; }
+  if (s.submitted_by_device && s.submitted_by_device === STATE.user.device) { toast('你不能實證自己提交的店鋪', 'pink'); return; }
   var existingVerification = STATE.verifications && STATE.verifications[s.id];
-  if (existingVerification) { toast('你已經認證過這間店鋪了', 'gold'); return; }
+  if (existingVerification) { toast('你已經實證過這間店鋪了', 'gold'); return; }
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🔍 認證店鋪</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">認證此店鋪可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n        <p class="text-xs text-white/30">提交者將獲得額外 <span class="text-neongreen font-bold">+35 積分</span></p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="vf-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 店鋪照片 <span class="text-neonpink">（必填）</span></label>\n        <p class="text-[11px] text-white/50 mt-1 mb-2">如果店鋪真實存在，請在現場拍下店鋪照片：</p>\n        <div id="vf-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  _verifyMode = 'confirm';
+  _verifyStoreId = storeId;
+  _verifyReportCategory = '';
   
-  // ✅ 啟動 GPS 每 2 秒更新
+  var photoHtml = s.photo ? '<img src="' + s.photo + '" class="w-full h-40 object-cover rounded-lg" alt="首發者照片" />' : '<div class="flex h-40 w-full items-center justify-center rounded-lg bg-zinc-800 text-4xl">🏪</div>';
+  
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🔍 店鋪實證</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">📸 首發者拍攝的店鋪照片：</p>\n        <div class="mt-1">' + photoHtml + '</div>\n        <p class="text-xs text-white/30 mt-2">你的任務：到現場確認這間店鋪的資料是否正確</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">選擇實證結果 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="switchVerifyMode(\'confirm\')" id="vm-confirm-btn" class="flex-1 rounded-xl border border-neongreen/50 bg-neongreen/10 py-3 text-sm font-black text-neongreen transition-all">✅ 店鋪存在</button>\n          <button onclick="switchVerifyMode(\'report\')" id="vm-report-btn" class="flex-1 rounded-xl border border-white/20 py-3 text-sm font-black text-white/45 transition-all">❌ 店鋪有問題</button>\n        </div>\n      </div>\n      <div id="verify-confirm-section">\n        <div>\n          <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n          <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n            <span id="vf-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n          </div>\n        </div>\n        <div>\n          <label class="text-xs font-bold text-gold">📷 店鋪照片 <span class="text-neonpink">（必填）</span></label>\n          <p class="text-[11px] text-white/50 mt-1 mb-2">如果店鋪真實存在，請在現場拍下店鋪照片：</p>\n          <div id="vf-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n            <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n            <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n          </div>\n        </div>\n      </div>\n      <div id="verify-report-section" class="hidden">\n        <div>\n          <label class="text-xs font-bold text-gold">問題類型 <span class="text-neonpink">（必填）</span></label>\n          <select id="vr-category" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gold" onchange="onVerifyReportCategoryChange(this.value)">\n            <option value="">請選擇問題類型</option>\n            <option value="store_not_exist">🏪 店鋪不存在</option>\n            <option value="location_wrong">📍 位置錯誤</option>\n            <option value="photo_fake">📸 照片錯誤</option>\n            <option value="name_wrong">📝 店名錯誤</option>\n            <option value="other">💬 其他</option>\n          </select>\n        </div>\n        <div id="vr-report-detail" class="hidden mt-3"></div>\n        <div id="vr-warning" class="hidden mt-3 rounded-xl border border-neonpink/40 bg-neonpink/10 p-3">\n          <p class="text-xs text-neonpink font-bold">⚠️ 請注意</p>\n          <p class="text-[11px] text-white/60 mt-1">惡意檢舉會導致帳號封鎖，請確保你已到達現場並確認店鋪狀況後再提交。</p>\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  
   startVerifyGpsTracking();
   
   setTimeout(function() {
@@ -4072,22 +4077,201 @@ function openVerifyForm(storeId) {
   }, 500);
   
   var checkInterval = setInterval(function() {
-    var photoReady = window._camPreview && window._camPreview.vf;
-    var gpsReady = _finalGpsLocked;
-    var btn = document.getElementById('vf-submit-btn');
-    if (btn) {
-      if (photoReady && gpsReady) {
-        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-        btn.disabled = false;
-        btn.innerHTML = '✅ 提交認證（+15 積分）';
-      } else {
-        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-        btn.disabled = true;
-        btn.innerHTML = photoReady ? (gpsReady ? '✅ 可以提交' : '📍 等待 GPS 定位...') : '📷 請先拍攝店鋪照片';
-      }
-    }
+    updateVerifySubmitButton();
   }, 500);
   setTimeout(function() { return clearInterval(checkInterval); }, 60000);
+}
+
+// ============================================================
+// 店鋪實證模式切換
+// ============================================================
+var _verifyMode = 'confirm';
+var _verifyStoreId = null;
+var _verifyReportCategory = '';
+
+function switchVerifyMode(mode) {
+    _verifyMode = mode;
+    
+    var confirmBtn = document.getElementById('vm-confirm-btn');
+    var reportBtn = document.getElementById('vm-report-btn');
+    var confirmSection = document.getElementById('verify-confirm-section');
+    var reportSection = document.getElementById('verify-report-section');
+    
+    if (mode === 'confirm') {
+        if (confirmBtn) {
+            confirmBtn.className = 'flex-1 rounded-xl border border-neongreen/50 bg-neongreen/10 py-3 text-sm font-black text-neongreen transition-all';
+        }
+        if (reportBtn) {
+            reportBtn.className = 'flex-1 rounded-xl border border-white/20 py-3 text-sm font-black text-white/45 transition-all';
+        }
+        if (confirmSection) confirmSection.classList.remove('hidden');
+        if (reportSection) reportSection.classList.add('hidden');
+    } else {
+        if (confirmBtn) {
+            confirmBtn.className = 'flex-1 rounded-xl border border-white/20 py-3 text-sm font-black text-white/45 transition-all';
+        }
+        if (reportBtn) {
+            reportBtn.className = 'flex-1 rounded-xl border border-neonpink/50 bg-neonpink/10 py-3 text-sm font-black text-neonpink transition-all';
+        }
+        if (confirmSection) confirmSection.classList.add('hidden');
+        if (reportSection) reportSection.classList.remove('hidden');
+    }
+    
+    updateVerifySubmitButton();
+}
+
+// ============================================================
+// GPS 每 2 秒追蹤 (店鋪實證 - 檢舉模式用)
+// ============================================================
+var _verifyReportGpsTimer = null;
+
+function startVerifyReportGpsTracking() {
+    stopVerifyReportGpsTracking();
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    function tick() {
+        var el = document.getElementById('vr-gps');
+        if (!el) { stopVerifyReportGpsTracking(); return; }
+        
+        if (_finalGpsLocked) return;
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                gpsLat = pos.coords.latitude;
+                gpsLng = pos.coords.longitude;
+                isGpsReady = true;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+                    el.className = 'text-neongreen text-xs';
+                }
+                updateVerifySubmitButton();
+            }, function() {
+                isGpsReady = false;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
+                    el.className = 'text-neonpink text-xs';
+                }
+                updateVerifySubmitButton();
+            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        }
+    }
+    
+    tick();
+    _verifyReportGpsTimer = setInterval(tick, 2000);
+}
+
+function stopVerifyReportGpsTracking() {
+    if (_verifyReportGpsTimer) {
+        clearInterval(_verifyReportGpsTimer);
+        _verifyReportGpsTimer = null;
+    }
+}
+
+function onVerifyReportCategoryChange(category) {
+    _verifyReportCategory = category;
+    
+    var detailEl = document.getElementById('vr-report-detail');
+    var warningEl = document.getElementById('vr-warning');
+    
+    if (!detailEl || !warningEl) return;
+    
+    if (!category) {
+        detailEl.classList.add('hidden');
+        warningEl.classList.add('hidden');
+        updateVerifySubmitButton();
+        return;
+    }
+    
+    var needsGpsPhoto = (category === 'store_not_exist' || category === 'location_wrong' || category === 'photo_fake');
+    var needsInput = (category === 'name_wrong' || category === 'other');
+    
+    var html = '';
+    if (needsGpsPhoto) {
+        html += '<div class="mb-3">' +
+            '<label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>' +
+            '<div class="mt-1 rounded-xl border border-white/10 bg-zinc-900/50 p-3">' +
+                '<span id="vr-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>' +
+            '</div>' +
+        '</div>' +
+        '<div>' +
+            '<label class="text-xs font-bold text-gold">📷 現場照片 <span class="text-neonpink">（必填）</span></label>' +
+            '<p class="text-[11px] text-white/50 mt-1 mb-2">請拍下現場情況作為證據：</p>' +
+            '<div id="vr-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">' +
+                '<button onclick="openCamera(\'vr\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>' +
+                '<img id="vr-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />' +
+            '</div>' +
+        '</div>';
+    }
+    
+    if (needsInput) {
+        var placeholder = category === 'name_wrong' ? '請輸入正確的店鋪名稱' : '請描述店鋪的問題';
+        html += '<div>' +
+            '<label class="text-xs font-bold text-gold">' + (category === 'name_wrong' ? '正確店名' : '問題說明') + ' <span class="text-neonpink">（必填）</span></label>' +
+            '<input id="vr-input" placeholder="' + placeholder + '" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" />' +
+        '</div>';
+    }
+    
+    detailEl.innerHTML = html;
+    detailEl.classList.remove('hidden');
+    warningEl.classList.remove('hidden');
+    
+    if (needsGpsPhoto) {
+        startVerifyReportGpsTracking();
+    } else {
+        stopVerifyReportGpsTracking();
+    }
+    
+    updateVerifySubmitButton();
+}
+
+function updateVerifySubmitButton() {
+    var btn = document.getElementById('vf-submit-btn');
+    if (!btn) return;
+    
+    if (_verifyMode === 'confirm') {
+        var photoReady = window._camPreview && window._camPreview.vf;
+        var gpsReady = _finalGpsLocked;
+        
+        if (photoReady && gpsReady) {
+            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            btn.innerHTML = '✅ 提交實證（+15 積分）';
+        } else {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+            btn.innerHTML = photoReady ? '📍 等待 GPS 鎖定...' : '📷 請先拍攝店鋪照片';
+        }
+    } else {
+        // 檢舉模式
+        var category = _verifyReportCategory;
+        var ready = false;
+        
+        if (category === 'store_not_exist' || category === 'location_wrong' || category === 'photo_fake') {
+            var reportPhotoReady = window._camPreview && window._camPreview.vr;
+            var reportGpsReady = _finalGpsLocked;
+            ready = reportPhotoReady && reportGpsReady;
+            if (!ready) {
+                btn.innerHTML = reportPhotoReady ? '📍 等待 GPS 鎖定...' : '📷 請先拍攝現場照片';
+            }
+        } else if (category === 'name_wrong' || category === 'other') {
+            var inputVal = document.getElementById('vr-input')?.value.trim();
+            ready = !!inputVal;
+            if (!ready) {
+                btn.innerHTML = '📝 請輸入說明';
+            }
+        }
+        
+        if (ready) {
+            btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            btn.innerHTML = '🚨 提交檢舉';
+        } else {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+        }
+    }
 }
 
 // ============================================================
@@ -4144,6 +4328,7 @@ function stopVerifyGpsTracking() {
         _verifyGpsTimer = null;
     }
 }
+
 
 function grabVerifyGPS() {
   var el = document.getElementById('vf-gps');
@@ -4232,10 +4417,9 @@ function getRegionStat(region) {
 }
 
 // ============================================================
-// 認證店鋪 (修正版 - 使用 status 欄位 + 防重鎖 + verifier_id)
+// 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
 async function submitVerification(storeId) {
-    // 🔒 防重鎖
     if (!acquireSubmitLock('submitVerification')) return;
     
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
@@ -4244,175 +4428,368 @@ async function submitVerification(storeId) {
         var s = STORES.find(function(x) { return x.id === storeId; });
         if (!s) { 
             toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
             return; 
         }
         
-        var photoBlob = window._cam?.vf;
-        if (!photoBlob) { 
-            toast('請先拍攝店鋪照片', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
-            return; 
-        }
-        
-        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
-    toast('請先拍照以鎖定 GPS 位置', 'pink'); 
-    enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
-    return; 
-}
-        
-        var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-        var limitDistance = isMallStore ? 0.5 : 0.3;
-        var storeTypeLabel = isMallStore ? '商場鋪 (GPS 可能不準確)' : '地鋪';
-        
-        if (s.lat && s.lng) {
-            var distance = calculateDistance(s.lat, s.lng, _vfGpsLat, _vfGpsLng);
-            var distanceMeters = Math.round(distance * 1000);
-            var limitMeters = Math.round(limitDistance * 1000);
-            if (distance > limitDistance) {
-                toast('⚠️ 你距離該' + storeTypeLabel + ' ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內認證', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
-                return;
-            }
-            toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內 (' + storeTypeLabel + ')', 'green');
-        }
-        
-        var photoUrl = window._camPreview?.vf || '';
-        if (CLOUD_ON) {
-            try {
-                var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-                photoUrl = await uploadImage(file, 'verifications');
-            } catch (e) { 
-                toast('圖片上傳失敗', 'pink'); 
-                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+        if (_verifyMode === 'confirm') {
+            // ========== 店鋪存在模式 ==========
+            var photoBlob = window._cam?.vf;
+            if (!photoBlob) { 
+                toast('請先拍攝店鋪照片', 'pink'); 
+                enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
                 return; 
             }
-        }
-        
-        var numericStoreId = parseInt(storeId);
-        
-        var verification = {
-            store_id: numericStoreId,
-            verifier_device: STATE.user.device,
-            verifier_id: STATE.user.user_id || STATE.user.device,
-            photo_url: photoUrl,
-            lat: _finalGpsLat,
-lng: _finalGpsLng,
-            note: document.getElementById('vf-note')?.value.trim() || '',
-            status: 'pending',
-            created_at: new Date().toISOString()
-        };
-        
-        if (CLOUD_ON) {
-            try {
-                await cloudInsert('store_verifications', verification);
-                console.log('✅ 認證已同步到雲端');
-            } catch (e) {
-                console.warn('⚠️ 認證雲端同步失敗:', e.message);
-                toast('⚠️ 認證記錄失敗，請稍後重試', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
-                return;
-            }
-        }
-        
-        s.verification_count = (s.verification_count || 0) + 1;
-        s._userVerified = true;
-        
-        if (s.verification_count >= 2) {
-            s.status = 'verified';
-            s.verified = 'verified';
-            s.is_verified = true;
             
-            if (s.submitted_by) {
-                await addPoints(35, '認證通過追加獎勵');
-                toast('🎉 ' + s.name + ' 已通過認證！提交者獲得 +35 分', 'green');
+            if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
+                toast('請先拍照以鎖定 GPS 位置', 'pink'); 
+                enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                return; 
             }
-            updateAchievementStat('store_complete');
-            var regionStat = getRegionStat(s.region);
-            if (regionStat) updateAchievementStat(regionStat);
+            
+            var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+            var limitDistance = isMallStore ? 0.5 : 0.3;
+            
+            if (s.lat && s.lng) {
+                var distance = calculateDistance(s.lat, s.lng, _finalGpsLat, _finalGpsLng);
+                var distanceMeters = Math.round(distance * 1000);
+                var limitMeters = Math.round(limitDistance * 1000);
+                if (distance > limitDistance) {
+                    toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內實證', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    return;
+                }
+                toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內', 'green');
+            }
+            
+            var photoUrl = window._camPreview?.vf || '';
+            if (CLOUD_ON) {
+                try {
+                    var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                    photoUrl = await uploadImage(file, 'verifications');
+                } catch (e) { 
+                    toast('圖片上傳失敗', 'pink'); 
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    return; 
+                }
+            }
+            
+            var numericStoreId = parseInt(storeId);
+            
+            var verification = {
+                store_id: numericStoreId,
+                verifier_device: STATE.user.device,
+                verifier_id: STATE.user.user_id || STATE.user.device,
+                photo_url: photoUrl,
+                lat: _finalGpsLat,
+                lng: _finalGpsLng,
+                note: '',
+                status: 'pending',
+                created_at: new Date().toISOString()
+            };
             
             if (CLOUD_ON) {
                 try {
-                    var checkResponse = await fetch(
-                        SUPABASE_URL + "/rest/v1/verification_reviews?select=id&store_id=eq." + storeId + "&admin_status=eq.pending",
-                        {
-                            headers: {
-                                'apikey': SUPABASE_KEY,
-                                'Authorization': 'Bearer ' + SUPABASE_KEY
-                            }
-                        }
-                    );
-                    var checkData = await checkResponse.json();
-                    if (!checkData || checkData.length === 0) {
-                        toast('🔔 此店鋪已達到 2 人認證，等待管理員審核', 'gold');
-                    }
+                    await cloudInsert('store_verifications', verification);
+                    console.log('✅ 實證已同步到雲端');
                 } catch (e) {
-                    console.warn('⚠️ 檢查審核記錄失敗:', e.message);
+                    console.warn('⚠️ 實證雲端同步失敗:', e.message);
+                    toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    return;
                 }
             }
-        } else {
-            toast('✅ 認證提交成功！目前 ' + s.verification_count + '/2 人認證', 'green');
-        }
-        
-        save();
-        
-        if (CLOUD_ON) {
-            try {
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
-                    {
-                        method: 'PATCH',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify({
-                            verification_count: s.verification_count,
-                            status: s.status,
-                            verified: s.verified,
-                            is_verified: s.is_verified
-                        })
-                    }
-                );
-                console.log('✅ 前台認證計數已同步');
-            } catch (e) {
-                console.warn('⚠️ 同步認證計數失敗:', e.message);
+            
+            s.verification_count = (s.verification_count || 0) + 1;
+            s._userVerified = true;
+            
+            if (s.verification_count >= 2) {
+                s.status = 'verified';
+                s.verified = 'verified';
+                s.is_verified = true;
+                
+                if (s.submitted_by) {
+                    await addPoints(35, '實證通過追加獎勵');
+                    toast('🎉 ' + s.name + ' 已通過實證！提交者獲得 +35 分', 'green');
+                }
+                updateAchievementStat('store_complete');
+                var regionStat = getRegionStat(s.region);
+                if (regionStat) updateAchievementStat(regionStat);
+            } else {
+                toast('✅ 實證提交成功！目前 ' + s.verification_count + '/2 人實證', 'green');
             }
-        }
-        
-        // 記錄任務進度
-        await recordTaskCompletion('verify_store');
-        
-        // 記錄貢獻
-        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-            try {
-                var numericStoreIdForVerifyContribution = parseInt(storeId);
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/user_contributions",
-                    {
+            
+            save();
+            
+            if (CLOUD_ON) {
+                try {
+                    await fetch(
+                        SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
+                        {
+                            method: 'PATCH',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify({
+                                verification_count: s.verification_count,
+                                status: s.status,
+                                verified: s.verified,
+                                is_verified: s.is_verified
+                            })
+                        }
+                    );
+                } catch (e) {
+                    console.warn('⚠️ 同步實證計數失敗:', e.message);
+                }
+            }
+            
+            // 創建/更新 verification_reviews
+            await upsertVerificationReview(storeId, verification);
+            
+            await recordTaskCompletion('verify_store');
+            
+            if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+                try {
+                    await fetch(
+                        SUPABASE_URL + "/rest/v1/user_contributions",
+                        {
+                            method: 'POST',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify([{
+                                user_id: STATE.user.user_id,
+                                device_id: STATE.user.device,
+                                store_id: numericStoreId,
+                                contribution_type: 'verify',
+                                contribution_value: 1,
+                                created_at: new Date().toISOString()
+                            }])
+                        }
+                    );
+                } catch (e) {
+                    console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+                }
+            }
+            
+            await addPoints(15, '店鋪實證');
+            updateAchievementStat('verify_store');
+            updateStreak();
+            
+            closeModal();
+            openStore(storeId);
+            
+        } else {
+            // ========== 店鋪有問題模式（檢舉） ==========
+            var category = _verifyReportCategory;
+            if (!category) {
+                toast('請選擇問題類型', 'pink');
+                enableSubmitButton(submitBtn, '🚨 提交檢舉');
+                return;
+            }
+            
+            var reportData = {
+                target_type: 'store',
+                target_id: storeId,
+                reporter_device: STATE.user.device,
+                reporter_user_id: STATE.user.user_id || null,
+                category: category,
+                reason: '',
+                status: 'pending',
+                created_at: new Date().toISOString()
+            };
+            
+            var needsGpsPhoto = (category === 'store_not_exist' || category === 'location_wrong' || category === 'photo_fake');
+            var needsInput = (category === 'name_wrong' || category === 'other');
+            
+            if (needsGpsPhoto) {
+                var reportPhotoBlob = window._cam?.vr;
+                if (!reportPhotoBlob) {
+                    toast('請先拍攝現場照片', 'pink');
+                    enableSubmitButton(submitBtn, '🚨 提交檢舉');
+                    return;
+                }
+                
+                if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) {
+                    toast('請先拍照以鎖定 GPS 位置', 'pink');
+                    enableSubmitButton(submitBtn, '🚨 提交檢舉');
+                    return;
+                }
+                
+                var reportPhotoUrl = window._camPreview?.vr || '';
+                if (CLOUD_ON) {
+                    try {
+                        var reportFile = new File([reportPhotoBlob], "report_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                        reportPhotoUrl = await uploadImage(reportFile, 'reports');
+                    } catch (e) {
+                        toast('圖片上傳失敗', 'pink');
+                        enableSubmitButton(submitBtn, '🚨 提交檢舉');
+                        return;
+                    }
+                }
+                
+                reportData.photo_url = reportPhotoUrl;
+                reportData.gps_lat = _finalGpsLat;
+                reportData.gps_lng = _finalGpsLng;
+            }
+            
+            if (needsInput) {
+                var inputVal = document.getElementById('vr-input')?.value.trim();
+                if (!inputVal) {
+                    toast(category === 'name_wrong' ? '請輸入正確店名' : '請描述問題', 'pink');
+                    enableSubmitButton(submitBtn, '🚨 提交檢舉');
+                    return;
+                }
+                reportData.reason = inputVal;
+            }
+            
+            // 寫入 reports 表
+            if (CLOUD_ON) {
+                try {
+                    var reportResponse = await fetch(SUPABASE_URL + "/rest/v1/reports", {
                         method: 'POST',
                         headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([{
-                            user_id: STATE.user.user_id,
-                            device_id: STATE.user.device,
-                            store_id: numericStoreIdForVerifyContribution,
-                            contribution_type: 'verify',
-                            contribution_value: 1,
-                            created_at: new Date().toISOString()
-                        }])
+                        body: JSON.stringify([reportData])
+                    });
+                    
+                    if (!reportResponse.ok) {
+                        throw new Error('HTTP ' + reportResponse.status);
                     }
-                );
-                console.log('✅ 貢獻記錄已同步');
-            } catch (e) {
-                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+                } catch (e) {
+                    console.warn('⚠️ 檢舉雲端同步失敗:', e.message);
+                    if (!STATE._offlineReports) STATE._offlineReports = [];
+                    STATE._offlineReports.push(reportData);
+                }
+            } else {
+                if (!STATE._offlineReports) STATE._offlineReports = [];
+                STATE._offlineReports.push(reportData);
             }
+            
+            // 標記店鋪為可疑
+            if (CLOUD_ON) {
+                try {
+                    await fetch(
+                        SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
+                        {
+                            method: 'PATCH',
+                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                            body: JSON.stringify({
+                                is_suspicious: true,
+                                suspicious_reason: category,
+                                suspicious_at: new Date().toISOString()
+                            })
+                        }
+                    );
+                } catch (e) {
+                    console.warn('⚠️ 標記可疑失敗:', e.message);
+                }
+            }
+            
+            // 更新本地
+            s.is_suspicious = true;
+            s.suspicious_reason = category;
+            save();
+            
+            // 記錄成就統計
+            updateAchievementStat('report_submitted');
+            addXP(5, '提交檢舉');
+            updateStreak();
+            
+            toast('✅ 檢舉已提交，感謝你的回報！', 'green');
+            closeModal();
         }
-        
-        await addPoints(15, '認證店鋪');
-        updateAchievementStat('verify_store');
-        updateStreak();
-        
-        closeModal();
-        openStore(storeId);
     } finally {
         releaseSubmitLock('submitVerification');
+    }
+}
+// ============================================================
+// 創建/更新 verification_reviews
+// ============================================================
+async function upsertVerificationReview(storeId, verification) {
+    if (!CLOUD_ON) return;
+    
+    try {
+        var stringStoreId = String(storeId);
+        
+        // 查詢是否已有記錄
+        var checkResponse = await fetch(
+            SUPABASE_URL + "/rest/v1/verification_reviews?store_id=eq." + encodeURIComponent(stringStoreId),
+            {
+                headers: getSupabaseHeaders()
+            }
+        );
+        
+        if (!checkResponse.ok) throw new Error('HTTP ' + checkResponse.status);
+        
+        var existingReviews = await checkResponse.json();
+        
+        if (existingReviews && existingReviews.length > 0) {
+            // 已有記錄，更新第二位認證者
+            var review = existingReviews[0];
+            
+            if (review.verifier_2_device) {
+                toast('此店鋪已認證完畢', 'gold');
+                return;
+            }
+            
+            if (review.verifier_1_device === verification.verifier_device) {
+                toast('你已經實證過這間店鋪了', 'gold');
+                return;
+            }
+            
+            var updateData = {
+                verifier_2_device: verification.verifier_device,
+                verifier_2_photo: verification.photo_url,
+                verifier_2_gps: { lat: verification.lat, lng: verification.lng },
+                admin_status: 'pending',
+                updated_at: new Date().toISOString()
+            };
+            
+            await fetch(
+                SUPABASE_URL + "/rest/v1/verification_reviews?id=eq." + review.id,
+                {
+                    method: 'PATCH',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify(updateData)
+                }
+            );
+            console.log('✅ verification_reviews 已更新（第二位認證者）');
+        } else {
+            // 沒有記錄，創建新記錄
+            var storeResponse = await fetch(
+                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId + "&select=submitted_by_device",
+                {
+                    headers: getSupabaseHeaders()
+                }
+            );
+            
+            var firstSubmitterDevice = '';
+            if (storeResponse.ok) {
+                var storeData = await storeResponse.json();
+                if (storeData && storeData.length > 0) {
+                    firstSubmitterDevice = storeData[0].submitted_by_device || '';
+                }
+            }
+            
+            var newReview = {
+                store_id: stringStoreId,
+                first_submitter_device: firstSubmitterDevice,
+                verifier_1_device: verification.verifier_device,
+                verifier_1_photo: verification.photo_url,
+                verifier_1_gps: { lat: verification.lat, lng: verification.lng },
+                admin_status: 'pending',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+            
+            await fetch(
+                SUPABASE_URL + "/rest/v1/verification_reviews",
+                {
+                    method: 'POST',
+                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([newReview])
+                }
+            );
+            console.log('✅ verification_reviews 已創建（第一位認證者）');
+        }
+    } catch (e) {
+        console.warn('⚠️ verification_reviews 同步失敗:', e.message);
     }
 }
 // ============================================================
@@ -5816,8 +6193,49 @@ async function capturePhoto(key) {
     window._camPreview[key] = dataUrl;
     
     // ✅ 拍照時鎖定最終 GPS
-    var prefix = key === 'vf' ? 'vf' : 'nt';
-    lockFinalGps(prefix);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            _finalGpsLat = pos.coords.latitude;
+            _finalGpsLng = pos.coords.longitude;
+            _finalGpsLocked = true;
+            gpsLat = _finalGpsLat;
+            gpsLng = _finalGpsLng;
+            isGpsReady = true;
+            
+            // 更新對應的 GPS 顯示
+            var elId = key + '-gps';
+            var el = document.getElementById(elId);
+            if (el) {
+                el.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
+                el.className = 'text-gold text-xs';
+            }
+            
+            // 如果是認證/實證模式，也更新 vf-gps
+            if (key === 'vf') {
+                var vfEl = document.getElementById('vf-gps');
+                if (vfEl) {
+                    vfEl.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
+                    vfEl.className = 'text-gold text-xs';
+                }
+            }
+            
+            // 如果是檢舉模式，也更新 vr-gps
+            if (key === 'vr') {
+                var vrEl = document.getElementById('vr-gps');
+                if (vrEl) {
+                    vrEl.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
+                    vrEl.className = 'text-gold text-xs';
+                }
+            }
+            
+            updateFormState();
+            if (typeof updateVerifySubmitButton === 'function') updateVerifySubmitButton();
+        }, function() {
+            toast('⚠️ 拍照時定位失敗，請重試', 'pink');
+        }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+    } else {
+        toast('⚠️ 此裝置不支援 GPS 定位', 'pink');
+    }
     
     closeCamera(key);
     var container = document.getElementById(key + "-camera-container");
@@ -5843,8 +6261,25 @@ function clearPhoto(key) {
   if (img) { img.classList.add('hidden'); img.style.display = 'none'; }
   
   // ✅ 解除 GPS 鎖定
-  var prefix = key === 'vf' ? 'vf' : 'nt';
-  unlockFinalGps(prefix);
+  _finalGpsLat = null;
+  _finalGpsLng = null;
+  _finalGpsLocked = false;
+  
+  // 恢復對應的 GPS 顯示
+  var elId = key + '-gps';
+  var el = document.getElementById(elId);
+  if (el) {
+    if (gpsLat && gpsLng) {
+      el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+      el.className = 'text-neongreen text-xs';
+    } else {
+      el.textContent = '無法定位，請確保開啟GPS定位功能。';
+      el.className = 'text-neonpink text-xs';
+    }
+  }
+  
+  updateFormState();
+  if (typeof updateVerifySubmitButton === 'function') updateVerifySubmitButton();
   
   toast('已移除照片', 'pink');
 }
@@ -7289,12 +7724,15 @@ function openModal(html) {
 }
 
 function closeModal() {
-  // ✅ 停止 GPS 追蹤
+  // 停止所有 GPS 追蹤
   stopIntelGpsTracking();
   stopVerifyGpsTracking();
+  if (typeof stopVerifyReportGpsTracking === 'function') stopVerifyReportGpsTracking();
   _finalGpsLat = null;
   _finalGpsLng = null;
   _finalGpsLocked = false;
+  _verifyMode = 'confirm';
+  _verifyReportCategory = '';
   
   var root = document.getElementById("modal-root");
   root.className = "pointer-events-none fixed inset-0 z-50";
