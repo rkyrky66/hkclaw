@@ -4620,10 +4620,7 @@ function getRegionStat(region) {
 // ============================================================
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
-    if (isUserBanned()) {
-    showBannedMessage();
-    return;
-}
+    
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -4676,11 +4673,9 @@ async function submitVerification(storeId) {
                 }
             }
             
-            // ✅ store_verifications.store_id 是 text → 使用 String
             var stringStoreId = String(storeId);
-            // ✅ user_contributions.store_id 是 bigint → 使用 parseInt
             var numericStoreId = parseInt(storeId);
-
+            
             var verification = {
                 store_id: stringStoreId,
                 verifier_device: STATE.user.device,
@@ -4693,17 +4688,51 @@ async function submitVerification(storeId) {
                 created_at: new Date().toISOString()
             };
             
+            // ============================================
+            // 調整後的寫入順序：
+            // 1. 先寫 verification_reviews（判斷第幾位認證者）
+            // 2. 再寫 store_verifications
+            // 3. 最後更新 claw_stores
+            // 4. 獨立寫入 user_contributions
+            // ============================================
+            
+            var reviewResult = null;
             if (CLOUD_ON) {
                 try {
-                    await cloudInsert('store_verifications', verification);
-                    console.log('✅ 實證已同步到雲端');
+                    reviewResult = await upsertVerificationReview(storeId, verification);
+                    if (reviewResult === 'already_complete') {
+                        toast('此店鋪已認證完畢', 'gold');
+                        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                        return;
+                    }
+                    if (reviewResult === 'already_verified') {
+                        toast('你已經實證過這間店鋪了', 'gold');
+                        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                        return;
+                    }
                 } catch (e) {
-                    console.warn('⚠️ 實證雲端同步失敗:', e.message);
+                    console.warn('⚠️ verification_reviews 寫入失敗:', e.message);
                     toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
                     enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
                     return;
                 }
             }
+            
+            if (CLOUD_ON) {
+                try {
+                    await cloudInsert('store_verifications', verification);
+                    console.log('✅ 實證已同步到雲端');
+                } catch (e) {
+                    console.warn('⚠️ store_verifications 寫入失敗:', e.message);
+                    toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    return;
+                }
+            }
+            
+            // ✅ 更新本地 STATE.verifications（防止重複實證）
+            STATE.verifications = STATE.verifications || {};
+            STATE.verifications[s.id] = true;
             
             s.verification_count = (s.verification_count || 0) + 1;
             s._userVerified = true;
@@ -4745,9 +4774,6 @@ async function submitVerification(storeId) {
                     console.warn('⚠️ 同步實證計數失敗:', e.message);
                 }
             }
-            
-            // 創建/更新 verification_reviews
-            await upsertVerificationReview(storeId, verification);
             
             await recordTaskCompletion('verify_store');
             
@@ -4905,17 +4931,17 @@ async function submitVerification(storeId) {
 }
 
 // ============================================================
-// 創建/更新 verification_reviews
+// 創建/更新 verification_reviews (修正版 - 回傳認證者位置)
 // ============================================================
 async function upsertVerificationReview(storeId, verification) {
-    if (!CLOUD_ON) return;
+    if (!CLOUD_ON) return 'local_only';
     
     try {
         var stringStoreId = String(storeId);
         
-        // 查詢是否已有記錄
+        // 查詢是否已有記錄（取最新一筆）
         var checkResponse = await fetch(
-            SUPABASE_URL + "/rest/v1/verification_reviews?store_id=eq." + encodeURIComponent(stringStoreId),
+            SUPABASE_URL + "/rest/v1/verification_reviews?store_id=eq." + encodeURIComponent(stringStoreId) + "&order=created_at.desc&limit=1",
             {
                 headers: getSupabaseHeaders()
             }
@@ -4926,28 +4952,30 @@ async function upsertVerificationReview(storeId, verification) {
         var existingReviews = await checkResponse.json();
         
         if (existingReviews && existingReviews.length > 0) {
-            // 已有記錄，更新第二位認證者
+            // 已有記錄
             var review = existingReviews[0];
             
+            // 檢查是否已滿兩位認證者
             if (review.verifier_2_device) {
-                toast('此店鋪已認證完畢', 'gold');
-                return;
+                return 'already_complete';
             }
             
+            // 檢查是否為同一認證者
             if (review.verifier_1_device === verification.verifier_device) {
-                toast('你已經實證過這間店鋪了', 'gold');
-                return;
+                return 'already_verified';
             }
             
+            // ✅ 第二位認證者
             var updateData = {
                 verifier_2_device: verification.verifier_device,
+                verifier_2_name: STATE.user.name || STATE.user.display_name || '',
                 verifier_2_photo: verification.photo_url,
                 verifier_2_gps: { lat: verification.lat, lng: verification.lng },
                 admin_status: 'pending',
                 updated_at: new Date().toISOString()
             };
             
-            await fetch(
+            var updateResponse = await fetch(
                 SUPABASE_URL + "/rest/v1/verification_reviews?id=eq." + review.id,
                 {
                     method: 'PATCH',
@@ -4955,28 +4983,46 @@ async function upsertVerificationReview(storeId, verification) {
                     body: JSON.stringify(updateData)
                 }
             );
+            
+            if (!updateResponse.ok && updateResponse.status !== 204) {
+                throw new Error('HTTP ' + updateResponse.status);
+            }
+            
             console.log('✅ verification_reviews 已更新（第二位認證者）');
+            return 'verifier_2';
         } else {
             // 沒有記錄，創建新記錄
+            // 查詢首發者資料
             var storeResponse = await fetch(
-                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId + "&select=submitted_by_device",
+                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + encodeURIComponent(storeId) + "&select=submitted_by_device,photo,lat,lng",
                 {
                     headers: getSupabaseHeaders()
                 }
             );
             
             var firstSubmitterDevice = '';
+            var firstSubmitterPhoto = '';
+            var firstSubmitterGps = { lat: null, lng: null };
+            
             if (storeResponse.ok) {
                 var storeData = await storeResponse.json();
                 if (storeData && storeData.length > 0) {
                     firstSubmitterDevice = storeData[0].submitted_by_device || '';
+                    firstSubmitterPhoto = storeData[0].photo || '';
+                    if (storeData[0].lat && storeData[0].lng) {
+                        firstSubmitterGps = { lat: storeData[0].lat, lng: storeData[0].lng };
+                    }
                 }
             }
             
             var newReview = {
                 store_id: stringStoreId,
                 first_submitter_device: firstSubmitterDevice,
+                first_submitter_name: '',  // 可選，後續可從 user_profiles 查詢
+                first_submitter_photo: firstSubmitterPhoto,
+                first_submitter_gps: firstSubmitterGps,
                 verifier_1_device: verification.verifier_device,
+                verifier_1_name: STATE.user.name || STATE.user.display_name || '',
                 verifier_1_photo: verification.photo_url,
                 verifier_1_gps: { lat: verification.lat, lng: verification.lng },
                 admin_status: 'pending',
@@ -4984,7 +5030,7 @@ async function upsertVerificationReview(storeId, verification) {
                 updated_at: new Date().toISOString()
             };
             
-            await fetch(
+            var insertResponse = await fetch(
                 SUPABASE_URL + "/rest/v1/verification_reviews",
                 {
                     method: 'POST',
@@ -4992,10 +5038,17 @@ async function upsertVerificationReview(storeId, verification) {
                     body: JSON.stringify([newReview])
                 }
             );
+            
+            if (!insertResponse.ok && insertResponse.status !== 201 && insertResponse.status !== 204) {
+                throw new Error('HTTP ' + insertResponse.status);
+            }
+            
             console.log('✅ verification_reviews 已創建（第一位認證者）');
+            return 'verifier_1';
         }
     } catch (e) {
         console.warn('⚠️ verification_reviews 同步失敗:', e.message);
+        throw e;
     }
 }
 // ============================================================
