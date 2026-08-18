@@ -629,15 +629,12 @@ var ACHIEVEMENT_DEFS = {
   streak_100: { key: 'streak_100', name: '連續 100 天貢獻', category: 'streak', icon: '🔥🔥🔥', description: '連續 100 天有提交或認證', condition: { type: 'streak', count: 100 }, reward: { points: 300, title: null } },
   weekly_perfect: { key: 'weekly_perfect', name: '一週全勤', category: 'streak', icon: '⭐', description: '一週 7 天都有貢獻', condition: { type: 'weekly_perfect', count: 1 }, reward: { points: 30, title: null } },
   monthly_perfect: { key: 'monthly_perfect', name: '月度全勤', category: 'streak', icon: '⭐', description: '一個月 30 天都有貢獻', condition: { type: 'monthly_perfect', count: 1 }, reward: { points: 100, title: null } },
-  cold_region_explorer: {
-    key: 'cold_region_explorer',
-    name: '秘境探索者',
-    category: 'region',
-    icon: '🗺️',
-    description: '認證 3 間冷門區域的店鋪（該區少於 5 間店）',
-    condition: { type: 'cold_region_verify', count: 3 },
-    reward: { points: 40, title: '秘境探索者' }
-  }
+  cold_region_explorer: { key: 'cold_region_explorer',name: '秘境探索者',    category: 'region',    icon: '🗺️',    description: '認證 3 間冷門區域的店鋪（該區少於 5 間店）',    condition: { type: 'cold_region_verify', count: 3 },    reward: { points: 40, title: '秘境探索者' }},
+  whistleblower: { key: 'whistleblower', name: '吹哨者', category: 'report', icon: '🚨', description: '提交第 1 次檢舉', condition: { type: 'report_submitted', count: 1 }, reward: { points: 5, title: null } },
+  watchdog: { key: 'watchdog', name: '正義守護者', category: 'report', icon: '🛡️', description: '提交 10 次檢舉', condition: { type: 'report_submitted', count: 10 }, reward: { points: 20, title: '守護者' } },
+  detective: { key: 'detective', name: '情報偵探', category: 'report', icon: '🔍', description: '提交 30 次檢舉', condition: { type: 'report_submitted', count: 30 }, reward: { points: 50, title: '偵探' } },
+  truth_seeker: { key: 'truth_seeker', name: '真相追尋者', category: 'report', icon: '⚖️', description: '檢舉被確認屬實 1 次', condition: { type: 'report_confirmed', count: 1 }, reward: { points: 20, title: null } },
+  justice_warrior: { key: 'justice_warrior', name: '正義使者', category: 'report', icon: '⚔️', description: '檢舉被確認屬實 5 次', condition: { type: 'report_confirmed', count: 5 }, reward: { points: 50, title: '正義使者' } }
 };
 
 var MALLS_CACHE = null;
@@ -684,7 +681,9 @@ var DEFAULT_STATE = {
       weekly_days: [],
       monthly_days: [],
       checkin_streak: 0,
-      cold_region_verify: 0
+      cold_region_verify: 0,
+      report_submitted: 0,
+      report_confirmed: 0
     }
   },
   verifications: {},
@@ -1084,7 +1083,15 @@ function createPersonalizedMarker(store) {
     var glowStyle = '';
     var iconDisplay = '●';
     var levelClass = '';
-    
+    // ✅ 如果店鋪有爭議，顯示警告
+if (store.is_suspicious) {
+    iconDisplay = '⚠️';
+    glowStyle = 'box-shadow:0 0 20px rgba(255,184,0,0.8),0 0 40px rgba(255,184,0,0.4);';
+    borderColor = '#FFB800';
+    baseColor = '#FF6B00';
+}
+
+
     if (levelInfo.level === 1) {
         iconDisplay = '⭐';
         levelClass = 'marker-level-1';
@@ -1896,6 +1903,8 @@ function getAchievementProgress(key) {
     case 'weekly_perfect': current = stats.weekly_perfect || 0; break;
     case 'monthly_perfect': current = stats.monthly_perfect || 0; break;
     case 'cold_region_verify': current = stats.cold_region_verify || 0; break;
+        case 'report_submitted': current = stats.report_submitted || 0; break;
+    case 'report_confirmed': current = stats.report_confirmed || 0; break;
     default: break;
   }
   
@@ -1939,6 +1948,8 @@ function checkAchievements() {
       case 'weekly_perfect': if (stats.weekly_perfect >= def.condition.count) isUnlocked = true; break;
       case 'monthly_perfect': if (stats.monthly_perfect >= def.condition.count) isUnlocked = true; break;
       case 'cold_region_verify': if (stats.cold_region_verify >= def.condition.count) isUnlocked = true; break;
+            case 'report_submitted': if (stats.report_submitted >= def.condition.count) isUnlocked = true; break;
+      case 'report_confirmed': if (stats.report_confirmed >= def.condition.count) isUnlocked = true; break;
       default: break;
     }
     
@@ -2401,7 +2412,10 @@ function openReportForm(targetType, targetId, targetName) {
 async function submitReport(targetType, targetId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitReport')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('report-submit-btn', '⏳ 提交中...');
     
     try {
@@ -2745,6 +2759,8 @@ document.addEventListener('DOMContentLoaded', checkOAuthCallback);
 // ============================================================
 async function loadCloud() {
   console.log("[v0] 直接從 Supabase 讀取資料...");
+  // ✅ 檢查用戶是否被封鎖
+    await checkUserBanStatus();
   try {
     var response = await fetch(SUPABASE_URL + "/rest/v1/claw_stores?select=*&is_hidden=eq.false", {
       headers: getSupabaseHeaders()
@@ -2797,7 +2813,58 @@ async function loadCloud() {
     toast("無法載入店鋪資料，使用示範店鋪", "pink");
   }
 }
+// ============================================================
+// 檢查用戶是否被封鎖
+// ============================================================
+async function checkUserBanStatus() {
+    if (!CLOUD_ON) return;
+    
+    var deviceId = STATE.user.device;
+    
+    try {
+        var response = await fetch(
+            SUPABASE_URL + "/rest/v1/user_profiles?select=banned_at,banned_by,ban_reason&device_id=eq." + encodeURIComponent(deviceId) + "&limit=1",
+            { headers: getSupabaseHeaders() }
+        );
+        
+        if (!response.ok) return;
+        
+        var data = await response.json();
+        
+        if (data && data.length > 0 && data[0].banned_at) {
+            // 用戶被封鎖
+            localStorage.setItem('claw_banned', JSON.stringify({
+                banned: true,
+                banned_at: data[0].banned_at,
+                banned_by: data[0].banned_by || '',
+                ban_reason: data[0].ban_reason || ''
+            }));
+            console.warn('🚫 用戶已被封鎖:', data[0].ban_reason);
+        } else {
+            // 用戶未被封鎖
+            localStorage.removeItem('claw_banned');
+        }
+    } catch (e) {
+        console.warn('⚠️ 檢查封鎖狀態失敗:', e.message);
+    }
+}
 
+// 檢查是否被封鎖（供寫入操作呼叫）
+function isUserBanned() {
+    try {
+        var bannedData = JSON.parse(localStorage.getItem('claw_banned') || 'null');
+        return bannedData && bannedData.banned === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// 顯示封鎖提示
+function showBannedMessage() {
+    var bannedData = JSON.parse(localStorage.getItem('claw_banned') || 'null');
+    var reason = bannedData ? (bannedData.ban_reason || '違反社群規範') : '違反社群規範';
+    toast('🚫 您的帳號已被封鎖：' + reason, 'pink');
+}
 function seedStores() {
   var base = [
     { name: "爪玩店 · 旺角旗艦", region: "旺角", addr: "西洋菜南街 2A 好望角大廈", ig: "clawplay.mk", fb: "clawplayHK", verified: "verified", size: "大", token: false, hour24: true, staff: true },
@@ -3937,8 +4004,9 @@ function buildStoreContent(s, _a) {
     var isInMall = s.mall && s.mall.trim() !== '';
     var mallInfo = isInMall ? '<span class="text-[10px] text-white/30 ml-2">' + s.mall + '</span>' : '';
     var isVerified = s.status === "verified" || s.verified === "verified";
+    var hasWarning = s.is_suspicious === true;
     var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + (s.verification_count || 0) + '/2)</span>';
-    
+    var warningBadge = hasWarning ? '<span class="text-[10px] text-yellow-400 ml-1">⚠️ 有爭議</span>' : '';
     // 獲取貢獻標記資訊
     var markerInfo = getMarkerLevelInfo(s.id);
     var contributionBadge = '';
@@ -3989,7 +4057,7 @@ function buildStoreContent(s, _a) {
         machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
     }
     
-    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
+    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + warningBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -4120,54 +4188,7 @@ function switchVerifyMode(mode) {
     updateVerifySubmitButton();
 }
 
-// ============================================================
-// GPS 每 2 秒追蹤 (店鋪實證 - 檢舉模式用)
-// ============================================================
-var _verifyReportGpsTimer = null;
-
-function startVerifyReportGpsTracking() {
-    stopVerifyReportGpsTracking();
-    _finalGpsLat = null;
-    _finalGpsLng = null;
-    _finalGpsLocked = false;
-    
-    function tick() {
-        var el = document.getElementById('vr-gps');
-        if (!el) { stopVerifyReportGpsTracking(); return; }
-        
-        if (_finalGpsLocked) return;
-        
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(pos) {
-                gpsLat = pos.coords.latitude;
-                gpsLng = pos.coords.longitude;
-                isGpsReady = true;
-                if (el && !_finalGpsLocked) {
-                    el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
-                    el.className = 'text-neongreen text-xs';
-                }
-                updateVerifySubmitButton();
-            }, function() {
-                isGpsReady = false;
-                if (el && !_finalGpsLocked) {
-                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
-                    el.className = 'text-neonpink text-xs';
-                }
-                updateVerifySubmitButton();
-            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-        }
-    }
-    
-    tick();
-    _verifyReportGpsTimer = setInterval(tick, 2000);
-}
-
-function stopVerifyReportGpsTracking() {
-    if (_verifyReportGpsTimer) {
-        clearInterval(_verifyReportGpsTimer);
-        _verifyReportGpsTimer = null;
-    }
-}
+tartVerifyReportGpsTra
 
 function onVerifyReportCategoryChange(category) {
     _verifyReportCategory = category;
@@ -4275,15 +4296,17 @@ function updateVerifySubmitButton() {
 }
 
 // ============================================================
-// GPS 每 2 秒追蹤 (店鋪認證用)
+// GPS 每 2 秒追蹤 (店鋪實證用) - 修正版
 // ============================================================
 var _verifyGpsTimer = null;
+var _verifyGpsRetryBtnShown = false;
 
 function startVerifyGpsTracking() {
     stopVerifyGpsTracking();
     _finalGpsLat = null;
     _finalGpsLng = null;
     _finalGpsLocked = false;
+    _verifyGpsRetryBtnShown = false;
     
     function tick() {
         var el = document.getElementById('vf-gps');
@@ -4291,31 +4314,54 @@ function startVerifyGpsTracking() {
         
         if (_finalGpsLocked) return;
         
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(pos) {
+        if (!navigator.geolocation) {
+            _vfGpsReady = false;
+            _vfGpsLat = null;
+            _vfGpsLng = null;
+            showVerifyGpsUnavailable(el, '⚠️ 此裝置不支援 GPS 定位');
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
                 _vfGpsLat = pos.coords.latitude;
                 _vfGpsLng = pos.coords.longitude;
                 _vfGpsReady = true;
+                
+                // 成功獲取 GPS，移除重新定位按鈕
+                removeVerifyGpsRetryButton(el);
+                _verifyGpsRetryBtnShown = false;
+                
                 if (el && !_finalGpsLocked) {
                     el.textContent = '實時更新中：' + _vfGpsLat.toFixed(6) + ', ' + _vfGpsLng.toFixed(6);
                     el.className = 'text-neongreen text-xs';
                 }
-            }, function() {
+                updateVerifySubmitButton();
+            },
+            function(err) {
                 _vfGpsReady = false;
                 _vfGpsLat = null;
                 _vfGpsLng = null;
-                if (el && !_finalGpsLocked) {
-                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
-                    el.className = 'text-neonpink text-xs';
+                
+                if (!_finalGpsLocked) {
+                    if (err.code === 1) {
+                        // ✅ Permission denied — 停止輪詢
+                        stopVerifyGpsTracking();
+                        showVerifyGpsPermissionBlocked(el);
+                        updateVerifySubmitButton();
+                        return;
+                    } else if (err.code === 2) {
+                        showVerifyGpsRetryButton(el, '📡 GPS 訊號弱，請到室外');
+                    } else if (err.code === 3) {
+                        showVerifyGpsRetryButton(el, '⏱️ 定位超時');
+                    } else {
+                        showVerifyGpsRetryButton(el, '⚠️ 定位失敗');
+                    }
+                    updateVerifySubmitButton();
                 }
-            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-        } else {
-            _vfGpsReady = false;
-            if (el && !_finalGpsLocked) {
-                el.textContent = '無法定位，請確保開啟GPS定位功能。';
-                el.className = 'text-neonpink text-xs';
-            }
-        }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
     }
     
     tick();
@@ -4327,6 +4373,56 @@ function stopVerifyGpsTracking() {
         clearInterval(_verifyGpsTimer);
         _verifyGpsTimer = null;
     }
+}
+
+// 顯示 GPS 權限被封鎖 (實證)
+function showVerifyGpsPermissionBlocked(el) {
+    if (!el) return;
+    el.textContent = '🔒 定位權限已被封鎖，請在瀏覽器設定中允許定位權限';
+    el.className = 'text-neonpink text-xs';
+    
+    removeVerifyGpsRetryButton(el);
+    var retryBtn = document.createElement('button');
+    retryBtn.id = 'vf-gps-retry';
+    retryBtn.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+    retryBtn.textContent = '🔄 重新定位';
+    retryBtn.onclick = function() {
+        removeVerifyGpsRetryButton(el);
+        startVerifyGpsTracking();
+    };
+    el.parentElement.appendChild(retryBtn);
+}
+
+// 顯示 GPS 重新定位按鈕 (實證)
+function showVerifyGpsRetryButton(el, message) {
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'text-yellow-400 text-xs';
+    
+    if (!document.getElementById('vf-gps-retry')) {
+        var retryBtn = document.createElement('button');
+        retryBtn.id = 'vf-gps-retry';
+        retryBtn.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+        retryBtn.textContent = '🔄 重新定位';
+        retryBtn.onclick = function() {
+            removeVerifyGpsRetryButton(el);
+            startVerifyGpsTracking();
+        };
+        el.parentElement.appendChild(retryBtn);
+    }
+}
+
+// 顯示 GPS 不可用 (實證)
+function showVerifyGpsUnavailable(el, message) {
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'text-neonpink text-xs';
+}
+
+// 移除重新定位按鈕 (實證)
+function removeVerifyGpsRetryButton(el) {
+    var existingBtn = document.getElementById('vf-gps-retry');
+    if (existingBtn) existingBtn.remove();
 }
 
 
@@ -4421,7 +4517,10 @@ function getRegionStat(region) {
 // ============================================================
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -4893,7 +4992,10 @@ function selectCoinUI(value) {
 async function submitAllSupplement(storeId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitAllSupplement')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('sf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -5188,7 +5290,10 @@ function setLiveTrack(track) { liveTrack = track; showView('live'); }
 async function submitPlayerPost() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitPlayerPost')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('lp-submit-btn', '⏳ 發布中...');
     
     try {
@@ -5300,7 +5405,10 @@ async function submitPlayerPost() {
 async function submitOwnerPost() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitOwnerPost')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('lo-submit-btn', '⏳ 發布中...');
     
     try {
@@ -5982,7 +6090,8 @@ function viewMe() {
     complete: { label: '🏅 完整貢獻' },
     region: { label: '🏙️ 地區探索' },
     supplement: { label: '📝 資料補充' },
-    streak: { label: '🔥 連續貢獻' }
+    streak: { label: '🔥 連續貢獻' },
+    report: { label: '🚨 檢舉貢獻' }
   };
   
   var achListHtml = '';
@@ -6379,7 +6488,10 @@ function openMachineForm(sid) {
 async function submitMachine(sid) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitMachine')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('mf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -6550,7 +6662,10 @@ function hasCheckedInToday(storeId) {
 async function doStoreCheckin(storeId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('doStoreCheckin')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     try {
         var s = STORES.find(function(x) { return x.id === storeId; });
         if (!s) { 
@@ -6627,7 +6742,9 @@ async function doStoreCheckin(storeId) {
 // ============================================================
 // 提交店鋪情報表單 (GPS 每2秒更新版)
 // ============================================================
-
+// ============================================================
+// 相機區塊 HTML
+// ============================================================
 function cameraBlock(key, quality) {
   return '<div id="' + key + '-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n    <button id="' + key + '-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n    <img id="' + key + '-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n  </div>';
 }
@@ -6682,15 +6799,18 @@ function openIntelForm(prefillMall, prefillRegion) {
 }
 
 // ============================================================
-// GPS 每 2 秒追蹤 (提交店鋪用)
+// GPS 每 2 秒追蹤 (提交店鋪用) - 修正版
+// 處理權限被封鎖 + 重新定位按鈕
 // ============================================================
 var _intelGpsTimer = null;
+var _intelGpsRetryBtnShown = false;
 
 function startIntelGpsTracking() {
     stopIntelGpsTracking();
     _finalGpsLat = null;
     _finalGpsLng = null;
     _finalGpsLocked = false;
+    _intelGpsRetryBtnShown = false;
     
     function tick() {
         var el = document.getElementById('nt-gps');
@@ -6698,34 +6818,57 @@ function startIntelGpsTracking() {
         
         if (_finalGpsLocked) return; // 已鎖定最終 GPS，不更新顯示
         
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(pos) {
+        if (!navigator.geolocation) {
+            isGpsReady = false;
+            gpsLat = null;
+            gpsLng = null;
+            showGpsUnavailable(el, '⚠️ 此裝置不支援 GPS 定位');
+            updateFormState();
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
                 gpsLat = pos.coords.latitude;
                 gpsLng = pos.coords.longitude;
                 isGpsReady = true;
+                
+                // 成功獲取 GPS，移除重新定位按鈕
+                removeGpsRetryButton(el);
+                _intelGpsRetryBtnShown = false;
+                
                 if (el && !_finalGpsLocked) {
                     el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
                     el.className = 'text-neongreen text-xs';
                 }
                 updateFormState();
-            }, function() {
+            },
+            function(err) {
                 isGpsReady = false;
                 gpsLat = null;
                 gpsLng = null;
-                if (el && !_finalGpsLocked) {
-                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
-                    el.className = 'text-neonpink text-xs';
+                
+                if (!_finalGpsLocked) {
+                    if (err.code === 1) {
+                        // ✅ Permission denied — 停止輪詢，顯示提示和重新定位按鈕
+                        stopIntelGpsTracking();
+                        showGpsPermissionBlocked(el);
+                        updateFormState();
+                        return;
+                    } else if (err.code === 2) {
+                        // GPS 訊號弱
+                        showGpsRetryButton(el, '📡 GPS 訊號弱，請到室外');
+                    } else if (err.code === 3) {
+                        // 超時
+                        showGpsRetryButton(el, '⏱️ 定位超時');
+                    } else {
+                        showGpsRetryButton(el, '⚠️ 定位失敗');
+                    }
+                    updateFormState();
                 }
-                updateFormState();
-            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-        } else {
-            isGpsReady = false;
-            if (el && !_finalGpsLocked) {
-                el.textContent = '無法定位，請確保開啟GPS定位功能。';
-                el.className = 'text-neonpink text-xs';
-            }
-            updateFormState();
-        }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
     }
     
     tick(); // 立即執行一次
@@ -6737,6 +6880,61 @@ function stopIntelGpsTracking() {
         clearInterval(_intelGpsTimer);
         _intelGpsTimer = null;
     }
+}
+
+// 顯示 GPS 權限被封鎖
+function showGpsPermissionBlocked(el) {
+    if (!el) return;
+    el.innerHTML = '🔒 定位權限已被封鎖，請在瀏覽器設定中允許定位權限';
+    el.className = 'text-neonpink text-xs';
+    
+    // 添加重新定位按鈕
+    removeGpsRetryButton(el);
+    var retryBtn = document.createElement('button');
+    retryBtn.id = 'gps-retry';
+    retryBtn.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+    retryBtn.textContent = '🔄 重新定位';
+    retryBtn.onclick = function() {
+        // 移除按鈕
+        removeGpsRetryButton(el);
+        // 重新啟動追蹤
+        startIntelGpsTracking();
+    };
+    el.parentElement.appendChild(retryBtn);
+}
+
+// 顯示 GPS 重新定位按鈕 (非權限問題)
+function showGpsRetryButton(el, message) {
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'text-yellow-400 text-xs';
+    
+    // 只有當按鈕不存在時才添加
+    if (!document.getElementById('gps-retry')) {
+        var retryBtn = document.createElement('button');
+        retryBtn.id = 'gps-retry';
+        retryBtn.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+        retryBtn.textContent = '🔄 重新定位';
+        retryBtn.onclick = function() {
+            removeGpsRetryButton(el);
+            startIntelGpsTracking();
+        };
+        el.parentElement.appendChild(retryBtn);
+    }
+}
+
+// 顯示 GPS 不可用
+function showGpsUnavailable(el, message) {
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'text-neonpink text-xs';
+    updateFormState();
+}
+
+// 移除重新定位按鈕
+function removeGpsRetryButton(el) {
+    var existingBtn = document.getElementById('gps-retry');
+    if (existingBtn) existingBtn.remove();
 }
 
 // 拍照時鎖定最終 GPS
@@ -7359,7 +7557,10 @@ function enableSubmitButton(btn, successText, btnId) {
 async function submitIntel() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitIntel')) return;
-    
+    if (isUserBanned()) {
+    showBannedMessage();
+    return;
+}
     // 禁用按鈕
     var submitBtn = disableSubmitButton('nt-submit-btn', '⏳ 提交中...');
     
@@ -8047,6 +8248,7 @@ const UserFocus = {
 (async function initApp() {
   console.log('🚀 爪爪情報站啟動中...');
   await loadCloud();
+  await checkUserBanStatus();
   await loadMalls();
   await loadLivePosts();
   await processPendingPosts();

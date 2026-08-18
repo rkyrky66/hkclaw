@@ -691,6 +691,9 @@
                 <li class="nav-item" data-tab="bounty-reviews" onclick="switchTab('bounty-reviews')">
     <i class="fas fa-trophy"></i><span>懸賞審核</span>
     <span class="badge badge-warning" id="badge-bounty-reviews">0</span>
+</li><li class="nav-item" data-tab="reports" onclick="switchTab('reports')">
+    <i class="fas fa-flag"></i><span>檢舉清單</span>
+    <span class="badge badge-danger" id="badge-reports">0</span>
 </li>
             </ul>
         </nav>
@@ -1029,7 +1032,8 @@ function switchTab(tab) {
         users: '用戶管理',
         audit: '審計日誌',
         'admin-actions': '操作記錄',
-        'bounty-reviews': '🏆 懸賞審核'
+        'bounty-reviews': '🏆 懸賞審核',
+        'reports': '🚨 檢舉清單'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
@@ -1042,7 +1046,8 @@ function switchTab(tab) {
         users: loadUsers,
         audit: loadAudit,
         'admin-actions': loadAdminActions,
-        'bounty-reviews': loadBountyReviews  // ✅ 加入這行
+        'bounty-reviews': loadBountyReviews,
+        'reports': loadReports
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -1055,18 +1060,20 @@ function loadDashboard() {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
     Promise.all([
-        sb.from('claw_stores').select('*', { count: 'exact', head: true })
-    .or('admin_overall_status.eq.pending,admin_overall_status.is.null'),
-        sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
-        sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed'),
-        sb.from('verification_reviews').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending')
-    ])
+    sb.from('claw_stores').select('*', { count: 'exact', head: true })
+.or('admin_overall_status.eq.pending,admin_overall_status.is.null'),
+    sb.from('field_status').select('*', { count: 'exact', head: true }).eq('status', 'suspicious'),
+    sb.from('claw_stores').select('*', { count: 'exact', head: true }).eq('admin_overall_status', 'confirmed'),
+    sb.from('verification_reviews').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending'),
+    sb.from('reports').select('*', { count: 'exact', head: true }).eq('admin_status', 'pending')
+])
     .then(function(results) {
         var storesCount = results[0];
         var flaggedCount = results[1];
         var confirmedCount = results[2];
         var verificationsCount = results[3];
-        
+        var reportsCount = results[4];
+document.getElementById('badge-reports').textContent = reportsCount.count || 0;
         document.getElementById('stat-pending').textContent = storesCount.count || 0;
         document.getElementById('stat-flagged').textContent = flaggedCount.count || 0;
         document.getElementById('stat-confirmed').textContent = confirmedCount.count || 0;
@@ -2442,6 +2449,235 @@ function loadBountyReviews() {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
         });
 }
+
+// ============================================================
+// 檢舉清單頁面
+// ============================================================
+function loadReports() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('reports')
+        .select('*')
+        .eq('admin_status', 'pending')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var reports = result.data || [];
+            
+            document.getElementById('badge-reports').textContent = reports.length;
+            
+            if (reports.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待處理的檢舉</p></div>';
+                return;
+            }
+            
+            // 收集所有 target_id，查詢店鋪資料
+            var storeIds = [];
+            for (var i = 0; i < reports.length; i++) {
+                if (reports[i].target_type === 'store') {
+                    var sid = parseInt(reports[i].target_id);
+                    if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
+                        storeIds.push(sid);
+                    }
+                }
+            }
+            
+            var storeQuery = storeIds.length > 0 
+                ? sb.from('claw_stores').select('id, name, region, addr, is_hidden, is_suspicious').in('id', storeIds)
+                : Promise.resolve({ data: [] });
+            
+            return Promise.all([Promise.resolve(reports), storeQuery]);
+        })
+        .then(function(results) {
+            var reports = results[0];
+            var storeResult = results[1];
+            var stores = {};
+            var storeData = storeResult.data || [];
+            for (var i = 0; i < storeData.length; i++) {
+                stores[String(storeData[i].id)] = storeData[i];
+            }
+            
+            var categoryLabels = {
+                'store_not_exist': '🏪 店鋪不存在',
+                'location_wrong': '📍 位置錯誤',
+                'photo_fake': '📸 照片造假',
+                'machine_not_exist': '🎰 機台不存在',
+                'tag_wrong': '🏷️ 標籤錯誤',
+                'name_wrong': '📝 店名錯誤',
+                'other': '💬 其他'
+            };
+            
+            var html = 
+                '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                    '<span style="font-size:13px;color:var(--text-muted);">🚨 共 ' + reports.length + ' 筆待處理檢舉</span>' +
+                    '<button class="btn-sm" onclick="loadReports()" style="margin-left:auto;">🔄 重新整理</button>' +
+                '</div>';
+            
+            for (var i = 0; i < reports.length; i++) {
+                var r = reports[i];
+                var store = stores[String(r.target_id)] || null;
+                var storeName = store ? store.name : '未知店鋪 (ID: ' + r.target_id + ')';
+                var storeRegion = store ? (store.region || '未設定') : '';
+                var isHidden = store ? store.is_hidden : false;
+                
+                html += 
+                    '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+                            '<div>' +
+                                '<strong style="font-size:16px;">' + (categoryLabels[r.category] || r.category) + '</strong>' +
+                                '<span style="font-size:12px;color:var(--text-muted);margin-left:8px;">🏪 ' + storeName + '</span>' +
+                                (storeRegion ? '<span style="font-size:12px;color:var(--text-muted);margin-left:8px;">📍 ' + storeRegion + '</span>' : '') +
+                            '</div>' +
+                            '<span class="status-badge pending">⏳ 待處理</span>' +
+                        '</div>' +
+                        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0;">' +
+                            '<div>' +
+                                '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">📋 檢舉資訊</div>' +
+                                '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;">檢舉者: ' + (r.reporter_device || '未知') + '</div>' +
+                                '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;">原因: ' + (r.reason || '無') + '</div>' +
+                                '<div style="font-size:12px;color:var(--text-muted);">時間: ' + new Date(r.created_at).toLocaleString() + '</div>' +
+                            '</div>' +
+                            '<div>' +
+                                (r.photo_url ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">📸 檢舉照片</div><img src="' + r.photo_url + '" style="max-width:100%;max-height:150px;border-radius:8px;object-fit:cover;" />' : '<div style="font-size:12px;color:var(--text-muted);">無照片</div>') +
+                                (r.gps_lat && r.gps_lng ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">📍 檢舉者 GPS: ' + r.gps_lat.toFixed(6) + ', ' + r.gps_lng.toFixed(6) + '</div>' : '') +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-color);padding-top:12px;">' +
+                            '<button class="btn-sm" onclick="viewReportedStore(\'' + r.target_id + '\')">📋 查看店鋪</button>' +
+                            '<button class="btn-sm danger" onclick="confirmReportHideStore(\'' + r.id + '\', \'' + r.target_id + '\')">🚫 確認檢舉並隱藏店鋪</button>' +
+                            '<button class="btn-sm warning" onclick="markReportMalicious(\'' + r.id + '\', \'' + r.reporter_device + '\')">⚠️ 標記惡意檢舉</button>' +
+                            '<button class="btn-sm success" onclick="dismissReport(\'' + r.id + '\')">✅ 駁回檢舉</button>' +
+                        '</div>' +
+                    '</div>';
+            }
+            
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+// 查看被檢舉的店鋪
+function viewReportedStore(storeId) {
+    viewStoreDetail(storeId);
+}
+
+// 確認檢舉並隱藏店鋪
+function confirmReportHideStore(reportId, storeId) {
+    if (!confirm('確定此檢舉屬實，要隱藏此店鋪嗎？\n\n此操作將：\n1. 隱藏店鋪（前台不再顯示）\n2. 標記檢舉為已處理')) {
+        return;
+    }
+    
+    var reason = prompt('請輸入隱藏原因（可選）：', '檢舉屬實');
+    
+    Promise.all([
+        sb.from('claw_stores')
+            .update({
+                is_hidden: true,
+                admin_overall_status: 'hidden',
+                hidden_at: new Date().toISOString(),
+                hidden_by: currentUser.display_name,
+                hidden_reason: reason || '檢舉屬實'
+            })
+            .eq('id', parseInt(storeId)),
+        sb.from('reports')
+            .update({
+                admin_status: 'confirmed',
+                admin_action: 'hide_store',
+                admin_note: reason || '檢舉屬實，已隱藏店鋪',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser.display_name,
+                resolved_at: new Date().toISOString(),
+                resolved_by: currentUser.display_name
+            })
+            .eq('id', reportId)
+    ])
+    .then(function() {
+        toast('✅ 已隱藏店鋪並處理檢舉');
+        loadReports();
+        loadDashboard();
+    })
+    .catch(function(error) {
+        toast('操作失敗: ' + error.message, 'error');
+    });
+}
+
+// 標記惡意檢舉並封鎖用戶
+function markReportMalicious(reportId, reporterDevice) {
+    if (!confirm('確定此檢舉為惡意檢舉，要封鎖檢舉者嗎？\n\n此操作將：\n1. 封鎖該用戶（禁止寫入操作）\n2. 標記檢舉為惡意')) {
+        return;
+    }
+    
+    var reason = prompt('請輸入封鎖原因（可選）：', '惡意檢舉');
+    
+    Promise.all([
+        sb.from('user_profiles')
+            .update({
+                banned_at: new Date().toISOString(),
+                banned_by: currentUser.display_name,
+                ban_reason: reason || '惡意檢舉'
+            })
+            .eq('device_id', reporterDevice),
+        sb.from('reports')
+            .update({
+                admin_status: 'rejected',
+                admin_action: 'ban_user',
+                admin_note: reason || '惡意檢舉，已封鎖用戶',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser.display_name,
+                resolved_at: new Date().toISOString(),
+                resolved_by: currentUser.display_name
+            })
+            .eq('id', reportId),
+        sb.from('admin_actions')
+            .insert({
+                action_type: 'ban_user',
+                target_type: 'user',
+                target_id: reporterDevice,
+                reason: reason || '惡意檢舉',
+                performed_by: currentUser.display_name,
+                metadata: { report_id: reportId }
+            })
+    ])
+    .then(function() {
+        toast('⚠️ 已封鎖用戶並處理檢舉');
+        loadReports();
+        loadDashboard();
+    })
+    .catch(function(error) {
+        toast('操作失敗: ' + error.message, 'error');
+    });
+}
+
+// 駁回檢舉（檢舉不屬實，店鋪不受影響）
+function dismissReport(reportId) {
+    if (!confirm('確定駁回此檢舉嗎？\n\n此操作將標記檢舉為已駁回，店鋪不受影響。')) {
+        return;
+    }
+    
+    sb.from('reports')
+        .update({
+            admin_status: 'dismissed',
+            admin_action: 'dismiss',
+            admin_note: '檢舉不屬實，已駁回',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: currentUser.display_name,
+            resolved_at: new Date().toISOString(),
+            resolved_by: currentUser.display_name
+        })
+        .eq('id', reportId)
+        .then(function() {
+            toast('✅ 已駁回檢舉');
+            loadReports();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
+}
+
 function resolveFieldFlag(flagId) {
     if (!confirm('確定要解決此存疑項目嗎？')) return;
     
