@@ -4188,7 +4188,110 @@ function switchVerifyMode(mode) {
     updateVerifySubmitButton();
 }
 
-tartVerifyReportGpsTra
+// ============================================================
+// GPS 每 2 秒追蹤 (檢舉模式用) - 完整版
+// ============================================================
+var _verifyReportGpsTimer = null;
+
+function startVerifyReportGpsTracking() {
+    stopVerifyReportGpsTracking();
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    function tick() {
+        var el = document.getElementById('vr-gps');
+        if (!el) { stopVerifyReportGpsTracking(); return; }
+        
+        if (_finalGpsLocked) return;
+        
+        if (!navigator.geolocation) {
+            el.textContent = '⚠️ 此裝置不支援 GPS 定位';
+            el.className = 'text-neonpink text-xs';
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                gpsLat = pos.coords.latitude;
+                gpsLng = pos.coords.longitude;
+                isGpsReady = true;
+                
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+                    el.className = 'text-neongreen text-xs';
+                }
+                updateVerifySubmitButton();
+            },
+            function(err) {
+                isGpsReady = false;
+                gpsLat = null;
+                gpsLng = null;
+                
+                if (!_finalGpsLocked) {
+                    if (err.code === 1) {
+                        // Permission denied — 停止輪詢
+                        stopVerifyReportGpsTracking();
+                        el.textContent = '🔒 定位權限已被封鎖，請在瀏覽器設定中允許定位權限';
+                        el.className = 'text-neonpink text-xs';
+                        
+                        // 添加重新定位按鈕
+                        var existingBtn = document.getElementById('vr-gps-retry');
+                        if (existingBtn) existingBtn.remove();
+                        var retryBtn = document.createElement('button');
+                        retryBtn.id = 'vr-gps-retry';
+                        retryBtn.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+                        retryBtn.textContent = '🔄 重新定位';
+                        retryBtn.onclick = function() {
+                            var btn = document.getElementById('vr-gps-retry');
+                            if (btn) btn.remove();
+                            startVerifyReportGpsTracking();
+                        };
+                        el.parentElement.appendChild(retryBtn);
+                        
+                        updateVerifySubmitButton();
+                        return;
+                    } else if (err.code === 2) {
+                        el.textContent = '📡 GPS 訊號弱，請到室外';
+                        el.className = 'text-yellow-400 text-xs';
+                    } else if (err.code === 3) {
+                        el.textContent = '⏱️ 定位超時';
+                        el.className = 'text-yellow-400 text-xs';
+                    } else {
+                        el.textContent = '⚠️ 定位失敗';
+                        el.className = 'text-yellow-400 text-xs';
+                    }
+                    
+                    // 添加重新定位按鈕
+                    if (!document.getElementById('vr-gps-retry')) {
+                        var retryBtn2 = document.createElement('button');
+                        retryBtn2.id = 'vr-gps-retry';
+                        retryBtn2.className = 'mt-2 w-full rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all';
+                        retryBtn2.textContent = '🔄 重新定位';
+                        retryBtn2.onclick = function() {
+                            var btn2 = document.getElementById('vr-gps-retry');
+                            if (btn2) btn2.remove();
+                            startVerifyReportGpsTracking();
+                        };
+                        el.parentElement.appendChild(retryBtn2);
+                    }
+                    updateVerifySubmitButton();
+                }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    }
+    
+    tick();
+    _verifyReportGpsTimer = setInterval(tick, 2000);
+}
+
+function stopVerifyReportGpsTracking() {
+    if (_verifyReportGpsTimer) {
+        clearInterval(_verifyReportGpsTimer);
+        _verifyReportGpsTimer = null;
+    }
+}
 
 function onVerifyReportCategoryChange(category) {
     _verifyReportCategory = category;
