@@ -2183,16 +2183,34 @@ function loadFlagged() {
                 for (var i = 0; i < data.length; i++) {
                     var f = data[i];
                     var bounty = bountyMap[f.id] || null;
-                    var bountyStatus = bounty ? 
-                        (bounty.status === 'open' ? '📢 懸賞中' : 
-                         bounty.status === 'in_progress' ? '⏳ 進行中' : 
-                         bounty.status === 'completed' ? '✅ 待審核' : '❌ 已結束') : 
-                        '📢 可懸賞';
-                    var bountyColor = bounty ? 
-                        (bounty.status === 'open' ? 'warning' : 
-                         bounty.status === 'in_progress' ? 'pending' : 
-                         bounty.status === 'completed' ? 'confirmed' : 'rejected') : 
-                        'pending';
+                    var bountyStatus = '';
+var bountyColor = 'pending';
+
+if (!bounty) {
+    bountyStatus = '📢 可懸賞';
+    bountyColor = 'pending';
+} else if (bounty.status === 'open') {
+    bountyStatus = '📢 懸賞中';
+    bountyColor = 'warning';
+} else if (bounty.status === 'in_progress') {
+    bountyStatus = '⏳ 進行中';
+    bountyColor = 'pending';
+} else if (bounty.status === 'completed' && !bounty.admin_decision) {
+    bountyStatus = '✅ 待審核';
+    bountyColor = 'confirmed';
+} else if (bounty.status === 'completed' && bounty.admin_decision === 'approved') {
+    bountyStatus = '✅ 已批准';
+    bountyColor = 'confirmed';
+} else if (bounty.status === 'completed' && bounty.admin_decision === 'rejected') {
+    bountyStatus = '❌ 已拒絕';
+    bountyColor = 'rejected';
+} else if (bounty.status === 'rejected') {
+    bountyStatus = '❌ 已結束';
+    bountyColor = 'rejected';
+} else {
+    bountyStatus = '❌ 已結束';
+    bountyColor = 'rejected';
+}
                     
                     // ✅ 修正：使用 String() 確保匹配
                     var storeName = storeNames[String(f.record_id)] || f.record_id;
@@ -2337,64 +2355,88 @@ async function batchPublishBounty() {
     loadDashboard();
 }
 // ============================================================
-// 懸賞任務審核清單
+// 懸賞任務審核清單 (修正版 - 移除 join + 過濾 admin_decision)
 // ============================================================
 function loadBountyReviews() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
-    sb
-        .from('bounty_tasks')
-        .select('*, claw_stores!inner(name, region)')
+    sb.from('bounty_tasks')
+        .select('*')
         .eq('status', 'completed')
+        .is('admin_decision', null)
         .order('completed_at', { ascending: false })
         .then(function(result) {
             if (result.error) throw result.error;
-            var data = result.data || [];
+            var tasks = result.data || [];
             
-            var html = 
-                '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
-                    '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + data.length + ' 個懸賞任務待審核</span>' +
-                    '<button class="btn-sm" onclick="loadBountyReviews()" style="margin-left:auto;">🔄 重新整理</button>' +
-                '</div>';
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的懸賞任務</p></div>';
+                return;
+            }
             
-            if (data.length === 0) {
-                html += '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的懸賞任務</p></div>';
-            } else {
-                for (var i = 0; i < data.length; i++) {
-                    var task = data[i];
-                    var store = task.claw_stores || { name: '未知店鋪', region: '' };
-                    var gps = task.submitted_gps || { lat: 'N/A', lng: 'N/A' };
-                    
-                    html += 
-                        '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
-                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
-                                '<div><strong style="font-size:16px;">🏪 ' + store.name + '</strong><span style="font-size:12px;color:var(--text-muted);margin-left:8px;">' + (store.region || '') + '</span></div>' +
-                                '<div><span class="status-badge pending">⏳ 待審核</span></div>' +
-                            '</div>' +
-                            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">' +
-                                '<div class="compare-card" style="border-color:var(--warning);">' +
-                                    '<div class="label" style="color:var(--warning);">⚠️ 舊版本 (存疑)</div>' +
-                                    '<div style="font-size:12px;color:var(--text-muted);">欄位: ' + task.field_name + '</div>' +
-                                    '<div style="font-size:12px;color:var(--text-secondary);">狀態: 待驗證</div>' +
-                                '</div>' +
-                                '<div class="compare-card" style="border-color:var(--success);">' +
-                                    '<div class="label" style="color:var(--success);">✅ 新版本 (懸賞提交)</div>' +
-                                    (task.submitted_photo ? '<img src="' + task.submitted_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
-                                    '<div class="gps">📍 ' + (gps.lat || 'N/A') + ', ' + (gps.lng || 'N/A') + '</div>' +
-                                    '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">提交者: ' + (task.completed_by || '未知') + '</div>' +
-                                    '<div style="font-size:11px;color:var(--text-secondary);">備註: ' + (task.submitted_value || '無') + '</div>' +
-                                '</div>' +
-                            '</div>' +
-                            '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-color);padding-top:12px;">' +
-                                '<button class="btn-sm success" onclick="approveBounty(\'' + task.id + '\', \'' + task.store_id + '\', \'' + task.field_name + '\', \'' + (task.submitted_value || '') + '\', \'' + (task.submitted_photo || '') + '\', ' + (task.reward_points || 10) + ')">✅ 接受新資料</button>' +
-                                '<button class="btn-sm danger" onclick="rejectBounty(\'' + task.id + '\', \'' + task.store_id + '\')">❌ 拒絕，維持存疑</button>' +
-                            '</div>' +
-                        '</div>';
+            // 收集所有 store_id，轉為數字
+            var storeIds = [];
+            for (var i = 0; i < tasks.length; i++) {
+                var sid = parseInt(tasks[i].store_id);
+                if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
+                    storeIds.push(sid);
                 }
             }
             
-            container.innerHTML = html;
+            // 查詢店鋪資料
+            return sb.from('claw_stores')
+                .select('id, name, region')
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    if (storeResult.error) throw storeResult.error;
+                    
+                    var stores = {};
+                    var storeData = storeResult.data || [];
+                    for (var i = 0; i < storeData.length; i++) {
+                        stores[String(storeData[i].id)] = storeData[i];
+                    }
+                    
+                    var html = 
+                        '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                            '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + tasks.length + ' 個懸賞任務待審核</span>' +
+                            '<button class="btn-sm" onclick="loadBountyReviews()" style="margin-left:auto;">🔄 重新整理</button>' +
+                        '</div>';
+                    
+                    for (var i = 0; i < tasks.length; i++) {
+                        var task = tasks[i];
+                        var store = stores[String(task.store_id)] || { name: '未知店鋪', region: '' };
+                        var gps = task.submitted_gps || { lat: 'N/A', lng: 'N/A' };
+                        
+                        html += 
+                            '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
+                                    '<div><strong style="font-size:16px;">🏪 ' + store.name + '</strong><span style="font-size:12px;color:var(--text-muted);margin-left:8px;">' + (store.region || '') + '</span></div>' +
+                                    '<div><span class="status-badge pending">⏳ 待審核</span></div>' +
+                                '</div>' +
+                                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">' +
+                                    '<div class="compare-card" style="border-color:var(--warning);">' +
+                                        '<div class="label" style="color:var(--warning);">⚠️ 舊版本 (存疑)</div>' +
+                                        '<div style="font-size:12px;color:var(--text-muted);">欄位: ' + task.field_name + '</div>' +
+                                        '<div style="font-size:12px;color:var(--text-secondary);">狀態: 待驗證</div>' +
+                                    '</div>' +
+                                    '<div class="compare-card" style="border-color:var(--success);">' +
+                                        '<div class="label" style="color:var(--success);">✅ 新版本 (懸賞提交)</div>' +
+                                        (task.submitted_photo ? '<img src="' + task.submitted_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
+                                        '<div class="gps">📍 ' + (gps.lat || 'N/A') + ', ' + (gps.lng || 'N/A') + '</div>' +
+                                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">提交者: ' + (task.completed_by || '未知') + '</div>' +
+                                        '<div style="font-size:11px;color:var(--text-secondary);">備註: ' + (task.submitted_value || '無') + '</div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-color);padding-top:12px;">' +
+                                    '<button class="btn-sm success" onclick="approveBounty(\'' + task.id + '\', \'' + task.store_id + '\', \'' + task.field_name + '\', \'' + (task.submitted_value || '') + '\', \'' + (task.submitted_photo || '') + '\', ' + (task.reward_points || 10) + ')">✅ 接受新資料</button>' +
+                                    '<button class="btn-sm danger" onclick="rejectBounty(\'' + task.id + '\', \'' + task.store_id + '\')">❌ 拒絕，維持存疑</button>' +
+                                '</div>' +
+                            '</div>';
+                    }
+                    
+                    container.innerHTML = html;
+                });
         })
         .catch(function(error) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';

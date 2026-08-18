@@ -4474,10 +4474,13 @@ async function submitVerification(storeId) {
                 }
             }
             
+            // ✅ store_verifications.store_id 是 text → 使用 String
+            var stringStoreId = String(storeId);
+            // ✅ user_contributions.store_id 是 bigint → 使用 parseInt
             var numericStoreId = parseInt(storeId);
-            
+
             var verification = {
-                store_id: numericStoreId,
+                store_id: stringStoreId,
                 verifier_device: STATE.user.device,
                 verifier_id: STATE.user.user_id || STATE.user.device,
                 photo_url: photoUrl,
@@ -4698,6 +4701,7 @@ async function submitVerification(storeId) {
         releaseSubmitLock('submitVerification');
     }
 }
+
 // ============================================================
 // 創建/更新 verification_reviews
 // ============================================================
