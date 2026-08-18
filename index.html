@@ -4043,7 +4043,7 @@ function openStoreFromMap(id) {
   openStore(id);
 }
 // ============================================================
-// 認證與補充表單
+// 認證表單 (GPS 每2秒更新版 + 移除備註欄)
 // ============================================================
 function openVerifyForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
@@ -4052,14 +4052,16 @@ function openVerifyForm(storeId) {
         toast('此店鋪已認證', 'gold'); 
         return; 
     }
-  if (s.submitted_by === STATE.user.device) { toast('你不能認證自己提交的店鋪', 'pink'); return; }
+  if (s.submitted_by_device && s.submitted_by_device === STATE.user.device) { toast('你不能認證自己提交的店鋪', 'pink'); return; }
   var existingVerification = STATE.verifications && STATE.verifications[s.id];
   if (existingVerification) { toast('你已經認證過這間店鋪了', 'gold'); return; }
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🔍 認證店鋪</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">認證此店鋪可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n        <p class="text-xs text-white/30">提交者將獲得額外 <span class="text-neongreen font-bold">+35 積分</span></p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 現場拍攝店鋪照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="vf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="vf-gps" class="text-yellow-400 text-xs">定位中，請確認已開啟 GPS...</span>\n          <button onclick="retryVerifyGPS()" id="vf-gps-retry" class="hidden mt-2 text-xs text-gold">🔄 重新定位</button>\n        </div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📝 備註 <span class="text-white/40">（選填）</span></label>\n        <textarea id="vf-note" placeholder="例如：店鋪在 3 樓，電梯左轉..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🔍 認證店鋪</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">認證此店鋪可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n        <p class="text-xs text-white/30">提交者將獲得額外 <span class="text-neongreen font-bold">+35 積分</span></p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="vf-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 店鋪照片 <span class="text-neonpink">（必填）</span></label>\n        <p class="text-[11px] text-white/50 mt-1 mb-2">如果店鋪真實存在，請在現場拍下店鋪照片：</p>\n        <div id="vf-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  
+  // ✅ 啟動 GPS 每 2 秒更新
+  startVerifyGpsTracking();
   
   setTimeout(function() {
-    grabVerifyGPS();
     var camBtn = document.getElementById('vf-camera-btn');
     if (camBtn) {
       camBtn.disabled = false;
@@ -4071,7 +4073,7 @@ function openVerifyForm(storeId) {
   
   var checkInterval = setInterval(function() {
     var photoReady = window._camPreview && window._camPreview.vf;
-    var gpsReady = window._vfGpsReady;
+    var gpsReady = _finalGpsLocked;
     var btn = document.getElementById('vf-submit-btn');
     if (btn) {
       if (photoReady && gpsReady) {
@@ -4081,11 +4083,66 @@ function openVerifyForm(storeId) {
       } else {
         btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
         btn.disabled = true;
-        btn.innerHTML = photoReady ? (gpsReady ? '✅ 可以提交' : '📍 等待 GPS 定位中...') : '📷 請先拍攝店鋪照片';
+        btn.innerHTML = photoReady ? (gpsReady ? '✅ 可以提交' : '📍 等待 GPS 定位...') : '📷 請先拍攝店鋪照片';
       }
     }
   }, 500);
-  setTimeout(function() { return clearInterval(checkInterval); }, 30000);
+  setTimeout(function() { return clearInterval(checkInterval); }, 60000);
+}
+
+// ============================================================
+// GPS 每 2 秒追蹤 (店鋪認證用)
+// ============================================================
+var _verifyGpsTimer = null;
+
+function startVerifyGpsTracking() {
+    stopVerifyGpsTracking();
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    function tick() {
+        var el = document.getElementById('vf-gps');
+        if (!el) { stopVerifyGpsTracking(); return; }
+        
+        if (_finalGpsLocked) return;
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                _vfGpsLat = pos.coords.latitude;
+                _vfGpsLng = pos.coords.longitude;
+                _vfGpsReady = true;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '實時更新中：' + _vfGpsLat.toFixed(6) + ', ' + _vfGpsLng.toFixed(6);
+                    el.className = 'text-neongreen text-xs';
+                }
+            }, function() {
+                _vfGpsReady = false;
+                _vfGpsLat = null;
+                _vfGpsLng = null;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
+                    el.className = 'text-neonpink text-xs';
+                }
+            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        } else {
+            _vfGpsReady = false;
+            if (el && !_finalGpsLocked) {
+                el.textContent = '無法定位，請確保開啟GPS定位功能。';
+                el.className = 'text-neonpink text-xs';
+            }
+        }
+    }
+    
+    tick();
+    _verifyGpsTimer = setInterval(tick, 2000);
+}
+
+function stopVerifyGpsTracking() {
+    if (_verifyGpsTimer) {
+        clearInterval(_verifyGpsTimer);
+        _verifyGpsTimer = null;
+    }
 }
 
 function grabVerifyGPS() {
@@ -4198,11 +4255,11 @@ async function submitVerification(storeId) {
             return; 
         }
         
-        if (!_vfGpsReady || !_vfGpsLat || !_vfGpsLng) { 
-            toast('請等待 GPS 定位完成', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
-            return; 
-        }
+        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
+    toast('請先拍照以鎖定 GPS 位置', 'pink'); 
+    enableSubmitButton(submitBtn, '✅ 提交認證（+15 積分）');
+    return; 
+}
         
         var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
         var limitDistance = isMallStore ? 0.5 : 0.3;
@@ -4239,8 +4296,8 @@ async function submitVerification(storeId) {
             verifier_device: STATE.user.device,
             verifier_id: STATE.user.user_id || STATE.user.device,
             photo_url: photoUrl,
-            lat: _vfGpsLat,
-            lng: _vfGpsLng,
+            lat: _finalGpsLat,
+lng: _finalGpsLng,
             note: document.getElementById('vf-note')?.value.trim() || '',
             status: 'pending',
             created_at: new Date().toISOString()
@@ -5691,7 +5748,7 @@ function closeCamera(key) {
 }
 
 // ============================================================
-// 拍照功能 (含圖片壓縮 - 800px + 0.6品質 + 100KB限制)
+// 拍照功能 (含圖片壓縮 + GPS 鎖定)
 // ============================================================
 async function capturePhoto(key) {
     var videoEl = document.getElementById(key + "-video");
@@ -5705,7 +5762,6 @@ async function capturePhoto(key) {
     var videoWidth = videoEl.videoWidth || 800;
     var videoHeight = videoEl.videoHeight || 600;
     
-    // 計算縮放比例
     var scale = Math.min(1, MAX_WIDTH / videoWidth, MAX_HEIGHT / videoHeight);
     canvas.width = Math.round(videoWidth * scale);
     canvas.height = Math.round(videoHeight * scale);
@@ -5713,17 +5769,14 @@ async function capturePhoto(key) {
     var ctx = canvas.getContext('2d');
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
     
-    // 先以 0.6 品質輸出
     var quality = 0.6;
     var dataUrl = canvas.toDataURL('image/jpeg', quality);
     
-    // 如果超過 100KB，逐步降低品質
     while (dataUrl.length > 100 * 1024 && quality > 0.2) {
         quality -= 0.1;
         dataUrl = canvas.toDataURL('image/jpeg', quality);
     }
     
-    // 如果還是太大，進一步縮小尺寸
     if (dataUrl.length > 100 * 1024) {
         var smallerCanvas = document.createElement('canvas');
         smallerCanvas.width = Math.round(canvas.width * 0.5);
@@ -5742,12 +5795,10 @@ async function capturePhoto(key) {
         img.style.display = 'block'; 
     }
     
-    // 生成 blob
     var blob = await new Promise(function(resolve) { 
         canvas.toBlob(function(b) { resolve(b); }, 'image/jpeg', quality); 
     });
     
-    // 如果 blob 太大，使用縮小後的 canvas 重新生成
     if (blob && blob.size > 100 * 1024) {
         var smallerCanvas2 = document.createElement('canvas');
         smallerCanvas2.width = Math.round(canvas.width * 0.5);
@@ -5764,29 +5815,9 @@ async function capturePhoto(key) {
     window._cam[key] = blob;
     window._camPreview[key] = dataUrl;
     
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(pos) {
-            gpsLat = pos.coords.latitude;
-            gpsLng = pos.coords.longitude;
-            isGpsReady = true;
-            if (document.getElementById('nt-gps')) {
-                var el = document.getElementById('nt-gps');
-                el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-                el.className = 'text-neongreen text-xs';
-            }
-            if (document.getElementById('vf-gps')) {
-                var el = document.getElementById('vf-gps');
-                el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-                el.className = 'text-neongreen text-xs';
-                _vfGpsReady = true;
-                _vfGpsLat = gpsLat;
-                _vfGpsLng = gpsLng;
-            }
-            updateFormState();
-        }, function() { 
-            console.log('⚠️ 拍照完成時定位失敗，使用上次位置'); 
-        }, { enableHighAccuracy: true, timeout: 3000 });
-    }
+    // ✅ 拍照時鎖定最終 GPS
+    var prefix = key === 'vf' ? 'vf' : 'nt';
+    lockFinalGps(prefix);
     
     closeCamera(key);
     var container = document.getElementById(key + "-camera-container");
@@ -5795,10 +5826,10 @@ async function capturePhoto(key) {
     }
     
     if (typeof checkPostForm === 'function') {
-        var prefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
-        if (prefix) checkPostForm(prefix);
+        var postPrefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
+        if (postPrefix) checkPostForm(postPrefix);
     }
-    toast('✅ 已拍照！', 'green');
+    toast('✅ 已拍照！GPS 位置已鎖定', 'green');
 }
 
 function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = null; openCamera(key); }
@@ -5810,6 +5841,11 @@ function clearPhoto(key) {
   if (container) container.innerHTML = '<button onclick="openCamera(\'' + key + '\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>';
   var img = document.getElementById(key + "-preview");
   if (img) { img.classList.add('hidden'); img.style.display = 'none'; }
+  
+  // ✅ 解除 GPS 鎖定
+  var prefix = key === 'vf' ? 'vf' : 'nt';
+  unlockFinalGps(prefix);
+  
   toast('已移除照片', 'pink');
 }
 
@@ -6150,7 +6186,7 @@ async function doStoreCheckin(storeId) {
     }
 }
 // ============================================================
-// 提交店鋪情報表單 (開頭部分)
+// 提交店鋪情報表單 (GPS 每2秒更新版)
 // ============================================================
 function openIntelForm(prefillMall, prefillRegion) {
   selectedRegion = '';
@@ -6160,13 +6196,19 @@ function openIntelForm(prefillMall, prefillRegion) {
   isGpsReady = false;
   gpsLat = null;
   gpsLng = null;
+  _finalGpsLat = null;
+  _finalGpsLng = null;
+  _finalGpsLocked = false;
   mallSelectionMode = 'button';
   mallInputValue = '';
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="form-guide" class="text-xs text-yellow-400 mt-1">📝 請先輸入店名</div>\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3"><span id="nt-gps" class="text-yellow-400 text-xs">定位中，請確認已開啟 GPS...</span><button id="gps-retry" onclick="retryGPS()" class="hidden mt-2 text-xs text-gold">🔄 重新定位</button></div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="form-guide" class="text-xs text-yellow-400 mt-1">📝 請先輸入店名</div>\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="nt-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   renderRegionSelectorTab();
-  setTimeout(function() { return grabGPS('nt-gps'); }, 500);
+  
+  // ✅ 啟動 GPS 每 2 秒更新
+  startIntelGpsTracking();
+  
   setTimeout(function() {
     var camBtn = document.getElementById('nt-camera-btn');
     if (camBtn) { camBtn.disabled = true; camBtn.className = 'w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed'; camBtn.onclick = null; }
@@ -6196,8 +6238,107 @@ function openIntelForm(prefillMall, prefillRegion) {
   }, 100);
 }
 
-function cameraBlock(key, quality) {
-  return '<div id="' + key + '-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n    <button id="' + key + '-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n    <img id="' + key + '-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n  </div>';
+// ============================================================
+// GPS 每 2 秒追蹤 (提交店鋪用)
+// ============================================================
+var _intelGpsTimer = null;
+
+function startIntelGpsTracking() {
+    stopIntelGpsTracking();
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    function tick() {
+        var el = document.getElementById('nt-gps');
+        if (!el) { stopIntelGpsTracking(); return; }
+        
+        if (_finalGpsLocked) return; // 已鎖定最終 GPS，不更新顯示
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                gpsLat = pos.coords.latitude;
+                gpsLng = pos.coords.longitude;
+                isGpsReady = true;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+                    el.className = 'text-neongreen text-xs';
+                }
+                updateFormState();
+            }, function() {
+                isGpsReady = false;
+                gpsLat = null;
+                gpsLng = null;
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '無法定位，請確保開啟GPS定位功能。';
+                    el.className = 'text-neonpink text-xs';
+                }
+                updateFormState();
+            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        } else {
+            isGpsReady = false;
+            if (el && !_finalGpsLocked) {
+                el.textContent = '無法定位，請確保開啟GPS定位功能。';
+                el.className = 'text-neonpink text-xs';
+            }
+            updateFormState();
+        }
+    }
+    
+    tick(); // 立即執行一次
+    _intelGpsTimer = setInterval(tick, 2000);
+}
+
+function stopIntelGpsTracking() {
+    if (_intelGpsTimer) {
+        clearInterval(_intelGpsTimer);
+        _intelGpsTimer = null;
+    }
+}
+
+// 拍照時鎖定最終 GPS
+function lockFinalGps(prefix) {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            _finalGpsLat = pos.coords.latitude;
+            _finalGpsLng = pos.coords.longitude;
+            _finalGpsLocked = true;
+            gpsLat = _finalGpsLat;
+            gpsLng = _finalGpsLng;
+            isGpsReady = true;
+            
+            var elId = prefix === 'vf' ? 'vf-gps' : 'nt-gps';
+            var el = document.getElementById(elId);
+            if (el) {
+                el.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
+                el.className = 'text-gold text-xs';
+            }
+            updateFormState();
+        }, function() {
+            // 拍照時 GPS 失敗，保持現狀
+            toast('⚠️ 拍照時定位失敗，請重試', 'pink');
+        }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+    }
+}
+
+// 取消照片時解除 GPS 鎖定
+function unlockFinalGps(prefix) {
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    var elId = prefix === 'vf' ? 'vf-gps' : 'nt-gps';
+    var el = document.getElementById(elId);
+    if (el) {
+        if (gpsLat && gpsLng) {
+            el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+            el.className = 'text-neongreen text-xs';
+        } else {
+            el.textContent = '無法定位，請確保開啟GPS定位功能。';
+            el.className = 'text-neonpink text-xs';
+        }
+    }
+    updateFormState();
 }
 
 // ============================================================
@@ -6695,7 +6836,7 @@ function isFormComplete() {
     if (!name) return false;
     if (!selectedRegion) return false;
     if (!selectedType) return false;
-    if (!isGpsReady) return false;
+    if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) return false;
     if (selectedType === 'mall' && !selectedMall) return false;
     return true;
 }
@@ -6711,7 +6852,24 @@ function updateSubmitButton() {
         } else {
             btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
             btn.disabled = true;
-            btn.innerHTML = '請完成所有必填欄位';
+            
+            var name = document.getElementById('nt-name')?.value.trim();
+            var hasPhoto = window._camPreview && window._camPreview.nt;
+            var hasGpsLocked = _finalGpsLocked;
+            
+            if (!name) {
+                btn.innerHTML = '📝 請輸入店名';
+            } else if (!selectedRegion) {
+                btn.innerHTML = '📍 請選擇地區';
+            } else if (!selectedType) {
+                btn.innerHTML = '🏪 請選擇店鋪類型';
+            } else if (!hasPhoto) {
+                btn.innerHTML = '📷 請先拍攝店鋪照片';
+            } else if (!hasGpsLocked) {
+                btn.innerHTML = '📍 請拍照以鎖定 GPS 位置';
+            } else {
+                btn.innerHTML = '請完成所有必填欄位';
+            }
         }
     }
 }
@@ -6753,7 +6911,7 @@ function enableSubmitButton(btn, successText, btnId) {
     }
 }
 // ============================================================
-// 提交店鋪 (含雲端同步 + 防重鎖 + 修正插入)
+// 提交店鋪 (含雲端同步 + 防重鎖 + GPS 鎖定檢查)
 // ============================================================
 async function submitIntel() {
     // 🔒 防重鎖
@@ -6783,6 +6941,13 @@ async function submitIntel() {
         var photoBlob = window._cam?.nt;
         if (!photoBlob) { 
             toast('請先拍攝店鋪照片', 'pink'); 
+            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
+            return; 
+        }
+        
+        // ✅ 檢查 GPS 是否已鎖定
+        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
+            toast('請先拍照以鎖定 GPS 位置', 'pink'); 
             enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
             return; 
         }
@@ -6849,8 +7014,8 @@ async function submitIntel() {
                     region: selectedRegion === '港島區' ? '港島區' : selectedRegion === '九龍區' ? '九龍區' : '新界區',
                     district: selectedRegion,
                     address: addr || '',
-                    lat: gpsLat || 0,
-                    lng: gpsLng || 0,
+                    lat: _finalGpsLat || gpsLat || 0,
+                    lng: _finalGpsLng || gpsLng || 0,
                     created_at: new Date().toISOString()
                 };
                 if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
@@ -6863,7 +7028,7 @@ async function submitIntel() {
             }
         }
         
-        // 構建插入資料（只包含確認存在的欄位）
+        // 構建插入資料
         var newStore = {
             name: name,
             region: selectedRegion,
@@ -6875,8 +7040,8 @@ async function submitIntel() {
             staff: false,
             machines: [],
             photo: photoUrl,
-            lat: gpsLat,
-            lng: gpsLng,
+            lat: _finalGpsLat,
+            lng: _finalGpsLng,
             mall: selectedType === 'mall' ? selectedMall : '',
             floor: selectedType === 'mall' ? selectedFloor : '',
             submitted_by: (STATE.user.user_id && isValidUUID(STATE.user.user_id)) ? STATE.user.user_id : null,
@@ -6891,7 +7056,7 @@ async function submitIntel() {
             device: STATE.user.device
         };
         
-        // 先插入雲端，獲取自動生成的數字 ID
+        // 先插入雲端
         var insertedId = null;
         if (CLOUD_ON) {
             try {
@@ -6914,7 +7079,6 @@ async function submitIntel() {
                 
                 console.log('✅ 店鋪已插入雲端');
                 
-                // 查詢剛插入的店鋪 ID
                 var queryResponse = await fetch(
                     SUPABASE_URL + "/rest/v1/claw_stores?select=id&name=eq." + encodeURIComponent(name) + "&submitted_by_device=eq." + encodeURIComponent(STATE.user.device) + "&order=created_at.desc&limit=1",
                     {
@@ -7036,6 +7200,7 @@ async function submitIntel() {
         releaseSubmitLock('submitIntel');
     }
 }
+
 // ============================================================
 // 導航與視圖切換
 // ============================================================
@@ -7124,6 +7289,13 @@ function openModal(html) {
 }
 
 function closeModal() {
+  // ✅ 停止 GPS 追蹤
+  stopIntelGpsTracking();
+  stopVerifyGpsTracking();
+  _finalGpsLat = null;
+  _finalGpsLng = null;
+  _finalGpsLocked = false;
+  
   var root = document.getElementById("modal-root");
   root.className = "pointer-events-none fixed inset-0 z-50";
   root.innerHTML = "";
