@@ -6627,6 +6627,10 @@ async function doStoreCheckin(storeId) {
 // ============================================================
 // 提交店鋪情報表單 (GPS 每2秒更新版)
 // ============================================================
+
+function cameraBlock(key, quality) {
+  return '<div id="' + key + '-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n    <button id="' + key + '-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n    <img id="' + key + '-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n  </div>';
+}
 function openIntelForm(prefillMall, prefillRegion) {
   selectedRegion = '';
   selectedType = '';
