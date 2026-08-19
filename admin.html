@@ -854,8 +854,8 @@ async function loadCoreDataToLocalCache() {
         var results = await Promise.all([
             // 查詢所有店鋪（不限狀態）
             sb.from('claw_stores')
-                .select('id, name, region, admin_overall_status, is_hidden, is_suspicious, created_at')
-                .order('created_at', { ascending: false }),
+    .select('*')
+    .order('created_at', { ascending: false }),
             // 查詢所有 field_status
             sb.from('field_status')
                 .select('*')

@@ -1334,7 +1334,8 @@ async function sbFetch(path, opts) {
     }, opts.headers || {})
   }));
   if (!res.ok) throw new Error("Supabase " + res.status);
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204 || res.status === 201) return null;
+  return res.json();
 }
 
 async function cloudInsert(table, row) {
@@ -1967,12 +1968,18 @@ function checkAchievements() {
       
       if (CLOUD_ON) {
         var userId = STATE.user.user_id || STATE.user.device;
-        cloudInsert('user_achievements', {
-          user_id: userId,
-          achievement_key: key,
-          achievement_name: def.name,
-          unlocked_at: new Date().toISOString()
-        });
+        fetch(SUPABASE_URL + "/rest/v1/user_achievements", {
+    method: 'POST',
+    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+    body: JSON.stringify([{
+        user_id: userId,
+        achievement_key: key,
+        achievement_name: def.name,
+        unlocked_at: new Date().toISOString()
+    }])
+}).catch(function(e) {
+    console.warn('⚠️ user_achievements 寫入失敗:', e.message);
+});
       }
     }
   });
@@ -4720,7 +4727,11 @@ async function submitVerification(storeId) {
             
             if (CLOUD_ON) {
                 try {
-                    await cloudInsert('store_verifications', verification);
+                    await fetch(SUPABASE_URL + "/rest/v1/store_verifications", {
+    method: 'POST',
+    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+    body: JSON.stringify([verification])
+});
                     console.log('✅ 實證已同步到雲端');
                 } catch (e) {
                     console.warn('⚠️ store_verifications 寫入失敗:', e.message);
@@ -5258,11 +5269,12 @@ async function submitAllSupplement(storeId) {
             try {
                 var numericStoreIdForUpdate = parseInt(storeId);
                 var updates = {};
-                if (isStreet && address) updates.address_detail = address;
-                updates.size = size;
-                updates.has_staff = staff;
-                updates.has_e_coin = coin;
-                updates.supplemented_by = STATE.user.device;
+if (isStreet && address) updates.address_detail = address;
+updates.size = size;
+updates.has_staff = staff;
+updates.has_e_coin = coin;
+updates.supplemented_by = STATE.user.device;
+updates.supplement_count = (s.supplement_count || 0) + 1;
                 
                 await fetch(
                     SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
@@ -6918,6 +6930,12 @@ function openIntelForm(prefillMall, prefillRegion) {
   mallSelectionMode = 'button';
   mallInputValue = '';
   
+  // ✅ 清除殘留照片和 GPS
+  window._cam = window._cam || {};
+  window._camPreview = window._camPreview || {};
+  window._cam['nt'] = null;
+  window._camPreview['nt'] = null;
+  
   openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="form-guide" class="text-xs text-yellow-400 mt-1">📝 請先輸入店名</div>\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-white/40">（選填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="nt-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   renderRegionSelectorTab();
@@ -7821,7 +7839,11 @@ async function submitIntel() {
                 if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
                 MALLS_CACHE[regionKey2].push(newMall);
                 try {
-                    await cloudInsert('malls', newMall);
+                    await fetch(SUPABASE_URL + "/rest/v1/malls", {
+    method: 'POST',
+    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+    body: JSON.stringify([newMall])
+});
                 } catch (e) {
                     console.warn('⚠️ 商場插入失敗（不影響主流程）:', e.message);
                 }
