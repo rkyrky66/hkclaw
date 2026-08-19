@@ -1484,6 +1484,7 @@ async function addPoints(n, why) {
 
 // ----- 收藏同步 (P1) -----
 async function toggleFav(type, id) {
+  if (!requireLogin('收藏')) return;
   var key = type === "store" ? "favStores" : "favMachines";
   var arr = STATE[key];
   var i = arr.indexOf(id);
@@ -2419,6 +2420,7 @@ function openReportForm(targetType, targetId, targetName) {
 async function submitReport(targetType, targetId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitReport')) return;
+    if (!requireLogin('檢舉')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -2551,7 +2553,113 @@ async function syncRecentRegions() {
     console.warn('⚠️ 最近搜索雲端同步失敗:', e.message);
   }
 }
+// ============================================================
+// 統一登入檢查
+// ============================================================
+function requireLogin(actionName) {
+    if (!STATE.user.is_bound || !STATE.user.user_id) {
+        toast('🔐 請先登入才能' + (actionName || '使用此功能'), 'gold');
+        setTimeout(function() {
+            showLoginPrompt(actionName);
+        }, 500);
+        return false;
+    }
+    return true;
+}
 
+// ============================================================
+// 登入提示彈窗
+// ============================================================
+function showLoginPrompt(actionName) {
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-5xl mb-3">🔐</div>
+            <h2 class="text-xl font-black text-gold">登入後即可${actionName || '使用完整功能'}</h2>
+            <p class="text-xs text-white/40 mt-2">資料雲端備份，換裝置不遺失</p>
+            <div class="mt-5 w-full space-y-3">
+                <button onclick="closeModal(); bindGoogleAccount();" 
+                    class="w-full rounded-2xl bg-white py-3 text-base font-black text-black flex items-center justify-center gap-2">
+                    <svg width="20" height="20" viewBox="0 0 48 48">
+                        <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+                        <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+                        <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+                        <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+                    </svg>
+                    用 Google 登入
+                </button>
+                <button onclick="closeModal(); showEmailLoginForm();" 
+                    class="w-full rounded-2xl border border-gold/50 bg-gold/10 py-3 text-base font-black text-gold">
+                    📧 用 Email 登入
+                </button>
+                <button onclick="closeModal()" 
+                    class="w-full text-xs text-white/30 hover:text-white/60 transition-colors">
+                    稍後再說
+                </button>
+            </div>
+        </div>
+    `);
+}
+
+// ============================================================
+// Email 登入表單（Magic Link）
+// ============================================================
+function showEmailLoginForm() {
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-5xl mb-3">📧</div>
+            <h2 class="text-xl font-black text-gold">Email 登入</h2>
+            <p class="text-xs text-white/40 mt-2">輸入 Email，我們會發送登入連結</p>
+            <div class="mt-5 w-full">
+                <input id="email-login-input" type="email" placeholder="你的 Email" 
+                    class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" />
+                <button onclick="loginWithEmail()" 
+                    class="mt-3 w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">
+                    發送登入連結
+                </button>
+                <p class="mt-2 text-[10px] text-white/30 text-center">💡 請檢查垃圾信箱</p>
+                <button onclick="closeModal(); showLoginPrompt();" 
+                    class="mt-3 w-full text-xs text-white/30 hover:text-white/60 transition-colors">
+                    ← 返回
+                </button>
+            </div>
+        </div>
+    `);
+}
+
+// ============================================================
+// Email Magic Link 登入
+// ============================================================
+async function loginWithEmail() {
+    var email = document.getElementById('email-login-input')?.value.trim();
+    if (!email) {
+        toast('請輸入 Email', 'pink');
+        return;
+    }
+    
+    if (!isSupabaseReady()) {
+        toast('⚠️ 認證服務暫時不可用', 'pink');
+        return;
+    }
+    
+    try {
+        toast('📧 正在發送登入連結...', 'gold');
+        var currentUrl = window.location.href.split('?')[0].split('#')[0];
+        var result = await supabaseClientInstance.auth.signInWithOtp({
+            email: email,
+            options: {
+                emailRedirectTo: currentUrl,
+                shouldCreateUser: true
+            }
+        });
+        if (result.error) throw result.error;
+        
+        closeModal();
+        toast('✅ 已發送登入連結，請查看 Email', 'green');
+    } catch (error) {
+        console.error('Email 登入錯誤:', error);
+        toast('❌ 發送失敗：' + (error.message || '未知錯誤'), 'pink');
+    }
+}
 // ============================================================
 // Google 帳號綁定 (擴充同步範圍)
 // ============================================================
@@ -2588,8 +2696,9 @@ async function checkOAuthCallback() {
   var params = new URLSearchParams(window.location.hash.substring(1));
   var accessToken = params.get('access_token');
   var refreshToken = params.get('refresh_token');
+  
   if (accessToken) {
-    console.log('🔐 檢測到 OAuth 回調，正在處理...');
+    console.log('🔐 檢測到 OAuth/Magic Link 回調，正在處理...');
     try {
       var result = await supabaseClientInstance.auth.setSession({
         access_token: accessToken,
@@ -2601,8 +2710,8 @@ async function checkOAuthCallback() {
       await syncUserDataAfterBind(userResult.data.user);
       window.history.replaceState({}, '', window.location.pathname);
     } catch (error) {
-      console.error('OAuth 回調處理錯誤:', error);
-      toast('❌ 綁定失敗：' + error.message, 'pink');
+      console.error('OAuth/Magic Link 回調處理錯誤:', error);
+      toast('❌ 登入失敗：' + error.message, 'pink');
     }
   }
 }
@@ -4627,7 +4736,7 @@ function getRegionStat(region) {
 // ============================================================
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
-    
+    if (!requireLogin('實證店鋪')) return;
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -5159,6 +5268,7 @@ function selectCoinUI(value) {
 async function submitAllSupplement(storeId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitAllSupplement')) return;
+    if (!requireLogin('補充資料')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -5458,6 +5568,7 @@ function setLiveTrack(track) { liveTrack = track; showView('live'); }
 async function submitPlayerPost() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitPlayerPost')) return;
+    if (!requireLogin('發布戰報')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -5573,6 +5684,7 @@ async function submitPlayerPost() {
 async function submitOwnerPost() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitOwnerPost')) return;
+    if (!requireLogin('發布宣傳')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -6656,6 +6768,7 @@ function openMachineForm(sid) {
 async function submitMachine(sid) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitMachine')) return;
+    if (!requireLogin('上架機台')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -6830,6 +6943,7 @@ function hasCheckedInToday(storeId) {
 async function doStoreCheckin(storeId) {
     // 🔒 防重鎖
     if (!acquireSubmitLock('doStoreCheckin')) return;
+    if (!requireLogin('打卡')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
@@ -7731,6 +7845,7 @@ function enableSubmitButton(btn, successText, btnId) {
 async function submitIntel() {
     // 🔒 防重鎖
     if (!acquireSubmitLock('submitIntel')) return;
+    if (!requireLogin('提交店鋪')) return;
     if (isUserBanned()) {
     showBannedMessage();
     return;
