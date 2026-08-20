@@ -4960,7 +4960,9 @@ function calculateGlobalTitle(allContributions) {
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
 async function submitVerification(storeId) {
-  console.log('🔍 認證除錯:', {
+      if (!acquireSubmitLock('submitVerification')) return;
+    if (!requireLogin('實證店鋪')) return;
+    console.log('🔍 認證除錯:', {
     is_bound: STATE.user.is_bound,
     user_id: STATE.user.user_id,
     device: STATE.user.device
@@ -4975,8 +4977,6 @@ try {
 } catch (e) {
     console.log('🔍 Session 取得失敗:', e.message);
 }
-    if (!acquireSubmitLock('submitVerification')) return;
-    if (!requireLogin('實證店鋪')) return;
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -5294,58 +5294,34 @@ try {
 // 創建/更新 verification_reviews (修正版 - 回傳認證者位置)
 // ============================================================
 async function upsertVerificationReview(storeId, verification) {
-  // 🔍 除錯檢查
-console.log('🔍 upsertVerificationReview 除錯:', {
-    storeId: storeId,
-    verifier_device: verification?.verifier_device,
-    verifier_id: verification?.verifier_id
-});
-try {
-    var debugSession2 = await supabaseClientInstance.auth.getSession();
-    console.log('🔍 upsert Session:', {
-        hasSession: !!debugSession2?.data?.session,
-        user_id: debugSession2?.data?.session?.user?.id || '無'
-    });
-} catch (e) {
-    console.log('🔍 upsert Session 失敗:', e.message);
-}
     if (!CLOUD_ON) return 'local_only';
     
     try {
         var stringStoreId = String(storeId);
-        // 🔍 檢查使用的 headers
-var debugHeaders = getSupabaseHeaders();
-console.log('🔍 fetch Headers:', {
-    apikey: debugHeaders.apikey ? '存在' : '不存在',
-    Authorization: debugHeaders.Authorization ? debugHeaders.Authorization.substring(0, 30) + '...' : '不存在'
-});
-        // 查詢是否已有記錄（取最新一筆）
-        var checkResponse = await fetch(
-            SUPABASE_URL + "/rest/v1/verification_reviews?store_id=eq." + encodeURIComponent(stringStoreId) + "&order=created_at.desc&limit=1",
-            {
-                headers: getSupabaseHeaders()
-            }
-        );
         
-        if (!checkResponse.ok) throw new Error('HTTP ' + checkResponse.status);
+        // 使用 SDK 查詢
+        var checkResult = await supabaseClientInstance
+            .from('verification_reviews')
+            .select('*')
+            .eq('store_id', stringStoreId)
+            .order('created_at', { ascending: false })
+            .limit(1);
         
-        var existingReviews = await checkResponse.json();
+        if (checkResult.error) throw checkResult.error;
+        
+        var existingReviews = checkResult.data || [];
         
         if (existingReviews && existingReviews.length > 0) {
-            // 已有記錄
             var review = existingReviews[0];
             
-            // 檢查是否已滿兩位認證者
             if (review.verifier_2_device) {
                 return 'already_complete';
             }
             
-            // 檢查是否為同一認證者
             if (review.verifier_1_device === verification.verifier_device) {
                 return 'already_verified';
             }
             
-            // ✅ 第二位認證者
             var updateData = {
                 verifier_2_device: verification.verifier_device,
                 verifier_2_name: STATE.user.name || STATE.user.display_name || '',
@@ -5355,50 +5331,39 @@ console.log('🔍 fetch Headers:', {
                 updated_at: new Date().toISOString()
             };
             
-            var updateResponse = await fetch(
-                SUPABASE_URL + "/rest/v1/verification_reviews?id=eq." + review.id,
-                {
-                    method: 'PATCH',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify(updateData)
-                }
-            );
+            var updateResult = await supabaseClientInstance
+                .from('verification_reviews')
+                .update(updateData)
+                .eq('id', review.id);
             
-            if (!updateResponse.ok && updateResponse.status !== 204) {
-                throw new Error('HTTP ' + updateResponse.status);
-            }
+            if (updateResult.error) throw updateResult.error;
             
             console.log('✅ verification_reviews 已更新（第二位認證者）');
             return 'verifier_2';
         } else {
-            // 沒有記錄，創建新記錄
             // 查詢首發者資料
-            var storeResponse = await fetch(
-                SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + encodeURIComponent(storeId) + "&select=submitted_by_device,photo,lat,lng",
-                {
-                    headers: getSupabaseHeaders()
-                }
-            );
+            var storeResult = await supabaseClientInstance
+                .from('claw_stores')
+                .select('submitted_by_device, photo, lat, lng')
+                .eq('id', parseInt(storeId))
+                .single();
             
             var firstSubmitterDevice = '';
             var firstSubmitterPhoto = '';
             var firstSubmitterGps = { lat: null, lng: null };
             
-            if (storeResponse.ok) {
-                var storeData = await storeResponse.json();
-                if (storeData && storeData.length > 0) {
-                    firstSubmitterDevice = storeData[0].submitted_by_device || '';
-                    firstSubmitterPhoto = storeData[0].photo || '';
-                    if (storeData[0].lat && storeData[0].lng) {
-                        firstSubmitterGps = { lat: storeData[0].lat, lng: storeData[0].lng };
-                    }
+            if (!storeResult.error && storeResult.data) {
+                firstSubmitterDevice = storeResult.data.submitted_by_device || '';
+                firstSubmitterPhoto = storeResult.data.photo || '';
+                if (storeResult.data.lat && storeResult.data.lng) {
+                    firstSubmitterGps = { lat: storeResult.data.lat, lng: storeResult.data.lng };
                 }
             }
             
             var newReview = {
                 store_id: stringStoreId,
                 first_submitter_device: firstSubmitterDevice,
-                first_submitter_name: '',  // 可選，後續可從 user_profiles 查詢
+                first_submitter_name: '',
                 first_submitter_photo: firstSubmitterPhoto,
                 first_submitter_gps: firstSubmitterGps,
                 verifier_1_device: verification.verifier_device,
@@ -5410,18 +5375,11 @@ console.log('🔍 fetch Headers:', {
                 updated_at: new Date().toISOString()
             };
             
-            var insertResponse = await fetch(
-                SUPABASE_URL + "/rest/v1/verification_reviews",
-                {
-                    method: 'POST',
-                    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                    body: JSON.stringify([newReview])
-                }
-            );
+            var insertResult = await supabaseClientInstance
+                .from('verification_reviews')
+                .insert(newReview);
             
-            if (!insertResponse.ok && insertResponse.status !== 201 && insertResponse.status !== 204) {
-                throw new Error('HTTP ' + insertResponse.status);
-            }
+            if (insertResult.error) throw insertResult.error;
             
             console.log('✅ verification_reviews 已創建（第一位認證者）');
             return 'verifier_1';
