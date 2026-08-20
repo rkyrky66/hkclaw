@@ -4960,23 +4960,10 @@ function calculateGlobalTitle(allContributions) {
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
 async function submitVerification(storeId) {
-      if (!acquireSubmitLock('submitVerification')) return;
+    if (!acquireSubmitLock('submitVerification')) return;
+    
     if (!requireLogin('實證店鋪')) return;
-    console.log('🔍 認證除錯:', {
-    is_bound: STATE.user.is_bound,
-    user_id: STATE.user.user_id,
-    device: STATE.user.device
-});
-try {
-    var debugSession = await supabaseClientInstance.auth.getSession();
-    console.log('🔍 Session 狀態:', {
-        hasSession: !!debugSession?.data?.session,
-        access_token: debugSession?.data?.session?.access_token ? '存在（長度 ' + debugSession.data.session.access_token.length + '）' : '不存在',
-        user_id: debugSession?.data?.session?.user?.id || '無'
-    });
-} catch (e) {
-    console.log('🔍 Session 取得失敗:', e.message);
-}
+    
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -5031,7 +5018,7 @@ try {
             
             var stringStoreId = String(storeId);
             var numericStoreId = parseInt(storeId);
-            
+
             var verification = {
                 store_id: stringStoreId,
                 verifier_device: STATE.user.device,
@@ -5048,7 +5035,7 @@ try {
             // 調整後的寫入順序：
             // 1. 先寫 verification_reviews（判斷第幾位認證者）
             // 2. 再寫 store_verifications
-            // 3. 最後更新 claw_stores
+            // 3. 最後更新 claw_stores（使用 SDK）
             // 4. 獨立寫入 user_contributions
             // ============================================
             
@@ -5076,11 +5063,11 @@ try {
             
             if (CLOUD_ON) {
                 try {
-                    await fetch(SUPABASE_URL + "/rest/v1/store_verifications", {
-    method: 'POST',
-    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-    body: JSON.stringify([verification])
-});
+                    var insertVerificationResult = await supabaseClientInstance
+                        .from('store_verifications')
+                        .insert(verification);
+                    
+                    if (insertVerificationResult.error) throw insertVerificationResult.error;
                     console.log('✅ 實證已同步到雲端');
                 } catch (e) {
                     console.warn('⚠️ store_verifications 寫入失敗:', e.message);
@@ -5099,7 +5086,6 @@ try {
             
             if (s.verification_count >= 2) {
                 s.status = 'verified';
-                s.verified = 'verified';
                 s.is_verified = true;
                 
                 if (s.submitted_by) {
@@ -5115,45 +5101,51 @@ try {
             
             save();
             
+            // ✅ 使用 SDK 更新 claw_stores
             if (CLOUD_ON) {
                 try {
-                    await fetch(
-                        SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
-                        {
-                            method: 'PATCH',
-                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                            body: JSON.stringify({
-                                verification_count: s.verification_count,
-                                status: s.status,
-                                verified: s.verified,
-                                is_verified: s.is_verified
-                            })
-                        }
-                    );
+                    console.log('🔍 SDK 更新前:', {
+                        id: numericStoreId,
+                        verification_count: s.verification_count,
+                        status: s.status,
+                        is_verified: s.is_verified
+                    });
+                    
+                    var updateStoreResult = await supabaseClientInstance
+                        .from('claw_stores')
+                        .update({
+                            verification_count: s.verification_count,
+                            status: s.status,
+                            is_verified: s.is_verified
+                        })
+                        .eq('id', numericStoreId);
+                    
+                    if (updateStoreResult.error) throw updateStoreResult.error;
+                    
+                    console.log('✅ SDK 更新成功:', {
+                        verification_count: s.verification_count,
+                        status: s.status,
+                        is_verified: s.is_verified
+                    });
                 } catch (e) {
-                    console.warn('⚠️ 同步實證計數失敗:', e.message);
+                    console.warn('⚠️ SDK 更新失敗:', e.message);
                 }
             }
             
             await recordTaskCompletion('verify_store');
-            await recordRegionContribution('verify_store', s.region, storeId);
+            
             if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
                 try {
-                    await fetch(
-                        SUPABASE_URL + "/rest/v1/user_contributions",
-                        {
-                            method: 'POST',
-                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                            body: JSON.stringify([{
-                                user_id: STATE.user.user_id,
-                                device_id: STATE.user.device,
-                                store_id: numericStoreId,
-                                contribution_type: 'verify',
-                                contribution_value: 1,
-                                created_at: new Date().toISOString()
-                            }])
-                        }
-                    );
+                    await supabaseClientInstance
+                        .from('user_contributions')
+                        .insert({
+                            user_id: STATE.user.user_id,
+                            device_id: STATE.user.device,
+                            store_id: numericStoreId,
+                            contribution_type: 'verify',
+                            contribution_value: 1,
+                            created_at: new Date().toISOString()
+                        });
                 } catch (e) {
                     console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
                 }
@@ -5162,6 +5154,8 @@ try {
             await addPoints(15, '店鋪實證');
             updateAchievementStat('verify_store');
             updateStreak();
+            
+            await recordRegionContribution('verify_store', s.region, storeId);
             
             closeModal();
             openStore(storeId);
@@ -5255,18 +5249,14 @@ try {
             // 標記店鋪為可疑
             if (CLOUD_ON) {
                 try {
-                    await fetch(
-                        SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + storeId,
-                        {
-                            method: 'PATCH',
-                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                            body: JSON.stringify({
-                                is_suspicious: true,
-                                suspicious_reason: category,
-                                suspicious_at: new Date().toISOString()
-                            })
-                        }
-                    );
+                    await supabaseClientInstance
+                        .from('claw_stores')
+                        .update({
+                            is_suspicious: true,
+                            suspicious_reason: category,
+                            suspicious_at: new Date().toISOString()
+                        })
+                        .eq('id', parseInt(storeId));
                 } catch (e) {
                     console.warn('⚠️ 標記可疑失敗:', e.message);
                 }
@@ -5281,6 +5271,8 @@ try {
             updateAchievementStat('report_submitted');
             addXP(5, '提交檢舉');
             updateStreak();
+            
+            await recordRegionContribution('report', s.region, storeId);
             
             toast('✅ 檢舉已提交，感謝你的回報！', 'green');
             closeModal();
