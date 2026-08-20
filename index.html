@@ -5055,14 +5055,7 @@ async function submitVerification(storeId) {
                 created_at: new Date().toISOString()
             };
             
-            // ============================================
-            // 調整後的寫入順序：
-            // 1. 先寫 verification_reviews（判斷第幾位認證者）
-            // 2. 再寫 store_verifications
-            // 3. 最後更新 claw_stores（使用 SDK）
-            // 4. 獨立寫入 user_contributions
-            // ============================================
-            
+            // 1. 寫 verification_reviews
             var reviewResult = null;
             if (CLOUD_ON) {
                 try {
@@ -5085,11 +5078,12 @@ async function submitVerification(storeId) {
                 }
             }
             
+            // 2. 寫 store_verifications
             if (CLOUD_ON) {
                 try {
                     var insertVerificationResult = await supabaseClientInstance
                         .from('store_verifications')
-                        .insert(verification);
+                        .insert(verification, { count: 'exact' });
                     
                     if (insertVerificationResult.error) throw insertVerificationResult.error;
                     console.log('✅ 實證已同步到雲端');
@@ -5101,58 +5095,45 @@ async function submitVerification(storeId) {
                 }
             }
             
-            // ✅ 更新本地 STATE.verifications（防止重複實證）
-            STATE.verifications = STATE.verifications || {};
-            STATE.verifications[s.id] = true;
-            
-            s.verification_count = (s.verification_count || 0) + 1;
-            s._userVerified = true;
-            
-            if (s.verification_count >= 2) {
-                s.status = 'verified';
-                s.is_verified = true;
-                
-                if (s.submitted_by) {
-                    await addPoints(35, '實證通過追加獎勵');
-                    toast('🎉 ' + s.name + ' 已通過實證！提交者獲得 +35 分', 'green');
-                }
-                updateAchievementStat('store_complete');
-                var regionStat = getRegionStat(s.region);
-                if (regionStat) updateAchievementStat(regionStat);
-            } else {
-                toast('✅ 實證提交成功！目前 ' + s.verification_count + '/2 人實證', 'green');
-            }
-            
-            save();
-            
-            // ✅ 使用 SDK 更新 claw_stores
+            // 3. 使用 RPC 原子增加 verification_count
             if (CLOUD_ON) {
                 try {
-                    console.log('🔍 SDK 更新前:', {
-                        id: numericStoreId,
-                        verification_count: s.verification_count,
-                        status: s.status,
-                        is_verified: s.is_verified
+                    var rpcResult = await supabaseClientInstance.rpc('increment_verification_count', {
+                        store_id_param: numericStoreId
                     });
                     
-                    var updateStoreResult = await supabaseClientInstance
-                        .from('claw_stores')
-                        .update({
-                            verification_count: s.verification_count,
-                            status: s.status,
-                            is_verified: s.is_verified
-                        })
-                        .eq('id', numericStoreId);
-                    
-                    if (updateStoreResult.error) throw updateStoreResult.error;
-                    
-                    console.log('✅ SDK 更新成功:', {
-                        verification_count: s.verification_count,
-                        status: s.status,
-                        is_verified: s.is_verified
-                    });
+                    if (rpcResult.error) throw rpcResult.error;
+                    console.log('✅ verification_count 已原子增加');
                 } catch (e) {
-                    console.warn('⚠️ SDK 更新失敗:', e.message);
+                    console.warn('⚠️ verification_count 更新失敗:', e.message);
+                }
+            }
+            
+            // 4. 更新本地 STATE.verifications
+            STATE.verifications = STATE.verifications || {};
+            STATE.verifications[s.id] = true;
+            save();
+            
+            // 5. 重新載入雲端資料
+            if (CLOUD_ON) {
+                try {
+                    await loadCloud();
+                    console.log('✅ 已重新載入最新店鋪資料');
+                } catch (e) {
+                    console.warn('⚠️ 重新載入失敗:', e.message);
+                }
+            }
+            
+            // 6. 從最新資料取得 verification_count
+            var updatedStore = STORES.find(function(x) { return x.id === storeId; });
+            if (updatedStore) {
+                if (updatedStore.verification_count >= 2) {
+                    toast('🎉 ' + updatedStore.name + ' 已通過實證！', 'green');
+                    updateAchievementStat('store_complete');
+                    var regionStat = getRegionStat(updatedStore.region);
+                    if (regionStat) updateAchievementStat(regionStat);
+                } else {
+                    toast('✅ 實證提交成功！目前 ' + updatedStore.verification_count + '/2 人實證', 'green');
                 }
             }
             
@@ -5169,7 +5150,7 @@ async function submitVerification(storeId) {
                             contribution_type: 'verify',
                             contribution_value: 1,
                             created_at: new Date().toISOString()
-                        });
+                        }, { count: 'exact' });
                 } catch (e) {
                     console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
                 }
@@ -5248,7 +5229,6 @@ async function submitVerification(storeId) {
                 reportData.reason = inputVal;
             }
             
-            // 寫入 reports 表
             if (CLOUD_ON) {
                 try {
                     var reportResponse = await fetch(SUPABASE_URL + "/rest/v1/reports", {
@@ -5270,7 +5250,6 @@ async function submitVerification(storeId) {
                 STATE._offlineReports.push(reportData);
             }
             
-            // 標記店鋪為可疑
             if (CLOUD_ON) {
                 try {
                     await supabaseClientInstance
@@ -5286,12 +5265,10 @@ async function submitVerification(storeId) {
                 }
             }
             
-            // 更新本地
             s.is_suspicious = true;
             s.suspicious_reason = category;
             save();
             
-            // 記錄成就統計
             updateAchievementStat('report_submitted');
             addXP(5, '提交檢舉');
             updateStreak();
@@ -5305,7 +5282,6 @@ async function submitVerification(storeId) {
         releaseSubmitLock('submitVerification');
     }
 }
-
 // ============================================================
 // 創建/更新 verification_reviews (修正版 - 回傳認證者位置)
 // ============================================================
@@ -5618,7 +5594,6 @@ updates.size = size;
 updates.has_staff = staff;
 updates.has_e_coin = coin;
 updates.supplemented_by = STATE.user.device;
-updates.supplement_count = (s.supplement_count || 0) + 1;
                 
                 await fetch(
                     SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
@@ -5638,6 +5613,18 @@ updates.supplement_count = (s.supplement_count || 0) + 1;
                         body: JSON.stringify({ admin_overall_status: 'pending' })
                     }
                 );
+                // 在 PATCH claw_stores 之後加入：
+if (CLOUD_ON) {
+    try {
+        var supplementRpcResult = await supabaseClientInstance.rpc('increment_supplement_count', {
+            store_id_param: numericStoreIdForUpdate
+        });
+        if (supplementRpcResult.error) throw supplementRpcResult.error;
+        console.log('✅ supplement_count 已原子增加');
+    } catch (e) {
+        console.warn('⚠️ supplement_count 更新失敗:', e.message);
+    }
+}
                 console.log('✅ 店鋪已重新設為待審核');
                 
                 if (currentGps) {
