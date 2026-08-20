@@ -948,7 +948,89 @@ var REGION_KEYS = {
     kl: { label: '九龍區', icon: '🏙️', districts: ['旺角', '尖沙咀', '觀塘', '深水埗', '紅磡', '藍田', '油麻地', '九龍城', '土瓜灣', '黃大仙', '牛頭角', '九龍灣', '秀茂坪', '油塘', '樂富', '啟德', '黃埔', '慈雲山', '大角咀', '荔枝角'] },
     nt: { label: '新界區', icon: '🌳', districts: ['屯門', '荃灣', '元朗', '葵芳', '將軍澳', '大埔', '葵興', '天水圍', '沙田', '大圍', '馬鞍山', '上水', '粉嶺', '青衣', '東涌', '昂坪', '坑口', '調景嶺', '日出康城', '西貢'] }
 };
+// ============================================================
+// 貢獻值定義
+// ============================================================
+var CONTRIBUTION_VALUES = {
+    'checkin': 1,          // 打卡
+    'post': 1,             // 發布戰績/宣傳
+    'supplement': 2,       // 補充資料
+    'report': 2,           // 檢舉/報錯
+    'verify_store': 3,     // 認證店鋪
+    'submit_store': 5,     // 提交新店
+    'machine': 2           // 上架機台
+};
 
+// ============================================================
+// 稱號定義
+// ============================================================
+var TITLE_DEFS = {
+    explorer: {
+        key: 'explorer',
+        label: '探險家',
+        icon: '🗺️',
+        actions: ['checkin'],
+        levels: [
+            { level: 1, threshold: 1, title: '旅人' },
+            { level: 2, threshold: 20, title: '探險家' },
+            { level: 3, threshold: 50, title: '先遣隊長' },
+            { level: 4, threshold: 100, title: '地圖領袖' },
+            { level: 5, threshold: 200, title: '全域領航員' }
+        ]
+    },
+    pioneer: {
+        key: 'pioneer',
+        label: '開拓者',
+        icon: '🏪',
+        actions: ['submit_store'],
+        levels: [
+            { level: 1, threshold: 1, title: '旅人' },
+            { level: 2, threshold: 20, title: '開拓者' },
+            { level: 3, threshold: 50, title: '情報主幹' },
+            { level: 4, threshold: 100, title: '開國元勛' },
+            { level: 5, threshold: 200, title: '建國元老' }
+        ]
+    },
+    inspector: {
+        key: 'inspector',
+        label: '考察師',
+        icon: '🔍',
+        actions: ['verify_store'],
+        levels: [
+            { level: 1, threshold: 1, title: '旅人' },
+            { level: 2, threshold: 20, title: '考察師' },
+            { level: 3, threshold: 50, title: '首席大師' },
+            { level: 4, threshold: 100, title: '總稽核長' },
+            { level: 5, threshold: 200, title: '情報至尊' }
+        ]
+    },
+    repairer: {
+        key: 'repairer',
+        label: '修繕家',
+        icon: '📝',
+        actions: ['supplement', 'report'],
+        levels: [
+            { level: 1, threshold: 1, title: '旅人' },
+            { level: 2, threshold: 20, title: '修繕家' },
+            { level: 3, threshold: 50, title: '專業巨匠' },
+            { level: 4, threshold: 100, title: '總顧問' },
+            { level: 5, threshold: 200, title: '數據權威' }
+        ]
+    },
+    player: {
+        key: 'player',
+        label: '打台師',
+        icon: '🎯',
+        actions: ['post'],
+        levels: [
+            { level: 1, threshold: 1, title: '旅人' },
+            { level: 2, threshold: 20, title: '打台師' },
+            { level: 3, threshold: 50, title: '戰報狂人' },
+            { level: 4, threshold: 100, title: '首席大戶' },
+            { level: 5, threshold: 200, title: '終極狂熱者' }
+        ]
+    }
+};
 // 計算區域探索進度
 function calculateRegionProgress(regionKey) {
     var region = REGION_KEYS[regionKey];
@@ -2482,6 +2564,7 @@ async function submitReport(targetType, targetId) {
             save();
             toast('✅ 檢舉已記錄（離線），連網後將自動提交', 'green');
             closeModal();
+            await recordRegionContribution('report', store.region, targetId);
         }
     } finally {
         releaseSubmitLock('submitReport');
@@ -4730,7 +4813,152 @@ function getRegionStat(region) {
   };
   return regionMap[region] || null;
 }
+// ============================================================
+// 地區貢獻記錄
+// ============================================================
+async function recordRegionContribution(actionType, storeRegion, storeId) {
+    if (!STATE.user.is_bound || !STATE.user.user_id) return;
+    if (!storeRegion) return;
+    
+    // 判斷地區所屬大區
+    var regionGroup = '';
+    Object.keys(REGION_KEYS).forEach(function(key) {
+        var group = REGION_KEYS[key];
+        if (group.districts.indexOf(storeRegion) !== -1) {
+            regionGroup = key;
+        }
+    });
+    
+    if (!regionGroup) return;
+    
+    var contributionValue = CONTRIBUTION_VALUES[actionType] || 1;
+    
+    // 寫入 Supabase
+    try {
+        await fetch(SUPABASE_URL + "/rest/v1/user_region_contributions", {
+            method: 'POST',
+            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+            body: JSON.stringify([{
+                user_id: STATE.user.user_id,
+                device_id: STATE.user.device,
+                region_group: regionGroup,
+                region_name: storeRegion,
+                action_type: actionType,
+                contribution_value: contributionValue,
+                store_id: storeId ? String(storeId) : null,
+                created_at: new Date().toISOString()
+            }])
+        });
+        console.log('✅ 地區貢獻已記錄:', actionType, storeRegion, '+', contributionValue);
+    } catch (e) {
+        console.warn('⚠️ 地區貢獻記錄失敗:', e.message);
+    }
+}
 
+// ============================================================
+// 計算地區稱號
+// ============================================================
+function calculateRegionTitle(regionGroup, contributions) {
+    // contributions: [{ action_type, contribution_value }]
+    
+    var totalValue = 0;
+    var actionTotals = {};
+    
+    contributions.forEach(function(c) {
+        totalValue += c.contribution_value || 0;
+        if (!actionTotals[c.action_type]) actionTotals[c.action_type] = 0;
+        actionTotals[c.action_type] += c.contribution_value || 0;
+    });
+    
+    // 找出最高佔比的路線
+    var bestRoute = null;
+    var bestValue = 0;
+    
+    Object.keys(TITLE_DEFS).forEach(function(routeKey) {
+        var route = TITLE_DEFS[routeKey];
+        var routeValue = 0;
+        route.actions.forEach(function(action) {
+            routeValue += actionTotals[action] || 0;
+        });
+        if (routeValue > bestValue) {
+            bestValue = routeValue;
+            bestRoute = route;
+        }
+    });
+    
+    if (!bestRoute || totalValue === 0) {
+        return { title: '旅人', route: null, level: 0, totalValue: 0 };
+    }
+    
+    // 判斷等級
+    var level = 1;
+    for (var i = bestRoute.levels.length - 1; i >= 0; i--) {
+        if (totalValue >= bestRoute.levels[i].threshold) {
+            level = bestRoute.levels[i].level;
+            break;
+        }
+    }
+    
+    var levelInfo = bestRoute.levels.find(function(l) { return l.level === level; });
+    
+    return {
+        title: levelInfo.title,
+        route: bestRoute,
+        level: level,
+        totalValue: totalValue
+    };
+}
+
+// ============================================================
+// 計算全港總稱號
+// ============================================================
+function calculateGlobalTitle(allContributions) {
+    var totalValue = 0;
+    var actionTotals = {};
+    
+    allContributions.forEach(function(c) {
+        totalValue += c.contribution_value || 0;
+        if (!actionTotals[c.action_type]) actionTotals[c.action_type] = 0;
+        actionTotals[c.action_type] += c.contribution_value || 0;
+    });
+    
+    var bestRoute = null;
+    var bestValue = 0;
+    
+    Object.keys(TITLE_DEFS).forEach(function(routeKey) {
+        var route = TITLE_DEFS[routeKey];
+        var routeValue = 0;
+        route.actions.forEach(function(action) {
+            routeValue += actionTotals[action] || 0;
+        });
+        if (routeValue > bestValue) {
+            bestValue = routeValue;
+            bestRoute = route;
+        }
+    });
+    
+    if (!bestRoute || totalValue === 0) {
+        return { title: '旅人', route: null, level: 0, totalValue: 0 };
+    }
+    
+    var globalThresholds = [0, 20, 80, 200, 400, 800];
+    var level = 1;
+    for (var i = globalThresholds.length - 1; i >= 0; i--) {
+        if (totalValue >= globalThresholds[i]) {
+            level = i + 1;
+            break;
+        }
+    }
+    
+    var levelInfo = bestRoute.levels.find(function(l) { return l.level === level; });
+    
+    return {
+        title: levelInfo ? levelInfo.title : '旅人',
+        route: bestRoute,
+        level: level,
+        totalValue: totalValue
+    };
+}
 // ============================================================
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
@@ -4896,7 +5124,7 @@ async function submitVerification(storeId) {
             }
             
             await recordTaskCompletion('verify_store');
-            
+            await recordRegionContribution('verify_store', s.region, storeId);
             if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
                 try {
                     await fetch(
@@ -5438,7 +5666,7 @@ updates.supplement_count = (s.supplement_count || 0) + 1;
         
         // 記錄任務進度
         await recordTaskCompletion('supplement');
-        
+        await recordRegionContribution('supplement', s.region, storeId);
         // 記錄貢獻
         if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
             try {
@@ -5669,7 +5897,7 @@ async function submitPlayerPost() {
         
         // 記錄任務進度 (分享戰績)
         await recordTaskCompletion('share');
-        
+        await recordRegionContribution('post', store.region, storeId);
         toast('✅ 戰報發布成功！+5 分', 'green');
         closeModal();
         showView('live');
@@ -5794,7 +6022,7 @@ async function submitOwnerPost() {
         
         // 記錄任務進度 (分享戰績)
         await recordTaskCompletion('share');
-        
+        await recordRegionContribution('post', store.region, storeId);
         toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+5 分', 'green');
         closeModal();
         showView('live');
@@ -6386,13 +6614,113 @@ function viewMe() {
     if (items) achListHtml += '<div class="mt-3"><p class="text-[10px] font-bold text-white/40">' + cat.label + '</p><div class="mt-1 rounded-lg bg-white/5 p-2">' + items + '</div></div>';
   }
   
+  var regionCollectionHtml = '<div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">🗺️ 地區收集卡</h3><div id="region-collection-cards"><p class="text-white/40 text-xs">載入中...</p></div></div>';
+  
   var achievementHtml = '<div class="mt-5"><div class="flex items-center justify-between"><h3 class="text-sm font-black text-white/90">🏆 成就 (' + unlockedCount + '/' + totalAchievements + ')</h3></div>' + levelHtml + achListHtml + '</div>';
+  
+  // ✅ 載入地區收集卡（在 return 之前）
+  setTimeout(function() {
+    var container = document.getElementById('region-collection-cards');
+    if (container) {
+      renderRegionCollectionCards().then(function(html) {
+        container.innerHTML = html;
+      });
+    }
+  }, 100);
   
   return '\n    <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">\n      <div class="flex items-center gap-4"><div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div><div><div class="text-lg font-black">' + STATE.user.name + '</div><div class="text-[11px] text-gold/70">裝置 ' + STATE.user.device + '</div></div></div>\n      <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">' + STATE.points + '</div></div><div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">' + (filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通") + '</div></div></div>\n      <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ' + (STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold") + ' py-3.5 text-base font-black">' + (STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）") + '</button>\n    </div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📝 我的貼文</h3><div class="space-y-2">' + postHtml + '</div></div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3>\n      <div class="space-y-2">\n        ' + (favS.length ? favS.map(function(s) {
     return '\n          <div class="flex items-center gap-2 rounded-xl border border-gold/25 bg-zinc-950 p-3">\n            <button onclick="openStore(\'' + s.id + '\')" class="flex-1 text-left text-sm text-gold truncate">\n              ' + s.name + ' <span class="text-[10px] text-white/40">· ' + s.region + '</span>\n            </button>\n            <div class="flex gap-1 flex-shrink-0">\n              <button onclick="quickAction(\'checkin\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-neongreen/30 px-2 py-1 text-[10px] text-neongreen hover:bg-neongreen/10 transition-all">打卡</button>\n              <button onclick="quickAction(\'update\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-gold/30 px-2 py-1 text-[10px] text-gold hover:bg-gold/10 transition-all">更新</button>\n              <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-neonpink/30 px-2 py-1 text-[10px] text-neonpink hover:bg-neonpink/10 transition-all">戰報</button>\n            </div>\n          </div>\n        ';
-  }).join('') : '<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>') + '\n      </div>\n    </div>\n    ' + (!STATE.user.is_bound ? '\n    <div class="mt-4 rounded-xl border border-gold/30 bg-gold/5 p-4">\n      <p class="text-sm font-bold text-gold">🔗 綁定帳號</p>\n      <p class="text-xs text-white/40 mt-1">綁定後數據永久保存，換手機也不怕遺失</p>\n      <button onclick="bindGoogleAccount()" class="mt-3 w-full rounded-lg bg-white text-black py-2.5 text-sm font-black">🔐 用 Google 帳號綁定</button>\n      <p class="text-[9px] text-white/30 mt-2">📌 綁定後可獲得 <span class="text-neongreen">+20 積分</span></p>\n      <p class="text-[8px] text-white/20 mt-1">💡 需要 Supabase 後台啟用 Google Provider</p>\n    </div>\n    ' : '\n    <div class="mt-4 rounded-xl border border-neongreen/30 bg-neongreen/5 p-4">\n      <div class="flex items-center gap-2">\n        <span class="text-neongreen">✅ 已綁定</span>\n        <span class="text-xs text-white/40">' + (STATE.user.email || '') + '</span>\n        <button onclick="logoutGoogle()" class="ml-auto text-xs text-white/30 hover:text-white">登出</button>\n      </div>\n    </div>\n    ') + '\n    ' + achievementHtml + '\n    <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>\n  ';
+  }).join('') : '<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>') + '\n      </div>\n    </div>\n    ' + (!STATE.user.is_bound ? '\n    <div class="mt-4 rounded-xl border border-gold/30 bg-gold/5 p-4">\n      <p class="text-sm font-bold text-gold">🔗 綁定帳號</p>\n      <p class="text-xs text-white/40 mt-1">綁定後數據永久保存，換手機也不怕遺失</p>\n      <button onclick="bindGoogleAccount()" class="mt-3 w-full rounded-lg bg-white text-black py-2.5 text-sm font-black">🔐 用 Google 帳號綁定</button>\n      <p class="text-[9px] text-white/30 mt-2">📌 綁定後可獲得 <span class="text-neongreen">+20 積分</span></p>\n      <p class="text-[8px] text-white/20 mt-1">💡 需要 Supabase 後台啟用 Google Provider</p>\n    </div>\n    ' : '\n    <div class="mt-4 rounded-xl border border-neongreen/30 bg-neongreen/5 p-4">\n      <div class="flex items-center gap-2">\n        <span class="text-neongreen">✅ 已綁定</span>\n        <span class="text-xs text-white/40">' + (STATE.user.email || '') + '</span>\n        <button onclick="logoutGoogle()" class="ml-auto text-xs text-white/30 hover:text-white">登出</button>\n      </div>\n    </div>\n    ') + '\n   ' + regionCollectionHtml + ' ' + achievementHtml + '\n    <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>\n  ';
 }
-
+// ============================================================
+// 渲染地區收集卡
+// ============================================================
+async function renderRegionCollectionCards() {
+    if (!STATE.user.is_bound || !STATE.user.user_id) {
+        return '<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">登入後顯示地區收集卡</p>';
+    }
+    
+    try {
+        var response = await fetch(
+            SUPABASE_URL + "/rest/v1/user_region_contributions?user_id=eq." + STATE.user.user_id + "&order=created_at",
+            { headers: getSupabaseHeaders() }
+        );
+        
+        if (!response.ok) return '<p class="text-white/40 text-xs">載入中...</p>';
+        
+        var contributions = await response.json();
+        
+        var html = '';
+        for (var groupKey in REGION_KEYS) {
+            var group = REGION_KEYS[groupKey];
+            var groupContributions = contributions.filter(function(c) { return c.region_group === groupKey; });
+            
+            // 計算已解鎖地區
+            var unlockedRegions = {};
+            groupContributions.forEach(function(c) {
+                if (!unlockedRegions[c.region_name]) unlockedRegions[c.region_name] = [];
+                unlockedRegions[c.region_name].push(c);
+            });
+            
+            var unlockedCount = Object.keys(unlockedRegions).length;
+            var totalDistricts = group.districts.length;
+            
+            // 計算稱號
+            var title = calculateRegionTitle(groupKey, groupContributions);
+            
+            html += '<div class="rounded-xl border border-gold/25 bg-zinc-950 p-3 mb-3">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<span class="text-sm font-black text-white/90">' + group.icon + ' ' + group.label + '</span>';
+            html += '<span class="text-xs text-white/40">(' + unlockedCount + '/' + totalDistricts + ')</span>';
+            html += '<span class="text-xs font-bold ' + (title.level >= 3 ? 'text-gold' : 'text-neongreen') + '">' + title.title + '</span>';
+            html += '</div>';
+            
+            // 顯示各地區
+            html += '<div class="mt-2 space-y-1">';
+            group.districts.forEach(function(district) {
+                var isUnlocked = !!unlockedRegions[district];
+                var districtContributions = unlockedRegions[district] || [];
+                
+                if (isUnlocked) {
+                    var actions = [];
+                    var hasCheckin = false, hasSubmit = false, hasVerify = false, hasSupplement = false;
+                    districtContributions.forEach(function(c) {
+                        if (c.action_type === 'checkin') hasCheckin = true;
+                        if (c.action_type === 'submit_store') hasSubmit = true;
+                        if (c.action_type === 'verify_store') hasVerify = true;
+                        if (c.action_type === 'supplement') hasSupplement = true;
+                    });
+                    if (hasCheckin) actions.push('📍');
+                    if (hasSubmit) actions.push('🏪');
+                    if (hasVerify) actions.push('🔍');
+                    if (hasSupplement) actions.push('📝');
+                    html += '<div class="flex items-center gap-2 text-xs">';
+                    html += '<span class="text-neongreen">✅ ' + district + '</span>';
+                    html += '<span>' + actions.join('') + '</span>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="flex items-center gap-2 text-xs">';
+                    html += '<span class="text-white/25">⬜ ' + district + '</span>';
+                    html += '</div>';
+                }
+            });
+            html += '</div></div>';
+        }
+        
+        // 全港總稱號
+        var globalTitle = calculateGlobalTitle(contributions);
+        html += '<div class="rounded-xl border border-gold/40 bg-gold/5 p-3 text-center">';
+        html += '<span class="text-xs text-white/40">🌟 全港總稱號</span>';
+        html += '<div class="text-lg font-black text-gold">' + globalTitle.title + '</div>';
+        html += '<span class="text-[10px] text-white/30">總貢獻值 ' + globalTitle.totalValue + '</span>';
+        html += '</div>';
+        
+        return html;
+    } catch (e) {
+        console.warn('⚠️ 載入地區收集卡失敗:', e.message);
+        return '<p class="text-white/40 text-xs">載入失敗</p>';
+    }
+}
 function filterActive() { return STATE.filterPassUntil > now(); }
 
 function resetAll() {
@@ -6985,7 +7313,7 @@ async function doStoreCheckin(storeId) {
         
         // 記錄任務進度
         await recordTaskCompletion('checkin');
-        
+        await recordRegionContribution('checkin', s.region, storeId);
         // 同步到雲端
         if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
             try {
@@ -8102,7 +8430,7 @@ async function submitIntel() {
         
         // 記錄任務進度
         await recordTaskCompletion('submit_store');
-        
+        await recordRegionContribution('submit_store', selectedRegion, insertedId);
         // 記錄貢獻
         if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id && insertedId) {
             try {
