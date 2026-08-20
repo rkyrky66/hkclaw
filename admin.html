@@ -1246,7 +1246,7 @@ function loadDashboard() {
 }
 
 // ============================================================
-// 新店審核清單 (使用 Local 快取版)
+// 新店審核清單 (直接操作版 - 勾選+已查閱)
 // ============================================================
 function loadStores() {
     var container = document.getElementById('tab-content');
@@ -1265,9 +1265,20 @@ function loadStores() {
             '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + pendingStores.length + ' 間待審核店鋪</span>' +
             '<button class="btn-sm" onclick="refreshCoreData()" style="margin-left:auto;">🔄 重新整理</button>' +
         '</div>' +
-        '<div class="table-container">' +
-            '<table>' +
-                '<thead><tr><th>店名</th><th>地區</th><th>狀態</th><th>操作</th></tr></thead>' +
+        '<div class="table-container" style="overflow-x:auto;">' +
+            '<table style="min-width:1200px;">' +
+                '<thead><tr>' +
+                    '<th style="min-width:100px;">店名</th>' +
+                    '<th style="min-width:60px;">地區</th>' +
+                    '<th style="min-width:60px;">照片</th>' +
+                    '<th style="min-width:150px;">地址</th>' +
+                    '<th style="min-width:50px;">規模</th>' +
+                    '<th style="min-width:50px;">場務</th>' +
+                    '<th style="min-width:50px;">兌幣</th>' +
+                    '<th style="min-width:50px;">認證</th>' +
+                    '<th style="min-width:150px;">提交</th>' +
+                    '<th style="min-width:70px;">操作</th>' +
+                '</tr></thead>' +
                 '<tbody>';
     
     for (var i = 0; i < pendingStores.length; i++) {
@@ -1278,51 +1289,192 @@ function loadStores() {
             return String(fs.record_id) === String(s.id);
         });
         
-        var hasSuspicious = false;
-        var hasPending = false;
-        var hasMissing = false;
-        var hasConfirmed = false;
-        
+        var fieldStatusMap = {};
         for (var j = 0; j < storeFieldStatuses.length; j++) {
-            if (storeFieldStatuses[j].status === 'suspicious') hasSuspicious = true;
-            if (storeFieldStatuses[j].status === 'pending') hasPending = true;
-            if (storeFieldStatuses[j].status === 'missing') hasMissing = true;
-            if (storeFieldStatuses[j].status === 'confirmed') hasConfirmed = true;
+            fieldStatusMap[storeFieldStatuses[j].field_name] = storeFieldStatuses[j].status;
         }
         
-        var hasAnyFieldStatus = hasSuspicious || hasPending || hasMissing || hasConfirmed;
+        // 判斷是否有補充
+        var hasSupplement = false;
+        var supplementerDevice = null;
+        var supplementDate = '';
         
-        var statusText, statusClass;
+        if (s.supplemented_by && s.supplemented_by !== '' && s.supplemented_by !== '無' && s.supplemented_by !== null) {
+            hasSupplement = true;
+            supplementerDevice = s.supplemented_by;
+        }
         
-        if (!hasAnyFieldStatus) {
-            statusText = '⏳ 待查閱';
-            statusClass = 'pending';
-        } else if (hasSuspicious) {
-            statusText = '⚠️ 部分存疑';
-            statusClass = 'suspicious';
-        } else if (hasPending) {
-            statusText = '⏳ 待查閱';
-            statusClass = 'pending';
-        } else if (hasMissing) {
-            statusText = '❓ 待補充';
-            statusClass = 'missing';
-        } else {
-            statusText = '✅ 已確認';
-            statusClass = 'confirmed';
+        for (var j = 0; j < storeFieldStatuses.length; j++) {
+            if (storeFieldStatuses[j].submitted_type === 'supplement') {
+                hasSupplement = true;
+                supplementerDevice = storeFieldStatuses[j].submitted_by;
+                supplementDate = storeFieldStatuses[j].updated_at || '';
+                break;
+            }
+        }
+        
+        // 認證總數
+        var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
+        
+        // 欄位顯示
+        var photoHtml = s.photo 
+            ? '<a href="' + s.photo + '" target="_blank"><img src="' + s.photo + '" style="width:40px;height:40px;border-radius:8px;object-fit:cover;cursor:pointer;" /></a>' 
+            : '<span style="font-size:20px;">🏪</span>';
+        
+        var sizeDisplay = s.size === 'small' ? 'S' : s.size === 'large' ? 'L' : 'M';
+        var staffDisplay = s.has_staff === true ? 'V' : s.has_staff === false ? 'X' : '?';
+        var coinDisplay = s.has_e_coin === true ? 'V' : s.has_e_coin === false ? 'X' : '?';
+        
+        // 提交資訊
+        var submitInfo = '';
+        var submitDate = s.created_at ? new Date(s.created_at).toLocaleDateString('zh-HK') : '';
+        submitInfo += '<div style="font-size:11px;">首發：' + (s.submitted_by_device || '未知') + '</div>';
+        submitInfo += '<div style="font-size:10px;color:var(--text-muted);">' + submitDate + '</div>';
+        
+        if (hasSupplement) {
+            submitInfo += '<div style="font-size:11px;margin-top:4px;">補充：' + (supplementerDevice || '未知') + '</div>';
+            if (supplementDate) {
+                submitInfo += '<div style="font-size:10px;color:var(--text-muted);">' + new Date(supplementDate).toLocaleDateString('zh-HK') + '</div>';
+            }
+        }
+        
+        // 欄位勾選格
+        function buildFieldCell(fieldName, displayValue, extraClass) {
+            var status = fieldStatusMap[fieldName] || '';
+            var isChecked = status === 'suspicious' ? 'checked' : '';
+            var borderClass = status === 'suspicious' ? 'border-suspicious' : 
+                             (status === 'confirmed' ? 'border-confirmed' : 
+                             (status === 'missing' ? 'border-missing' : ''));
+            return '<td style="position:relative;' + extraClass + '">' +
+                '<div style="display:flex;align-items:center;gap:6px;">' +
+                    '<div style="flex:1;min-width:0;">' + displayValue + '</div>' +
+                    '<input type="checkbox" class="store-field-checkbox" data-store-id="' + s.id + '" data-field-name="' + fieldName + '" ' + isChecked + ' style="width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--warning);" />' +
+                '</div>' +
+            '</td>';
         }
         
         html += '<tr>' +
-            '<td><strong>' + s.name + '</strong></td>' +
-            '<td>' + (s.region || '未設定') + '</td>' +
-            '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
-            '<td><button class="btn-sm primary" onclick="viewStoreDetail(\'' + s.id + '\')">📋 詳細檢視</button></td>' +
+            buildFieldCell('name', '<strong>' + s.name + '</strong>') +
+            buildFieldCell('region', s.region || '未設定') +
+            buildFieldCell('photo', photoHtml) +
+            buildFieldCell('addr', s.addr || '未填') +
+            buildFieldCell('size', sizeDisplay) +
+            buildFieldCell('has_staff', staffDisplay) +
+            buildFieldCell('has_e_coin', coinDisplay) +
+            '<td><span class="status-badge ' + (totalVerifications >= 2 ? 'confirmed' : 'pending') + '">' + totalVerifications + '/2</span></td>' +
+            '<td>' + submitInfo + '</td>' +
+            '<td><button class="btn-sm primary" onclick="confirmReviewedFromList(\'' + s.id + '\')">✅ 已查閱</button></td>' +
         '</tr>';
     }
     
     html += '</tbody></table></div>';
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">💡 勾選欄位 = 標記存疑；未勾選的待查閱欄位在點擊「已查閱」後自動確認</div>';
     container.innerHTML = html;
 }
 
+// ============================================================
+// 從列表直接已查閱
+// ============================================================
+function confirmReviewedFromList(storeId) {
+    var numericStoreId = parseInt(storeId);
+    var stringStoreId = String(storeId);
+    
+    var checkboxes = document.querySelectorAll('.store-field-checkbox[data-store-id="' + storeId + '"]');
+    
+    if (checkboxes.length === 0) {
+        toast('找不到該店鋪的欄位', 'error');
+        return;
+    }
+    
+    if (!confirm('確定要完成查閱嗎？\n勾選的欄位將標記為存疑，未勾選的待查閱欄位將自動確認。\n\n此店鋪將從新店審核中移除。')) return;
+    
+    var flaggedFields = [];
+    var allFieldNames = [];
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+        allFieldNames.push(checkboxes[i].dataset.fieldName);
+        if (checkboxes[i].checked) {
+            flaggedFields.push(checkboxes[i].dataset.fieldName);
+        }
+    }
+    
+    // 取得該店鋪現有的 field_status
+    var existingFields = localStoreCache.fieldStatuses.filter(function(fs) {
+        return fs.record_id === stringStoreId;
+    });
+    var existingMap = {};
+    for (var i = 0; i < existingFields.length; i++) {
+        existingMap[existingFields[i].field_name] = existingFields[i];
+    }
+    
+    var writePromises = [];
+    var suspiciousCount = 0;
+    var confirmedCount = 0;
+    
+    for (var i = 0; i < allFieldNames.length; i++) {
+        var fieldName = allFieldNames[i];
+        var isFlagged = flaggedFields.indexOf(fieldName) !== -1;
+        var existing = existingMap[fieldName];
+        var newStatus = null;
+        
+        if (isFlagged) {
+            newStatus = 'suspicious';
+            suspiciousCount++;
+        } else if (existing && existing.status === 'pending') {
+            newStatus = 'confirmed';
+            confirmedCount++;
+        } else if (existing && existing.status === 'suspicious') {
+            newStatus = 'suspicious';
+            suspiciousCount++;
+        } else if (existing && existing.status === 'confirmed') {
+            newStatus = 'confirmed';
+        } else if (existing && existing.status === 'missing') {
+            newStatus = 'missing';
+        } else {
+            continue;
+        }
+        
+        writePromises.push(
+            sb.from('field_status').upsert({
+                table_name: 'claw_stores',
+                record_id: stringStoreId,
+                field_name: fieldName,
+                status: newStatus,
+                flagged_by: (newStatus === 'suspicious') ? (currentUser ? currentUser.display_name : 'admin') : null,
+                flagged_at: (newStatus === 'suspicious') ? new Date().toISOString() : null,
+                resolved: (newStatus === 'confirmed'),
+                resolved_at: (newStatus === 'confirmed') ? new Date().toISOString() : null,
+                note: (newStatus === 'suspicious') ? '管理員標記存疑' : null,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'table_name,record_id,field_name' })
+        );
+    }
+    
+    var overallStatus = 'reviewed';
+    writePromises.push(
+        sb.from('claw_stores')
+            .update({ admin_overall_status: overallStatus })
+            .eq('id', numericStoreId)
+    );
+    
+    Promise.all(writePromises)
+        .then(function() {
+            // 更新 local 快取
+            removeStoreFromLocalCache(storeId);
+            updateTopBarFromLocalCache();
+            
+            var summary = [];
+            if (confirmedCount > 0) summary.push(confirmedCount + ' 個已確認');
+            if (suspiciousCount > 0) summary.push(suspiciousCount + ' 個存疑');
+            toast('✅ 已查閱完成：' + (summary.length > 0 ? summary.join('、') : '無變更'));
+            
+            loadStores();
+            loadDashboard();
+        })
+        .catch(function(error) {
+            toast('操作失敗: ' + error.message, 'error');
+        });
+}
 // ============================================================
 // 重新整理核心資料（重新查詢 Supabase）
 // ============================================================
