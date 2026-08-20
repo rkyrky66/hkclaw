@@ -363,8 +363,15 @@ input, select, textarea { font-size: 16px; }
 <div class="relative flex-1 overflow-hidden">
 <main id="main" class="no-scrollbar h-full overflow-hidden px-4 py-3 pb-28">
 <div id="map-page-container" style="display:flex; flex-direction:column; height:100%; position:relative; z-index:1;">
-<div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0;">
+<div id="map-wrapper" style="height:40vh; min-height:200px; flex-shrink:0; position:relative;">
 <div id="map-container" style="height:100%; width:100%;"></div>
+<div id="map-controls" style="position:absolute; top:12px; right:12px; z-index:1000; display:flex; flex-direction:column; gap:8px;">
+    <button onclick="refreshMapData()" 
+        style="width:40px;height:40px;border-radius:50%;background:rgba(20,20,20,0.85);border:1px solid rgba(212,175,55,0.5);color:#D4AF37;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);"
+        title="重新整理">
+        🔄
+    </button>
+</div>
 </div>
 <div class="map-divider" style="flex-shrink:0;"></div>
 <div id="filter-container" style="flex-shrink:0; padding:8px 4px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid rgba(212,175,55,0.1);">
@@ -373,8 +380,12 @@ input, select, textarea { font-size: 16px; }
 <button id="filter-incomplete" onclick="setMapFilter('incomplete')" class="filter-btn rounded-full px-3 py-1 text-xs font-bold border border-white/20 text-white/40">📝 待完善</button>
 <span id="filter-count" class="text-[10px] text-white/30 ml-auto self-center">共 <span id="filter-count-number">0</span> 間</span>
 </div>
-<div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
+<div id="map-store-list-wrapper" style="flex:1; overflow-y:auto; padding-top:8px; padding-bottom:8px; -webkit-overflow-scrolling:touch; position:relative;">
 <div id="map-store-list" class="space-y-2 pb-2"></div>
+<div id="back-to-top-btn" onclick="scrollMapListToTop()" 
+    style="position:absolute; bottom:16px; right:16px; z-index:1000; display:none; width:40px;height:40px;border-radius:50%;background:rgba(20,20,20,0.85);border:1px solid rgba(0,255,0,0.5);color:#00FF00;font-size:16px;cursor:pointer;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);"
+    title="回到頂部">
+    ⬆️
 </div>
 </div>
 <div id="page-overlay" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:5; overflow-y:auto; padding:12px 0 80px 0; display:none; background:#000; pointer-events:auto;"></div>
@@ -3604,6 +3615,7 @@ function getArithmeticCenter(coords) {
       ensureStoresVisible();
     }
     mapInitialized = true;
+    initBackToTopButton();
     addRegionPolygons();
     isInitializingMap = false;
     if (CURRENT === 'map') {
@@ -8822,21 +8834,29 @@ function initPullToRefresh() {
   if (!container || !indicator) return;
   
   container.addEventListener('touchstart', function(e) {
+    if (CURRENT === 'map') {
+      // 地圖頁面不啟用下拉刷新
+      isPulling = false;
+      return;
+    }
     if (container.scrollTop === 0) {
       pullStartY = e.touches[0].clientY;
       isPulling = true;
       pullMoveY = 0;
     } else {
-      // ✅ 非頂部時不啟用下拉刷新
       isPulling = false;
       pullMoveY = 0;
     }
   }, { passive: true });
   
   container.addEventListener('touchmove', function(e) {
+    if (CURRENT === 'map') {
+      isPulling = false;
+      indicator.style.top = '-60px';
+      return;
+    }
     if (!isPulling || isRefreshing) return;
     if (container.scrollTop !== 0) {
-      // ✅ 已離開頂部，停止下拉
       isPulling = false;
       pullMoveY = 0;
       indicator.style.top = '-60px';
@@ -8853,6 +8873,11 @@ function initPullToRefresh() {
   }, { passive: true });
   
   container.addEventListener('touchend', function() {
+    if (CURRENT === 'map') {
+      isPulling = false;
+      pullMoveY = 0;
+      return;
+    }
     if (isPulling && pullMoveY > 60 && !isRefreshing) {
       isRefreshing = true;
       if (indicator) {
@@ -8892,6 +8917,73 @@ async function refreshAllData() {
     else { initMap(); }
   } else { showView(CURRENT); }
   toast('✅ 已更新至最新資料', 'green');
+}
+
+async function refreshMapData() {
+    toast('🔄 重新整理中...', 'gold');
+    
+    try {
+        // 重新載入雲端數據
+        await loadCloud();
+        await loadMalls();
+        
+        // 重新取得 GPS 定位
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    gpsLat = userLocation.lat;
+                    gpsLng = userLocation.lng;
+                    
+                    if (map && mapInitialized) {
+                        map.flyTo([userLocation.lat, userLocation.lng], map.getZoom() || 15, { duration: 1 });
+                        addUserMarker(userLocation.lat, userLocation.lng);
+                    }
+                    
+                    updateMapMarkers();
+                    updateMapList();
+                    updateRegionProgress();
+                    toast('✅ 已更新至最新資料', 'green');
+                },
+                function(err) {
+                    // GPS 失敗，仍更新雲端數據
+                    updateMapMarkers();
+                    updateMapList();
+                    updateRegionProgress();
+                    toast('⚠️ 雲端數據已更新，但 GPS 定位失敗', 'gold');
+                },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+            );
+        } else {
+            updateMapMarkers();
+            updateMapList();
+            updateRegionProgress();
+            toast('✅ 已更新至最新資料', 'green');
+        }
+    } catch (e) {
+        toast('❌ 重新整理失敗: ' + e.message, 'pink');
+    }
+}
+
+function scrollMapListToTop() {
+    var listWrapper = document.getElementById('map-store-list-wrapper');
+    if (listWrapper) {
+        listWrapper.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function initBackToTopButton() {
+    var listWrapper = document.getElementById('map-store-list-wrapper');
+    var btn = document.getElementById('back-to-top-btn');
+    if (!listWrapper || !btn) return;
+    
+    listWrapper.addEventListener('scroll', function() {
+        if (listWrapper.scrollTop > 200) {
+            btn.style.display = 'flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
 }
 
 // ============================================================
