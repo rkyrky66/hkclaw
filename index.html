@@ -4615,7 +4615,13 @@ function onVerifyReportCategoryChange(category) {
 function updateVerifySubmitButton() {
     var btn = document.getElementById('vf-submit-btn');
     if (!btn) return;
-    
+    // ✅ 新增：提交中鎖定按鈕
+    if (isSubmittingVerification) {
+        btn.disabled = true;
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.innerHTML = '⏳ 提交中...';
+        return;
+    }
     if (_verifyMode === 'confirm') {
         var photoReady = window._camPreview && window._camPreview.vf;
         var gpsReady = _finalGpsLocked;
@@ -5028,8 +5034,11 @@ function calculateGlobalTitle(allContributions) {
 
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
-    
-    if (!requireLogin('實證店鋪')) return;
+    isSubmittingVerification = true;
+    if (!requireLogin('實證店鋪')) {
+        isSubmittingVerification = false;  // ← 失敗時重置
+        return;
+    }
     
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
@@ -5354,6 +5363,7 @@ console.log('🔍 updateData keys:', Object.keys(updateData).length);
             closeModal();
         }
     } finally {
+      isSubmittingVerification = false;
         releaseSubmitLock('submitVerification');
     }
 }
