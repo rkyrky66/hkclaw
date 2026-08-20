@@ -2819,12 +2819,22 @@ async function syncUserDataAfterBind(user) {
     var displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || '夾客';
     var avatarUrl = user.user_metadata?.avatar_url || '';
     var googleId = user.id;
-    var existingResult = await supabaseClientInstance.from('user_profiles').select('*').eq('google_id', googleId).maybeSingle();
+    
+    // 查詢是否已有此 Google 帳戶的記錄
+    var existingResult = await supabaseClientInstance
+      .from('user_profiles')
+      .select('*')
+      .eq('google_id', googleId)
+      .maybeSingle();
+    
     if (existingResult.error) throw existingResult.error;
+    
     var existingUser = existingResult.data;
+    var isNewUser = !existingUser;  // ✅ 是否為新用戶
     var userId = null;
     
     if (existingUser) {
+      // 已有記錄 → 更新，不發放綁定獎勵
       userId = existingUser.id;
       var updates = {
         display_name: displayName,
@@ -2834,11 +2844,17 @@ async function syncUserDataAfterBind(user) {
         last_active_at: new Date().toISOString(),
         is_anonymous: false
       };
-      var updateResult = await supabaseClientInstance.from('user_profiles').update(updates).eq('device_id', deviceId);
+      var updateResult = await supabaseClientInstance
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', userId);
       if (updateResult.error) throw updateResult.error;
+      
+      // 使用雲端較大的積分
       if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
       if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
     } else {
+      // 新記錄 → 建立，發放綁定獎勵
       var newUserData = {
         device_id: deviceId,
         google_id: googleId,
@@ -2853,7 +2869,11 @@ async function syncUserDataAfterBind(user) {
         created_at: new Date().toISOString(),
         last_active_at: new Date().toISOString()
       };
-      var insertResult = await supabaseClientInstance.from('user_profiles').insert(newUserData).select().single();
+      var insertResult = await supabaseClientInstance
+        .from('user_profiles')
+        .insert(newUserData)
+        .select()
+        .single();
       if (insertResult.error) throw insertResult.error;
       userId = insertResult.data.id;
     }
@@ -2881,8 +2901,16 @@ async function syncUserDataAfterBind(user) {
     await loadTaskProgressFromCloud();
     
     save();
-    addPoints(20, 'Google 帳號綁定獎勵');
-    toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
+    
+    if (isNewUser) {
+      // ✅ 只有新用戶才發放綁定獎勵
+      addPoints(20, 'Google 帳號綁定獎勵');
+      toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
+    } else {
+      // 已有記錄 → 只提示登入成功
+      toast('✅ 帳號登入成功！數據已同步', 'green');
+    }
+    
     if (CURRENT === 'map') {
       setTimeout(function() {
         if (map && mapInitialized) {
@@ -3006,6 +3034,7 @@ async function loadCloud() {
         floor: s.floor || null,
         submitted_by: s.submitted_by || null,
         verification_count: s.verification_count || 0,
+        verification_count_2: s.verification_count_2 || 0,
         is_verified: s.is_verified || false,
         has_staff: s.has_staff !== undefined ? s.has_staff : null,
         has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
@@ -4221,7 +4250,8 @@ function buildStoreContent(s, _a) {
     var mallInfo = isInMall ? '<span class="text-[10px] text-white/30 ml-2">' + s.mall + '</span>' : '';
     var isVerified = s.status === "verified" || s.verified === "verified";
     var hasWarning = s.is_suspicious === true;
-    var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + (s.verification_count || 0) + '/2)</span>';
+    var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
+var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + totalVerifications + '/2)</span>';
     var warningBadge = hasWarning ? '<span class="text-[10px] text-yellow-400 ml-1">⚠️ 有爭議</span>' : '';
     // 獲取貢獻標記資訊
     var markerInfo = getMarkerLevelInfo(s.id);
@@ -4996,6 +5026,7 @@ function calculateGlobalTitle(allContributions) {
 // ============================================================
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
+
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
     
@@ -5068,7 +5099,7 @@ async function submitVerification(storeId) {
                 created_at: new Date().toISOString()
             };
             
-            // 1. 寫 verification_reviews
+            // 1. 寫 verification_reviews（判斷第一/第二位）
             var reviewResult = null;
             if (CLOUD_ON) {
                 try {
@@ -5108,21 +5139,44 @@ async function submitVerification(storeId) {
                 }
             }
             
-            // 3. 使用 RPC 原子增加 verification_count
+            // 3. 根據 reviewResult 更新 claw_stores
             if (CLOUD_ON) {
                 try {
-                    var rpcResult = await supabaseClientInstance.rpc('increment_verification_count', {
-                        store_id_param: numericStoreId
-                    });
+                    var updateData = {};
                     
-                    if (rpcResult.error) throw rpcResult.error;
-                    console.log('✅ verification_count 已原子增加');
+                    if (reviewResult === 'verifier_1') {
+                        // 第一位認證者
+                        updateData = {
+                            verification_count: 1,
+                            verification_count_2: 0,
+                            status: 'pending',
+                            is_verified: false
+                        };
+                    } else if (reviewResult === 'verifier_2') {
+                        // 第二位認證者
+                        updateData = {
+                            verification_count: 1,
+                            verification_count_2: 1,
+                            status: 'verified',
+                            is_verified: true
+                        };
+                    }
+                    
+                    if (Object.keys(updateData).length > 0) {
+                        var updateStoreResult = await supabaseClientInstance
+                            .from('claw_stores')
+                            .update(updateData)
+                            .eq('id', numericStoreId);
+                        
+                        if (updateStoreResult.error) throw updateStoreResult.error;
+                        console.log('✅ claw_stores 已更新:', JSON.stringify(updateData));
+                    }
                 } catch (e) {
-                    console.warn('⚠️ verification_count 更新失敗:', e.message);
+                    console.warn('⚠️ claw_stores 更新失敗:', e.message);
                 }
             }
             
-            // 4. 更新本地 STATE.verifications
+            // 4. 更新本地
             STATE.verifications = STATE.verifications || {};
             STATE.verifications[s.id] = true;
             save();
@@ -5137,16 +5191,17 @@ async function submitVerification(storeId) {
                 }
             }
             
-            // 6. 從最新資料取得 verification_count
+            // 6. 從最新資料判斷狀態
             var updatedStore = STORES.find(function(x) { return x.id === storeId; });
             if (updatedStore) {
-                if (updatedStore.verification_count >= 2) {
+                var totalVerifications = (updatedStore.verification_count || 0) + (updatedStore.verification_count_2 || 0);
+                if (totalVerifications >= 2) {
                     toast('🎉 ' + updatedStore.name + ' 已通過實證！', 'green');
                     updateAchievementStat('store_complete');
                     var regionStat = getRegionStat(updatedStore.region);
                     if (regionStat) updateAchievementStat(regionStat);
                 } else {
-                    toast('✅ 實證提交成功！目前 ' + updatedStore.verification_count + '/2 人實證', 'green');
+                    toast('✅ 實證提交成功！目前 ' + totalVerifications + '/2 人實證', 'green');
                 }
             }
             
@@ -5295,6 +5350,7 @@ async function submitVerification(storeId) {
         releaseSubmitLock('submitVerification');
     }
 }
+
 // ============================================================
 // 創建/更新 verification_reviews (修正版 - 回傳認證者位置)
 // ============================================================

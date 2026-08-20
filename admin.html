@@ -1507,7 +1507,7 @@ function renderStoreDetail(store, fieldStatuses) {
         statusText = '✅ 已完整確認';
         statusClass = 'confirmed';
     }
-    
+    var totalVerifications = (store.verification_count || 0) + (store.verification_count_2 || 0);
     var modalHtml = 
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
             '<div>' +
@@ -1515,7 +1515,7 @@ function renderStoreDetail(store, fieldStatuses) {
                 '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">' +
                     '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
                     '<span style="font-size:12px;color:var(--text-muted);">📍 ' + (store.region || '未知地區') + '</span>' +
-                    '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || 'pending') + ' (' + (store.verification_count || 0) + '/2)</span>' +
+                    '<span style="font-size:12px;color:var(--text-muted);">🔑 ' + (store.status || 'pending') + ' (' + totalVerifications + '/2)</span>' +
                 '</div>' +
             '</div>' +
         '</div>' +
