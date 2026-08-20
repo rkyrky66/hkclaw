@@ -476,9 +476,6 @@ function createFallbackClient() {
     }
   };
 }
-document.addEventListener('DOMContentLoaded', function() {
-  initSupabaseClient();
-});
 
 function isSupabaseReady() {
   if (!supabaseClientInstance) { return false; }
@@ -4963,6 +4960,21 @@ function calculateGlobalTitle(allContributions) {
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
 async function submitVerification(storeId) {
+  console.log('🔍 認證除錯:', {
+    is_bound: STATE.user.is_bound,
+    user_id: STATE.user.user_id,
+    device: STATE.user.device
+});
+try {
+    var debugSession = await supabaseClientInstance.auth.getSession();
+    console.log('🔍 Session 狀態:', {
+        hasSession: !!debugSession?.data?.session,
+        access_token: debugSession?.data?.session?.access_token ? '存在（長度 ' + debugSession.data.session.access_token.length + '）' : '不存在',
+        user_id: debugSession?.data?.session?.user?.id || '無'
+    });
+} catch (e) {
+    console.log('🔍 Session 取得失敗:', e.message);
+}
     if (!acquireSubmitLock('submitVerification')) return;
     if (!requireLogin('實證店鋪')) return;
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
@@ -5282,11 +5294,31 @@ async function submitVerification(storeId) {
 // 創建/更新 verification_reviews (修正版 - 回傳認證者位置)
 // ============================================================
 async function upsertVerificationReview(storeId, verification) {
+  // 🔍 除錯檢查
+console.log('🔍 upsertVerificationReview 除錯:', {
+    storeId: storeId,
+    verifier_device: verification?.verifier_device,
+    verifier_id: verification?.verifier_id
+});
+try {
+    var debugSession2 = await supabaseClientInstance.auth.getSession();
+    console.log('🔍 upsert Session:', {
+        hasSession: !!debugSession2?.data?.session,
+        user_id: debugSession2?.data?.session?.user?.id || '無'
+    });
+} catch (e) {
+    console.log('🔍 upsert Session 失敗:', e.message);
+}
     if (!CLOUD_ON) return 'local_only';
     
     try {
         var stringStoreId = String(storeId);
-        
+        // 🔍 檢查使用的 headers
+var debugHeaders = getSupabaseHeaders();
+console.log('🔍 fetch Headers:', {
+    apikey: debugHeaders.apikey ? '存在' : '不存在',
+    Authorization: debugHeaders.Authorization ? debugHeaders.Authorization.substring(0, 30) + '...' : '不存在'
+});
         // 查詢是否已有記錄（取最新一筆）
         var checkResponse = await fetch(
             SUPABASE_URL + "/rest/v1/verification_reviews?store_id=eq." + encodeURIComponent(stringStoreId) + "&order=created_at.desc&limit=1",
