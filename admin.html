@@ -1413,7 +1413,6 @@ function renderStoreDetail(store, fieldStatuses) {
     
     var supplementFields = [
         { key: 'addr', label: '地址', value: store.addr || '未填' },
-        { key: 'address_detail', label: '詳細地址', value: store.address_detail || '未填' },
         { key: 'size', label: '規模', value: store.size || '未填' },
         { key: 'has_staff', label: '有場務', value: store.has_staff !== undefined && store.has_staff !== null ? (store.has_staff ? '有' : '無') : '未填' },
         { key: 'has_e_coin', label: '電子兌幣', value: store.has_e_coin !== undefined && store.has_e_coin !== null ? (store.has_e_coin ? '有' : '無') : '未填' }
@@ -1884,7 +1883,7 @@ async function revokeSupplement(storeId, supplementerDevice, supplementerName) {
             oldValues[field] = store[field];
             
             switch(field) {
-                case 'address_detail': updates[field] = ''; break;
+                case 'addr': updates[field] = ''; break;
                 case 'size': updates[field] = null; break;  // ✅ 改為 null
                 case 'has_staff': case 'has_e_coin': updates[field] = null; break;
                 case 'addr': updates[field] = ''; break;

@@ -2991,7 +2991,6 @@ async function loadCloud() {
         submitted_by: s.submitted_by || null,
         verification_count: s.verification_count || 0,
         is_verified: s.is_verified || false,
-        address_detail: s.address_detail || '',
         has_staff: s.has_staff !== undefined ? s.has_staff : null,
         has_e_coin: s.has_e_coin !== undefined ? s.has_e_coin : null,
         supplement_count: s.supplement_count || 0,
@@ -4253,7 +4252,7 @@ function buildStoreContent(s, _a) {
         machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
     }
     
-    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + warningBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.address_detail ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.address_detail + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
+    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + warningBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.size? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📏 ' + (s.size === 'small' ? '小型 (6台以下)' : s.size === 'large' ? '大型 (12台以上)' : '中型 (7-12台)') + '</span>' : '') + '\n      ' + (s.has_staff !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_staff ? '👤 有場務' : '👤 無場務') + '</span>' : '') + '\n      ' + (s.has_e_coin !== undefined ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + (s.has_e_coin ? '🪙 有電子兌幣' : '🪙 無電子兌幣') + '</span>' : '') + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -5388,14 +5387,14 @@ function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
   var isStreetStore = s.type !== 'mall' && s.mall === '';
-  var existing = { address: s.address_detail && s.address_detail !== '', size: s.size && s.size !== '中', staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
+  var existing = { address: s.addr && s.addr !== '', size: s.size && s.size !== '中', staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
   var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
   var allCompleted = completedCount === 4;
   var isMallStore = s.type === 'mall' || s.mall !== '';
   var addressRequired = isStreetStore;
   var addressCompleted = isMallStore ? true : existing.address;
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + s.addr + '</p>\n        <div class="mt-2 flex items-center gap-3 text-xs">\n          <span class="text-white/40">📊 完成進度：</span>\n          <span class="text-neongreen font-bold">' + (allCompleted ? '✅ 已完成' : completedCount + '/4') + '</span>\n        </div>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A 好望角大廈" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.address_detail || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 規模 <span class="text-neonpink">（必填）</span>' + (existing.size ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型 (6台以下)</button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型 (7-12台)</button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型 (12台以上)</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span>' + (existing.staff ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🪙 電子兌幣 <span class="text-neonpink">（必填）</span>' + (existing.coin ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🪙 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🪙 無電子兌幣</button></div></div>\n      <button onclick="submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + s.addr + '</p>\n        <div class="mt-2 flex items-center gap-3 text-xs">\n          <span class="text-white/40">📊 完成進度：</span>\n          <span class="text-neongreen font-bold">' + (allCompleted ? '✅ 已完成' : completedCount + '/4') + '</span>\n        </div>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A 好望角大廈" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 規模 <span class="text-neonpink">（必填）</span>' + (existing.size ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型 (6台以下)</button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型 (7-12台)</button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型 (12台以上)</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span>' + (existing.staff ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🪙 電子兌幣 <span class="text-neonpink">（必填）</span>' + (existing.coin ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🪙 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🪙 無電子兌幣</button></div></div>\n      <button onclick="submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   window._sfSelections = { size: s.size || null, staff: s.has_staff !== undefined && s.has_staff !== null ? s.has_staff : null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null ? s.has_e_coin : null };
   
@@ -5541,7 +5540,7 @@ async function submitAllSupplement(storeId) {
             console.log('📍 補充資料時 GPS 位置:', currentGps);
         }
         
-        if (isStreet && address) s.address_detail = address;
+        if (isStreet && address) s.addr = address;
         s.size = size;
         s.has_staff = staff;
         s.has_e_coin = coin;
@@ -5550,7 +5549,7 @@ async function submitAllSupplement(storeId) {
         s._userSupplemented = true;
         
         var supplementFields = [];
-        if (isStreet && address) supplementFields.push('address_detail');
+        if (isStreet && address) supplementFields.push('addr');
         supplementFields.push('size');
         supplementFields.push('has_staff');
         supplementFields.push('has_e_coin');
@@ -5589,7 +5588,7 @@ async function submitAllSupplement(storeId) {
             try {
                 var numericStoreIdForUpdate = parseInt(storeId);
                 var updates = {};
-if (isStreet && address) updates.address_detail = address;
+if (isStreet && address) updates.addr = address;
 updates.size = size;
 updates.has_staff = staff;
 updates.has_e_coin = coin;
@@ -8000,7 +7999,13 @@ function updateFormState() {
     var name = document.getElementById('nt-name')?.value.trim();
     var hasName = !!name;
     var hasRegion = !!selectedRegion;
+    var hasType = !!selectedType;
+    var hasMall = !selectedType || selectedType !== 'mall' || !!selectedMall;
+    var hasFloor = !selectedType || selectedType !== 'mall' || !!selectedFloor;
+    var hasPhoto = !!(window._cam && window._cam['nt']);
+    
     var canProceed = hasName && hasRegion;
+    
     var guideEl = document.getElementById('form-guide');
     if (guideEl) {
         if (!hasName) {
@@ -8009,40 +8014,38 @@ function updateFormState() {
         } else if (!hasRegion) {
             guideEl.textContent = '📍 請選擇地區';
             guideEl.className = 'text-xs text-yellow-400';
-        } else if (!selectedType) {
+        } else if (!hasType) {
             guideEl.textContent = '🏪 請選擇店鋪類型';
             guideEl.className = 'text-xs text-yellow-400';
-        } else if (!isGpsReady) {
-            guideEl.textContent = '📍 請等待 GPS 定位完成...';
+        } else if (selectedType === 'mall' && !hasMall) {
+            guideEl.textContent = '🏬 請選擇商場';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else if (selectedType === 'mall' && !hasFloor) {
+            guideEl.textContent = '🏢 請輸入樓層';
+            guideEl.className = 'text-xs text-yellow-400';
+        } else if (!hasPhoto) {
+            guideEl.textContent = '📷 請拍攝店鋪照片';
             guideEl.className = 'text-xs text-yellow-400';
         } else {
             guideEl.textContent = '✅ 所有必填欄位已完成，可以提交了！';
             guideEl.className = 'text-xs text-neongreen';
         }
     }
+    
+    // 類型按鈕啟用
     document.querySelectorAll('.type-btn').forEach(function(btn) {
         if (!canProceed) {
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
             btn.classList.remove('border-gold', 'bg-gold/20', 'text-gold', 'glow-gold');
             btn.classList.add('border-white/20', 'text-white/45');
-            btn.innerHTML = '🔒 ' + btn.textContent.replace('🔒 ', '');
         } else {
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            btn.innerHTML = btn.textContent.replace('🔒 ', '');
         }
     });
-    var typeLabel = document.querySelector('label[for="store-type"]');
-    if (typeLabel) {
-        typeLabel.className = "text-xs font-bold " + (canProceed ? 'text-gold' : 'text-white/30');
-        if (!canProceed) {
-            typeLabel.innerHTML = '🔒 店鋪類型 <span class="text-neonpink">（請先填寫店名和地區）</span>';
-        } else {
-            typeLabel.innerHTML = '店鋪類型 <span class="text-neonpink">（必填）</span>';
-        }
-    }
-    var hasType = !!selectedType;
+    
+    // 相機按鈕
     var canCamera = canProceed && hasType;
     var camBtn = document.getElementById('nt-camera-btn');
     if (camBtn) {
@@ -8058,15 +8061,8 @@ function updateFormState() {
             camBtn.innerHTML = '📸 開啟相機拍照';
         }
     }
-    var gpsLabel = document.querySelector('label[for="gps-section"]');
-    if (gpsLabel) {
-        gpsLabel.className = "text-xs font-bold " + (canCamera ? 'text-gold' : 'text-white/30');
-        if (!canCamera) {
-            gpsLabel.innerHTML = '🔒 定位 <span class="text-neonpink">（請先完成上一步）</span>';
-        } else {
-            gpsLabel.innerHTML = '定位 <span class="text-neonpink">（必填）</span>';
-        }
-    }
+    
+    // 提交按鈕
     updateSubmitButton();
 }
 
@@ -8075,11 +8071,17 @@ function isFormComplete() {
     if (!name) return false;
     if (!selectedRegion) return false;
     if (!selectedType) return false;
+    
+    if (selectedType === 'mall') {
+        if (!selectedMall) return false;
+        if (!selectedFloor) return false;
+    }
+    
+    if (!window._cam || !window._cam['nt']) return false;
     if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) return false;
-    if (selectedType === 'mall' && !selectedMall) return false;
+    
     return true;
 }
-
 function updateSubmitButton() {
     var btn = document.getElementById('nt-submit-btn');
     var complete = isFormComplete();
@@ -8093,7 +8095,7 @@ function updateSubmitButton() {
             btn.disabled = true;
             
             var name = document.getElementById('nt-name')?.value.trim();
-            var hasPhoto = window._camPreview && window._camPreview.nt;
+            var hasPhoto = !!(window._cam && window._cam['nt']);
             var hasGpsLocked = _finalGpsLocked;
             
             if (!name) {
@@ -8102,6 +8104,10 @@ function updateSubmitButton() {
                 btn.innerHTML = '📍 請選擇地區';
             } else if (!selectedType) {
                 btn.innerHTML = '🏪 請選擇店鋪類型';
+            } else if (selectedType === 'mall' && !selectedMall) {
+                btn.innerHTML = '🏬 請選擇商場';
+            } else if (selectedType === 'mall' && !selectedFloor) {
+                btn.innerHTML = '🏢 請輸入樓層';
             } else if (!hasPhoto) {
                 btn.innerHTML = '📷 請先拍攝店鋪照片';
             } else if (!hasGpsLocked) {
@@ -8112,6 +8118,7 @@ function updateSubmitButton() {
         }
     }
 }
+
 // ============================================================
 // 🔒 通用防重鎖機制
 // ============================================================
@@ -8295,7 +8302,6 @@ async function submitIntel() {
             submitted_by_device: STATE.user.device,
             verification_count: 0,
             is_verified: false,
-            address_detail: '',
             has_staff: null,
             has_e_coin: null,
             supplement_count: 0,
