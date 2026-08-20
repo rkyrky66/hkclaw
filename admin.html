@@ -1321,7 +1321,7 @@ function loadStores() {
             ? '<a href="' + s.photo + '" target="_blank"><img src="' + s.photo + '" style="width:40px;height:40px;border-radius:8px;object-fit:cover;cursor:pointer;" /></a>' 
             : '<span style="font-size:20px;">🏪</span>';
         
-        var sizeDisplay = s.size === 'small' ? 'S' : s.size === 'large' ? 'L' : 'M';
+        var sizeDisplay = s.size === 'small' ? 'S' : s.size === 'large' ? 'L' : (s.size === 'medium' ? 'M' : '?');
         var staffDisplay = s.has_staff === true ? 'V' : s.has_staff === false ? 'X' : '?';
         var coinDisplay = s.has_e_coin === true ? 'V' : s.has_e_coin === false ? 'X' : '?';
         
