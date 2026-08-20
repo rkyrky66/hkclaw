@@ -2992,7 +2992,6 @@ async function logoutGoogle() {
   } catch (e) { toast('登出失敗: ' + e.message, 'pink'); }
 }
 
-document.addEventListener('DOMContentLoaded', checkOAuthCallback);
 
 // ============================================================
 // 載入店鋪資料 (修正版 - 過濾隱藏店鋪 + size 預設值修正)
@@ -5102,25 +5101,31 @@ async function submitVerification(storeId) {
             // 1. 寫 verification_reviews（判斷第一/第二位）
             var reviewResult = null;
             if (CLOUD_ON) {
-                try {
-                    reviewResult = await upsertVerificationReview(storeId, verification);
-                    if (reviewResult === 'already_complete') {
-                        toast('此店鋪已認證完畢', 'gold');
-                        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-                        return;
-                    }
-                    if (reviewResult === 'already_verified') {
-                        toast('你已經實證過這間店鋪了', 'gold');
-                        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ verification_reviews 寫入失敗:', e.message);
-                    toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
-                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-                    return;
-                }
-            }
+    try {
+        reviewResult = await upsertVerificationReview(storeId, verification);
+        
+        // 🔍 除錯 log
+        console.log('🔍 reviewResult:', reviewResult);
+        console.log('🔍 storeId:', storeId);
+        console.log('🔍 verification.verifier_device:', verification.verifier_device);
+        
+        if (reviewResult === 'already_complete') {
+            toast('此店鋪已認證完畢', 'gold');
+            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+            return;
+        }
+        if (reviewResult === 'already_verified') {
+            toast('你已經實證過這間店鋪了', 'gold');
+            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+            return;
+        }
+    } catch (e) {
+        console.warn('⚠️ verification_reviews 寫入失敗:', e.message);
+        toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
+        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+        return;
+    }
+}
             
             // 2. 寫 store_verifications
             if (CLOUD_ON) {
@@ -5161,7 +5166,9 @@ async function submitVerification(storeId) {
                             is_verified: true
                         };
                     }
-                    
+                    // 🔍 除錯 log
+console.log('🔍 updateData:', JSON.stringify(updateData));
+console.log('🔍 updateData keys:', Object.keys(updateData).length);
                     if (Object.keys(updateData).length > 0) {
                         var updateStoreResult = await supabaseClientInstance
                             .from('claw_stores')
