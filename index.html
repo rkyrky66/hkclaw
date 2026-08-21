@@ -6025,9 +6025,11 @@ async function submitAllSupplement(storeId) {
             var addrInput = document.getElementById('sf-address');
             if (addrInput) address = addrInput.value.trim();
         }
-        var size = window._sfSelections.size;
-        var staff = window._sfSelections.staff;
-        var coin = window._sfSelections.coin;
+        var size = window._sfSelections.size;      // ← 確認此行存在
+        var staff = window._sfSelections.staff;    // ← 確認此行存在
+        var coin = window._sfSelections.coin;      // ← 確認此行存在
+        var hour24 = window._sfSelections.hour24;  // ← 確認此行存在
+        var token = window._sfSelections.token; 
         
         if (isStreet && !address) { 
             toast('請輸入詳細地址', 'pink'); 
@@ -6101,11 +6103,9 @@ async function submitAllSupplement(storeId) {
             return;
         }
         
-        if (isStreet && address) s.addr = address;
-        s.size = size;
-        s.has_staff = staff;
-        s.has_e_coin = coin;
-        s.supplement_count = (s.supplement_count || 0) + 1;
+if (isStreet && address) s.addr = address;
+// ❌ 不再更新本地 size/has_staff/has_e_coin/hour24/token
+s.supplement_count = (s.supplement_count || 0) + 1;
         s.supplemented_by = STATE.user.device;
         s._userSupplemented = true;
         
@@ -6146,12 +6146,10 @@ async function submitAllSupplement(storeId) {
             try {
                 var numericStoreIdForUpdate = parseInt(storeId);
                 var updates = {};
-                if (isStreet && address) updates.addr = address;
-                updates.size = size;
-                updates.has_staff = staff;
-                updates.has_e_coin = coin;
-                updates.supplemented_by = STATE.user.device;
-                updates.supplement_photo = photoUrl;
+if (isStreet && address) updates.addr = address;
+updates.supplemented_by = STATE.user.device;
+updates.supplement_photo = photoUrl;
+// ❌ 不再寫入 size/has_staff/has_e_coin/hour24/token 到 claw_stores
                 
                 await fetch(
                     SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
@@ -6223,6 +6221,23 @@ if (CLOUD_ON) {
     await Promise.all(votePromises);
     console.log('✅ 補充資料已寫入投票');
 }
+
+        // ✅ 補充資料寫入投票（5 個欄位，不確定不寫入）
+        if (CLOUD_ON) {
+            try {
+                var votePromises = [];
+                if (size) votePromises.push(castFieldVote(storeId, 'size', size));
+                if (staff === true || staff === false) votePromises.push(castFieldVote(storeId, 'has_staff', String(staff)));
+                if (coin === true || coin === false) votePromises.push(castFieldVote(storeId, 'has_e_coin', String(coin)));
+                if (hour24 === true || hour24 === false) votePromises.push(castFieldVote(storeId, 'hour24', String(hour24)));
+                if (token === true || token === false) votePromises.push(castFieldVote(storeId, 'token', String(token)));
+                await Promise.all(votePromises);
+                console.log('✅ 補充資料已寫入投票');
+            } catch (e) {
+                console.warn('⚠️ 投票寫入失敗:', e.message);
+            }
+        }
+        
         await recordTaskCompletion('supplement');
         
         if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
@@ -7853,13 +7868,10 @@ function hasCheckedInToday(storeId) {
 // 店鋪打卡 (含防重鎖)
 // ============================================================
 async function doStoreCheckin(storeId) {
-    // 🔒 防重鎖
     if (!acquireSubmitLock('doStoreCheckin')) return;
+    
     if (!requireLogin('打卡')) return;
-    if (isUserBanned()) {
-    showBannedMessage();
-    return;
-}
+    
     try {
         var s = STORES.find(function(x) { return x.id === storeId; });
         if (!s) { 
@@ -7867,19 +7879,16 @@ async function doStoreCheckin(storeId) {
             return; 
         }
         
-        // 檢查是否已打卡
         if (hasCheckedInToday(storeId)) {
             toast('📍 今日已在「' + s.name + '」打卡，明天再來吧！', 'gold');
             return;
         }
         
-        // 檢查 GPS
         if (!gpsLat || !gpsLng) {
             toast('📍 請先開啟 GPS 定位', 'pink');
             return;
         }
         
-        // GPS 距離檢查 (300米)
         if (s.lat && s.lng) {
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
             var distanceMeters = Math.round(distance * 1000);
@@ -7890,27 +7899,12 @@ async function doStoreCheckin(storeId) {
             toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
         }
         
-        // 記錄打卡
         var checkins = getTodayCheckins();
         checkins.push(storeId);
         save();
         
-        // 記錄任務進度
         await recordTaskCompletion('checkin');
-        // ✅ 打卡後觸發投票
-try {
-    var question = await getNextVoteQuestion(storeId);
-    if (question) {
-        var result = await showVoteQuestion(storeId, question);
-        if (result.fieldName && result.answer) {
-            await castFieldVote(storeId, result.fieldName, result.answer);
-        }
-    }
-} catch (e) {
-    console.warn('⚠️ 投票流程失敗:', e.message);
-}
-        await recordRegionContribution('checkin', s.region, storeId);
-        // 同步到雲端
+        
         if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
             try {
                 var numericCheckinStoreId = parseInt(storeId);
@@ -7939,15 +7933,30 @@ try {
         
         toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
         
-        // 更新店鋪詳情 (刷新按鈕狀態)
+        await addPoints(5, '打卡');
+        
+        await recordRegionContribution('checkin', s.region, storeId);
+        
+        // ✅ 打卡後觸發投票
+        try {
+            var question = await getNextVoteQuestion(storeId);
+            if (question) {
+                var result = await showVoteQuestion(storeId, question);
+                if (result.fieldName && result.answer) {
+                    await castFieldVote(storeId, result.fieldName, result.answer);
+                    toast('📊 感謝你的回答！', 'green');
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ 投票流程失敗:', e.message);
+        }
+        
         updateStoreContent(storeId);
     } finally {
         releaseSubmitLock('doStoreCheckin');
     }
 }
-// ============================================================
-// 提交店鋪情報表單 (GPS 每2秒更新版)
-// ============================================================
+
 // ============================================================
 // 相機區塊 HTML
 // ============================================================
@@ -7974,6 +7983,10 @@ function openIntelForm(prefillMall, prefillRegion) {
   window._cam['nt'] = null;
   window._camPreview['nt'] = null;
   
+
+  // ============================================================
+// 提交店鋪情報表單 (GPS 每2秒更新版)
+// ============================================================
   openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="nt-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">📝 1. 請輸入店名　　　（0/4）</button>\n    </div>\n  ');
 
   renderRegionSelectorTab();
