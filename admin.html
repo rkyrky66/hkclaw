@@ -1440,7 +1440,7 @@ function loadStoreManagement() {
 // ============================================================
 // 店鋪編輯彈窗
 // ============================================================
-function openStoreEditModal(storeId) {
+async function openStoreEditModal(storeId) {
     var store = null;
     var numericId = parseInt(storeId);
     for (var i = 0; i < localStoreCache.stores.length; i++) {
@@ -1466,7 +1466,22 @@ function openStoreEditModal(storeId) {
     
     var verifier1Photo = review ? (review.verifier_1_photo || '') : '';
     var verifier2Photo = review ? (review.verifier_2_photo || '') : '';
-    
+    // 查詢該店鋪的投票數
+var voteCounts = {};
+try {
+    var votesResult = await sb.from('store_field_votes')
+        .select('field_name, answer')
+        .eq('store_id', String(storeId));
+    if (!votesResult.error) {
+        (votesResult.data || []).forEach(function(v) {
+            var key = v.field_name + '_' + v.answer;
+            if (!voteCounts[key]) voteCounts[key] = 0;
+            voteCounts[key]++;
+        });
+    }
+} catch (e) {
+    console.warn('⚠️ 載入投票數失敗:', e.message);
+}
     var modalHtml = 
         '<div style="max-height:70vh;overflow-y:auto;">' +
             '<div class="section-header">📋 基本資料</div>' +
@@ -1538,6 +1553,41 @@ function openStoreEditModal(storeId) {
                     '補充照 ' + (store.supplement_photo ? '✅' : '（無照片）') +
                 '</label>' +
             '</div>' +
+            // 在 modalHtml 的字串中，照片顯示區塊之後加入：
+'<div class="section-header">📊 投票數編輯（直接修改投票數）</div>' +
+'<div style="display:flex;flex-direction:column;gap:12px;">' +
+    // 規模
+    '<div><label style="font-size:12px;color:var(--text-muted);">📏 規模投票數</label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px;">' +
+        '<div><label style="font-size:10px;">小型</label><input type="number" id="edit-vote-size-small" value="' + (voteCounts['size_small'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">中型</label><input type="number" id="edit-vote-size-medium" value="' + (voteCounts['size_medium'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">大型</label><input type="number" id="edit-vote-size-large" value="' + (voteCounts['size_large'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+    '</div></div>' +
+    // 場務
+    '<div><label style="font-size:12px;color:var(--text-muted);">👤 場務投票數</label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+        '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-staff-true" value="' + (voteCounts['has_staff_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-staff-false" value="' + (voteCounts['has_staff_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+    '</div></div>' +
+    // 兌幣
+    '<div><label style="font-size:12px;color:var(--text-muted);">💳 兌幣投票數</label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+        '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-coin-true" value="' + (voteCounts['has_e_coin_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-coin-false" value="' + (voteCounts['has_e_coin_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+    '</div></div>' +
+    // 24小時
+    '<div><label style="font-size:12px;color:var(--text-muted);">🕐 24小時投票數</label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+        '<div><label style="font-size:10px;">是</label><input type="number" id="edit-vote-hour24-true" value="' + (voteCounts['hour24_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">否</label><input type="number" id="edit-vote-hour24-false" value="' + (voteCounts['hour24_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+    '</div></div>' +
+    // 代幣
+    '<div><label style="font-size:12px;color:var(--text-muted);">🎟️ 代幣投票數</label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+        '<div><label style="font-size:10px;">需要</label><input type="number" id="edit-vote-token-true" value="' + (voteCounts['token_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+        '<div><label style="font-size:10px;">不需要</label><input type="number" id="edit-vote-token-false" value="' + (voteCounts['token_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+    '</div></div>' +
+'</div>' +
         '</div>';
     
     openModal('✏️ 編輯店鋪 #' + store.id, modalHtml, '💾 保存修改');
@@ -1585,6 +1635,7 @@ async function saveStoreEdit(storeId) {
         }
         
         toast('✅ 已保存修改');
+        await saveStoreVotes(storeId);
         closeModal();
         loadStoreManagement();
         updateTopBarFromLocalCache();
@@ -1592,6 +1643,46 @@ async function saveStoreEdit(storeId) {
         toast('❌ 保存失敗: ' + e.message, 'error');
     }
 }
+
+async function saveStoreVotes(storeId) {
+    var voteUpdates = [];
+    
+    function addVotes(fieldName, answer, count) {
+        count = parseInt(count) || 0;
+        for (var i = 0; i < count; i++) {
+            voteUpdates.push({
+                store_id: String(storeId),
+                field_name: fieldName,
+                answer: answer,
+                voted_by: 'admin_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                voted_at: new Date().toISOString()
+            });
+        }
+    }
+    
+    addVotes('size', 'small', document.getElementById('edit-vote-size-small')?.value);
+    addVotes('size', 'medium', document.getElementById('edit-vote-size-medium')?.value);
+    addVotes('size', 'large', document.getElementById('edit-vote-size-large')?.value);
+    addVotes('has_staff', 'true', document.getElementById('edit-vote-staff-true')?.value);
+    addVotes('has_staff', 'false', document.getElementById('edit-vote-staff-false')?.value);
+    addVotes('has_e_coin', 'true', document.getElementById('edit-vote-coin-true')?.value);
+    addVotes('has_e_coin', 'false', document.getElementById('edit-vote-coin-false')?.value);
+    addVotes('hour24', 'true', document.getElementById('edit-vote-hour24-true')?.value);
+    addVotes('hour24', 'false', document.getElementById('edit-vote-hour24-false')?.value);
+    addVotes('token', 'true', document.getElementById('edit-vote-token-true')?.value);
+    addVotes('token', 'false', document.getElementById('edit-vote-token-false')?.value);
+    
+    if (voteUpdates.length === 0) return;
+    
+    try {
+        var result = await sb.from('store_field_votes').insert(voteUpdates);
+        if (result.error) throw result.error;
+        toast('✅ 投票數已更新');
+    } catch (e) {
+        toast('❌ 投票更新失敗: ' + e.message, 'error');
+    }
+}
+
 // ============================================================
 // 從列表直接已查閱
 // ============================================================
