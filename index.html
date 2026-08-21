@@ -1969,15 +1969,21 @@ async function syncLikeToCloud(postId, likes) {
   if (!CLOUD_ON) return false;
   
   try {
-    var result = await supabaseClientInstance
-      .from('live_posts')
-      .update({ 
-        likes: likes,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', postId);
+    var response = await fetch(
+      SUPABASE_URL + "/rest/v1/live_posts?id=eq." + encodeURIComponent(postId),
+      {
+        method: 'PATCH',
+        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ 
+          likes: likes,
+          updated_at: new Date().toISOString()
+        })
+      }
+    );
     
-    if (result.error) throw result.error;
+    if (!response.ok && response.status !== 204) {
+      throw new Error('HTTP ' + response.status);
+    }
     
     console.log('✅ 按讚已同步到雲端:', postId);
     return true;
@@ -1986,6 +1992,7 @@ async function syncLikeToCloud(postId, likes) {
     return false;
   }
 }
+
 async function processPendingPosts() {
   if (!CLOUD_ON || !STATE._pendingPosts || STATE._pendingPosts.length === 0) return;
   
@@ -4487,7 +4494,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
     '<p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n' +
     (s.lat && s.lng ? '<a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" class="text-xs text-neongreen hover:underline">🗺️</a>' : '') + '\n' +
     statusBadge + warningBadge + '\n' +
-'</div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      ' + (s.size === null && s.has_staff === null && s.has_e_coin === null && s.hour24 === null && s.token === null ? (storeVotes.length === 0 ? 
+'</div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      ' + (s.size === null && s.has_staff === null && s.has_e_coin === null && s.hour24 === null && s.token === null ? (!s.supplement_photo || s.supplement_photo === '' ? 
     '<button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+15分)</button>' : '') : '') + '\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + ((s.verification_count || 0) + (s.verification_count_2 || 0) > 0 ? '<span class="text-white/40">🔍 已獲 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + ' 個認證</span>' : '') + '\n      ' + (s.is_verified === true || s.status === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
 }
 
@@ -6370,7 +6377,12 @@ function viewLive() {
         '</div>' +
         '<div class="mt-1 flex items-center gap-3 text-[10px] text-white/30">' +
           '<span>👤 ' + (p.author || '匿名') + '</span>' +
-          '<button onclick="toggleLike(\'' + p.id + '\')" data-post-id="' + p.id + '" class="flex items-center gap-1 ...">' + (hasLiked ? '❤️' : '🤍') + ' ' + (p.likes ? p.likes.length : 0) + '</button>' +
+          '<button onclick="toggleLike(\'' + p.id + '\')" data-post-id="' + p.id + '" class="flex items-center gap-1 ' + (hasLiked ? 'text-neonpink' : 'text-white/30') + '">' + (hasLiked ? '❤️' : '🤍') + ' ' + (p.likes ? p.likes.length : 0) + '</button>' +
+          (isOwner ? 
+            '<button onclick="openEditTags(\'' + p.id + '\')" class="text-white/30 hover:text-gold transition-colors">✏️</button>' +
+            '<button onclick="deletePost(\'' + p.id + '\')" class="text-white/30 hover:text-neonpink transition-colors">🗑️</button>' : 
+            '<button onclick="openReportForm(\'post\', \'' + p.id + '\', \'貼文\')" class="text-white/30 hover:text-neonpink transition-colors">🚨</button>'
+          ) +
         '</div>' +
       '</div>';
     }).join('');
@@ -6640,13 +6652,126 @@ async function toggleLike(postId) {
   save();
   await syncLikeToCloud(postId, post.likes);
   
-  // ✅ 不重新渲染，只更新按鈕文字
+  // 只更新按鈕，不重新渲染
   var likeBtn = document.querySelector('[data-post-id="' + postId + '"]');
   if (likeBtn) {
     var hasLiked = post.likes.includes(userDevice);
     likeBtn.innerHTML = (hasLiked ? '❤️' : '🤍') + ' ' + post.likes.length;
-    likeBtn.className = likeBtn.className.replace(hasLiked ? 'text-white/30' : 'text-neonpink', hasLiked ? 'text-neonpink' : 'text-white/30');
+    if (hasLiked) {
+      likeBtn.classList.remove('text-white/30');
+      likeBtn.classList.add('text-neonpink');
+    } else {
+      likeBtn.classList.remove('text-neonpink');
+      likeBtn.classList.add('text-white/30');
+    }
   }
+}
+
+async function deletePost(postId) {
+  if (!confirm('確定要刪除這篇貼文嗎？\n\n⚠️ 刪除後將扣除 10 積分')) return;
+  
+  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
+  if (!post) return;
+  
+  if (post.author_device !== STATE.user.device) {
+    toast('只能刪除自己的貼文', 'pink');
+    return;
+  }
+  
+  try {
+    // 雲端刪除
+    if (CLOUD_ON) {
+      await supabaseClientInstance
+        .from('live_posts')
+        .delete()
+        .eq('id', postId);
+    }
+    
+    // 本地刪除
+    STATE.livePosts = STATE.livePosts.filter(function(p) { return p.id !== postId; });
+    save();
+    
+    // 扣分
+    await addPoints(-10, '刪除貼文');
+    
+    toast('✅ 貼文已刪除，-10 分', 'green');
+    
+    if (CURRENT === 'live') {
+      showView('live');
+    }
+  } catch (e) {
+    toast('❌ 刪除失敗: ' + e.message, 'pink');
+  }
+}
+
+function openEditTags(postId) {
+  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
+  if (!post) return;
+  
+  if (post.author_device !== STATE.user.device) {
+    toast('只能編輯自己的貼文', 'pink');
+    return;
+  }
+  
+  var allTags = ['出貨', '夾送', '刮中', '推幣', '大LAM', 'LAM', '小LAM', '平手', '小損', '損', '大損', '一番賞', '景品', '盒玩', '布偶', '吊飾', '扭蛋', '佛心台', '標準台', '技術台', '山崩台'];
+  var currentTags = post.tags || [];
+  
+  var tagsHtml = allTags.map(function(t) {
+    var isActive = currentTags.includes(t);
+    return '<button onclick="this.classList.toggle(\'chip-active-gold\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] ' + (isActive ? 'chip-active-gold' : 'text-gold') + '">' + t + '</button>';
+  }).join('');
+  
+  openModal(`
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3">
+      <h2 class="font-black text-gold">✏️ 編輯標籤</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    </div>
+    <div class="mt-4">
+      <p class="text-xs text-white/40 mb-2">選擇標籤（可多選）</p>
+      <div class="flex flex-wrap gap-1.5">${tagsHtml}</div>
+    </div>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="saveEditedTags('${postId}')" class="w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">💾 保存</button>
+    </div>
+  `);
+}
+
+async function saveEditedTags(postId) {
+  var selectedTags = [];
+  document.querySelectorAll('[data-tag].chip-active-gold').forEach(function(btn) {
+    selectedTags.push(btn.dataset.tag);
+  });
+  
+  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
+  if (!post) return;
+  
+  post.tags = selectedTags;
+  post.content = selectedTags.length > 0 ? selectedTags.join(' · ') : '';
+  save();
+  
+  if (CLOUD_ON) {
+    try {
+      var response = await fetch(
+        SUPABASE_URL + "/rest/v1/live_posts?id=eq." + encodeURIComponent(postId),
+        {
+          method: 'PATCH',
+          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ 
+            tags: selectedTags,
+            content: post.content,
+            updated_at: new Date().toISOString()
+          })
+        }
+      );
+      if (!response.ok && response.status !== 204) throw new Error('HTTP ' + response.status);
+    } catch (e) {
+      console.warn('⚠️ 標籤更新失敗:', e.message);
+    }
+  }
+  
+  toast('✅ 標籤已更新', 'green');
+  closeModal();
+  if (CURRENT === 'live') showView('live');
 }
 
 // ============================================================
