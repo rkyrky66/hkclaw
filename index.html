@@ -4482,9 +4482,11 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
     }
     
-    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + s.addr + '</p>\n          ' + statusBadge + warningBadge + '\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      <button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+5分/項)</button>\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + 
-fieldVoteHtml + '\n      ' + 
-(s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + (s.verification_count > 0 ? '<span class="text-white/40">🔍 已獲 ' + s.verification_count + ' 個認證</span>' : '') + '\n      ' + (s.verified === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
+    return '\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div>\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-0.5">\n' +
+    '<p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n' +
+    (s.lat && s.lng ? '<a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" class="text-xs text-neongreen hover:underline">🗺️</a>' : '') + '\n' +
+    statusBadge + warningBadge + '\n' +
+'</div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    ' + photoHtml + '\n    <div class="mt-3 flex flex-wrap gap-2 text-xs flex-shrink-0">\n      ' + (s.ig ? '<a href="https://instagram.com/' + s.ig + '" target="_blank" class="rounded-full border border-neonpink/50 px-3 py-1 text-neonpink glow-pink">📸 IG @' + s.ig + '</a>' : '') + '\n      ' + (s.fb ? '<a href="https://facebook.com/' + s.fb + '" target="_blank" class="rounded-full border border-neongreen/50 px-3 py-1 text-neongreen">🔗 FB</a>' : '') + '\n      <button onclick="toggleFav(\'store\',\'' + s.id + '\')" class="rounded-full border border-gold/50 px-3 py-1 text-gold">' + (fav ? '★ 已收藏' : '☆ 收藏') + '</button>\n      ' + (isInMall ? '<button onclick="backToMall()" class="rounded-full border border-neongreen/30 px-3 py-1 text-xs text-neongreen">🏬 返回商場</button>' : '') + '\n      ' + (!isVerified ? '<button onclick="openVerifyForm(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">🔍 認證此店 (+15分)</button>' : '') + '\n      ' + (s.size === null && s.has_staff === null && s.has_e_coin === null && s.hour24 === null && s.token === null ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">📝 補充資料 (+15分)</button>' : '') + '\n      <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">📢 戰報</button>\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 檢舉</button>\n <button onclick="doStoreCheckin(\'' + s.id + '\')" class="rounded-full border border-neongreen/50 px-3 py-1 text-xs text-neongreen glow-green">📍 打卡 (+5分)</button>\n   </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    <div class="mt-2 flex flex-wrap gap-2 text-[10px] flex-shrink-0">\n      ' + ((s.verification_count || 0) + (s.verification_count_2 || 0) > 0 ? '<span class="text-white/40">🔍 已獲 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + ' 個認證</span>' : '') + '\n      ' + (s.is_verified === true || s.status === 'verified' ? '<span class="text-neongreen">✅ 已通過認證</span>' : '') + '\n    </div>\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n      <button onclick="openMachineForm(\'' + s.id + '\')" class="mt-4 w-full rounded-2xl bg-neongreen py-3 text-base font-black text-black glow-green">➕ 共享此店第一部機台</button>\n    </div>\n  ';
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -5239,22 +5241,29 @@ async function getNextVoteQuestion(storeId) {
 function showVoteQuestion(storeId, question) {
     return new Promise(function(resolve) {
         var optionsHtml = question.options.map(function(opt) {
-            return '<button onclick="resolveVote(\'' + question.key + '\', \'' + opt.value + '\')" class="w-full rounded-xl border border-gold/40 py-3 text-sm font-bold text-gold hover:bg-gold/10 transition-all">' + opt.label + '</button>';
+            return '<button onclick="resolveVote(\'' + question.key + '\', \'' + opt.value + '\')" class="w-full rounded-xl border border-gold/40 py-2.5 text-sm font-bold text-gold hover:bg-gold/10 transition-all">' + opt.label + '</button>';
         }).join('');
         
-        openModal(`
-            <div class="flex flex-col items-center py-4">
-                <div class="text-5xl mb-3">📊</div>
-                <h2 class="text-lg font-black text-gold text-center">${question.question}</h2>
-                <div class="mt-5 w-full space-y-2">
-                    ${optionsHtml}
-                    <button onclick="resolveVote(null, null)" class="w-full text-xs text-white/30 hover:text-white/60 transition-colors py-2">🤷 不確定</button>
-                </div>
-            </div>
-        `);
+        // 使用小型彈窗（覆蓋在現有 modal 上）
+        var voteOverlay = document.createElement('div');
+        voteOverlay.id = 'vote-overlay';
+        voteOverlay.style.cssText = 'position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);';
+        voteOverlay.innerHTML = 
+            '<div style="background:#18181b;border:1px solid rgba(212,175,55,0.4);border-radius:20px;padding:24px;max-width:320px;width:90%;box-shadow:0 0 30px rgba(212,175,55,0.2);">' +
+                '<div class="text-center">' +
+                    '<div class="text-3xl mb-2">🙋</div>' +
+                    '<h3 class="text-base font-black text-gold">問問你</h3>' +
+                    '<p class="text-sm text-white/70 mt-2">' + question.question + '</p>' +
+                '</div>' +
+                '<div class="mt-4 space-y-2">' +
+                    optionsHtml +
+                    '<button onclick="resolveVote(null, null)" class="w-full text-xs text-white/30 hover:text-white/60 transition-colors py-2">🤷 不確定</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(voteOverlay);
         
         window._resolveVote = function(fieldName, answer) {
-            closeModal();
+            if (voteOverlay) voteOverlay.remove();
             resolve({ fieldName: fieldName, answer: answer });
         };
     });
@@ -5854,7 +5863,7 @@ function openSupplementForm(storeId) {
   var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
   var allCompleted = completedCount === 4;
   var isMallStore = s.type === 'mall' || s.mall !== '';
-  var addressRequired = isStreetStore;
+  var addressRequired = isStreetStore && (!s.addr || s.addr === '');
   var addressCompleted = isMallStore ? true : existing.address;
   
   // ✅ 清除殘留照片
@@ -7899,9 +7908,29 @@ async function doStoreCheckin(storeId) {
             toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
         }
         
+        // 記錄打卡
         var checkins = getTodayCheckins();
         checkins.push(storeId);
         save();
+        
+        // ✅ 先觸發投票，後加分
+        var voteCompleted = true;
+        try {
+            var question = await getNextVoteQuestion(storeId);
+            if (question) {
+                var result = await showVoteQuestion(storeId, question);
+                if (result.fieldName && result.answer) {
+                    await castFieldVote(storeId, result.fieldName, result.answer);
+                    toast('📊 多謝你順手幫手！', 'green');
+                }
+                // 不確定也算完成（用戶已回應）
+            }
+        } catch (e) {
+            console.warn('⚠️ 投票流程失敗:', e.message);
+        }
+        
+        // ✅ 回答後才加分
+        await addPoints(5, '打卡');
         
         await recordTaskCompletion('checkin');
         
@@ -7933,23 +7962,7 @@ async function doStoreCheckin(storeId) {
         
         toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
         
-        await addPoints(5, '打卡');
-        
         await recordRegionContribution('checkin', s.region, storeId);
-        
-        // ✅ 打卡後觸發投票
-        try {
-            var question = await getNextVoteQuestion(storeId);
-            if (question) {
-                var result = await showVoteQuestion(storeId, question);
-                if (result.fieldName && result.answer) {
-                    await castFieldVote(storeId, result.fieldName, result.answer);
-                    toast('📊 感謝你的回答！', 'green');
-                }
-            }
-        } catch (e) {
-            console.warn('⚠️ 投票流程失敗:', e.message);
-        }
         
         updateStoreContent(storeId);
     } finally {
