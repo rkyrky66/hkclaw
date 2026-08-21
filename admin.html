@@ -671,6 +671,9 @@
                     <i class="fas fa-store"></i><span>新店審核</span>
                     <span class="badge badge-warning" id="badge-stores">0</span>
                 </li>
+                <li class="nav-item" data-tab="store-management" onclick="switchTab('store-management')">
+    <i class="fas fa-edit"></i><span>店鋪管理</span>
+</li>
                 <li class="nav-item" data-tab="verifications" onclick="switchTab('verifications')">
                     <i class="fas fa-check-double"></i><span>認證審核</span>
                     <span class="badge badge-warning" id="badge-verifications">0</span>
@@ -777,10 +780,11 @@ var currentViewStoreId = null;
 // Local 狀態管理（記憶體快取）
 // ============================================================
 var localStoreCache = {
-    stores: [],           // { id, name, region, admin_overall_status, is_hidden, is_suspicious, ... }
-    fieldStatuses: [],    // { id, table_name, record_id, field_name, status, ... }
-    loadedAt: null,       // 載入時間
-    isLoaded: false       // 是否已載入
+    stores: [],
+    fieldStatuses: [],
+    verificationReviews: [],
+    loadedAt: null,
+    isLoaded: false
 };
 
 // 從 local 快取取得待審核店鋪
@@ -852,31 +856,34 @@ function updateTopBarFromLocalCache() {
 async function loadCoreDataToLocalCache() {
     try {
         var results = await Promise.all([
-            // 查詢所有店鋪（不限狀態）
             sb.from('claw_stores')
-    .select('*')
-    .order('created_at', { ascending: false }),
-            // 查詢所有 field_status
+                .select('*')
+                .order('created_at', { ascending: false }),
             sb.from('field_status')
                 .select('*')
-                .eq('table_name', 'claw_stores')
+                .eq('table_name', 'claw_stores'),
+            sb.from('verification_reviews')
+                .select('*')
         ]);
         
         if (results[0].error) throw results[0].error;
         if (results[1].error) throw results[1].error;
+        if (results[2].error) throw results[2].error;
         
         localStoreCache.stores = results[0].data || [];
         localStoreCache.fieldStatuses = results[1].data || [];
+        localStoreCache.verificationReviews = results[2].data || [];
         localStoreCache.loadedAt = new Date();
         localStoreCache.isLoaded = true;
         
-        console.log('✅ Local 快取已載入:', localStoreCache.stores.length, '間店鋪,', localStoreCache.fieldStatuses.length, '個欄位狀態');
+        console.log('✅ Local 快取已載入:', localStoreCache.stores.length, '間店鋪,', localStoreCache.fieldStatuses.length, '個欄位狀態,', localStoreCache.verificationReviews.length, '筆認證審核');
         return true;
     } catch (e) {
         console.error('❌ Local 快取載入失敗:', e.message);
         return false;
     }
 }
+
 
 // 更新頂部統計（含 Supabase 其他待處理計數）
 async function updateTopBarStats() {
@@ -1156,6 +1163,7 @@ function switchTab(tab) {
     var titles = {
         dashboard: '儀表板',
         stores: '新店審核',
+        'store-management': '📋 店鋪管理',
         verifications: '認證審核',
         flagged: '⚠️ 存疑清單',
         users: '用戶管理',
@@ -1170,6 +1178,7 @@ function switchTab(tab) {
     var loaders = {
         dashboard: loadDashboard,
         stores: loadStores,
+        'store-management': loadStoreManagement,
         verifications: loadVerifications,
         flagged: loadFlagged,
         users: loadUsers,
@@ -1372,6 +1381,217 @@ function loadStores() {
     container.innerHTML = html;
 }
 
+// ============================================================
+// 店鋪管理列表（所有狀態，按 ID 排列）
+// ============================================================
+function loadStoreManagement() {
+    var container = document.getElementById('tab-content');
+    
+    var allStores = localStoreCache.stores.slice().sort(function(a, b) {
+        return b.id - a.id;  // 按 ID 降序（新的在前）
+    });
+    
+    if (allStores.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-store"></i><p>暫無店鋪資料</p></div>';
+        return;
+    }
+    
+    var html = 
+        '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+            '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + allStores.length + ' 間店鋪</span>' +
+            '<button class="btn-sm" onclick="refreshCoreData()" style="margin-left:auto;">🔄 重新整理</button>' +
+        '</div>' +
+        '<div class="table-container" style="overflow-x:auto;">' +
+            '<table style="min-width:600px;">' +
+                '<thead><tr>' +
+                    '<th>ID</th>' +
+                    '<th>店名</th>' +
+                    '<th>地區</th>' +
+                    '<th>狀態</th>' +
+                    '<th>認證</th>' +
+                    '<th>隱藏</th>' +
+                    '<th>操作</th>' +
+                '</tr></thead>' +
+                '<tbody>';
+    
+    for (var i = 0; i < allStores.length; i++) {
+        var s = allStores[i];
+        var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
+        var statusLabel = s.admin_overall_status || s.status || 'pending';
+        var statusClass = statusLabel === 'confirmed' || statusLabel === 'verified' ? 'confirmed' : 
+                         statusLabel === 'suspicious' ? 'suspicious' : 
+                         statusLabel === 'hidden' ? 'hidden' : 'pending';
+        
+        html += '<tr>' +
+            '<td>' + s.id + '</td>' +
+            '<td><strong>' + s.name + '</strong></td>' +
+            '<td>' + (s.region || '-') + '</td>' +
+            '<td><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></td>' +
+            '<td>' + totalVerifications + '/2</td>' +
+            '<td>' + (s.is_hidden ? '🚫' : '✅') + '</td>' +
+            '<td><button class="btn-sm primary" onclick="openStoreEditModal(\'' + s.id + '\')">✏️ 編輯</button></td>' +
+        '</tr>';
+    }
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// ============================================================
+// 店鋪編輯彈窗
+// ============================================================
+function openStoreEditModal(storeId) {
+    var store = null;
+    var numericId = parseInt(storeId);
+    for (var i = 0; i < localStoreCache.stores.length; i++) {
+        if (localStoreCache.stores[i].id === numericId) {
+            store = localStoreCache.stores[i];
+            break;
+        }
+    }
+    
+    if (!store) {
+        toast('找不到店鋪', 'error');
+        return;
+    }
+    
+    // 取得認證者照片
+    var review = null;
+    for (var j = 0; j < localStoreCache.verificationReviews.length; j++) {
+        if (String(localStoreCache.verificationReviews[j].store_id) === String(storeId)) {
+            review = localStoreCache.verificationReviews[j];
+            break;
+        }
+    }
+    
+    var verifier1Photo = review ? (review.verifier_1_photo || '') : '';
+    var verifier2Photo = review ? (review.verifier_2_photo || '') : '';
+    
+    var modalHtml = 
+        '<div style="max-height:70vh;overflow-y:auto;">' +
+            '<div class="section-header">📋 基本資料</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">店名</label>' +
+                '<input id="edit-name" value="' + (store.name || '') + '" class="form-input" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;" /></div>' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">地區</label>' +
+                '<input id="edit-region" value="' + (store.region || '') + '" class="form-input" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;" /></div>' +
+            '</div>' +
+            '<div style="margin-top:12px;"><label style="font-size:12px;color:var(--text-muted);">地址</label>' +
+            '<input id="edit-addr" value="' + (store.addr || '') + '" class="form-input" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;" /></div>' +
+            
+            '<div class="section-header">📏 規模/場務/兌幣</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">規模</label>' +
+                '<select id="edit-size" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
+                    '<option value="" ' + (!store.size ? 'selected' : '') + '>未填</option>' +
+                    '<option value="small" ' + (store.size === 'small' ? 'selected' : '') + '>小型 (S)</option>' +
+                    '<option value="medium" ' + (store.size === 'medium' ? 'selected' : '') + '>中型 (M)</option>' +
+                    '<option value="large" ' + (store.size === 'large' ? 'selected' : '') + '>大型 (L)</option>' +
+                '</select></div>' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">場務</label>' +
+                '<select id="edit-staff" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
+                    '<option value="" ' + (store.has_staff === null || store.has_staff === undefined ? 'selected' : '') + '>未填</option>' +
+                    '<option value="true" ' + (store.has_staff === true ? 'selected' : '') + '>有 (V)</option>' +
+                    '<option value="false" ' + (store.has_staff === false ? 'selected' : '') + '>無 (X)</option>' +
+                '</select></div>' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">兌幣</label>' +
+                '<select id="edit-coin" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
+                    '<option value="" ' + (store.has_e_coin === null || store.has_e_coin === undefined ? 'selected' : '') + '>未填</option>' +
+                    '<option value="true" ' + (store.has_e_coin === true ? 'selected' : '') + '>有 (V)</option>' +
+                    '<option value="false" ' + (store.has_e_coin === false ? 'selected' : '') + '>無 (X)</option>' +
+                '</select></div>' +
+            '</div>' +
+            
+            '<div class="section-header">🔑 狀態</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">管理員狀態</label>' +
+                '<select id="edit-admin-status" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
+                    '<option value="pending" ' + (store.admin_overall_status === 'pending' || !store.admin_overall_status ? 'selected' : '') + '>pending</option>' +
+                    '<option value="reviewed" ' + (store.admin_overall_status === 'reviewed' ? 'selected' : '') + '>reviewed</option>' +
+                    '<option value="confirmed" ' + (store.admin_overall_status === 'confirmed' ? 'selected' : '') + '>confirmed</option>' +
+                    '<option value="suspicious" ' + (store.admin_overall_status === 'suspicious' ? 'selected' : '') + '>suspicious</option>' +
+                    '<option value="hidden" ' + (store.admin_overall_status === 'hidden' ? 'selected' : '') + '>hidden</option>' +
+                '</select></div>' +
+                '<div><label style="font-size:12px;color:var(--text-muted);">認證狀態</label>' +
+                '<select id="edit-verify-status" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
+                    '<option value="pending" ' + (store.status === 'pending' ? 'selected' : '') + '>pending</option>' +
+                    '<option value="verified" ' + (store.status === 'verified' ? 'selected' : '') + '>verified</option>' +
+                '</select></div>' +
+            '</div>' +
+            
+            '<div class="section-header">📷 照片顯示（主網店鋪頁面）</div>' +
+            '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                '<label style="display:flex;align-items:center;gap:8px;font-size:13px;">' +
+                    '<input type="checkbox" id="edit-show-first" ' + (store.show_first_photo !== false ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--primary);" />' +
+                    '首發照 ' + (store.photo ? '✅' : '（無照片）') +
+                '</label>' +
+                '<label style="display:flex;align-items:center;gap:8px;font-size:13px;">' +
+                    '<input type="checkbox" id="edit-show-v1" ' + (store.show_verifier_1_photo === true ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--primary);" />' +
+                    '認證者1照 ' + (verifier1Photo ? '✅' : '（無照片）') +
+                '</label>' +
+                '<label style="display:flex;align-items:center;gap:8px;font-size:13px;">' +
+                    '<input type="checkbox" id="edit-show-v2" ' + (store.show_verifier_2_photo === true ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--primary);" />' +
+                    '認證者2照 ' + (verifier2Photo ? '✅' : '（無照片）') +
+                '</label>' +
+                '<label style="display:flex;align-items:center;gap:8px;font-size:13px;">' +
+                    '<input type="checkbox" id="edit-show-supplement" ' + (store.show_supplement_photo !== false ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--primary);" />' +
+                    '補充照 ' + (store.supplement_photo ? '✅' : '（無照片）') +
+                '</label>' +
+            '</div>' +
+        '</div>';
+    
+    openModal('✏️ 編輯店鋪 #' + store.id, modalHtml, '💾 保存修改');
+    
+    // 設定保存回調
+    modalCallback = function() {
+        saveStoreEdit(storeId);
+    };
+}
+// ============================================================
+// 保存店鋪編輯
+// ============================================================
+async function saveStoreEdit(storeId) {
+    var updates = {
+        name: document.getElementById('edit-name')?.value || '',
+        region: document.getElementById('edit-region')?.value || '',
+        addr: document.getElementById('edit-addr')?.value || '',
+        size: document.getElementById('edit-size')?.value || null,
+        has_staff: document.getElementById('edit-staff')?.value === 'true' ? true : document.getElementById('edit-staff')?.value === 'false' ? false : null,
+        has_e_coin: document.getElementById('edit-coin')?.value === 'true' ? true : document.getElementById('edit-coin')?.value === 'false' ? false : null,
+        admin_overall_status: document.getElementById('edit-admin-status')?.value || 'pending',
+        status: document.getElementById('edit-verify-status')?.value || 'pending',
+        is_verified: document.getElementById('edit-verify-status')?.value === 'verified',
+        show_first_photo: document.getElementById('edit-show-first')?.checked !== false,
+        show_verifier_1_photo: document.getElementById('edit-show-v1')?.checked === true,
+        show_verifier_2_photo: document.getElementById('edit-show-v2')?.checked === true,
+        show_supplement_photo: document.getElementById('edit-show-supplement')?.checked !== false,
+        updated_at: new Date().toISOString()
+    };
+    
+    try {
+        var result = await sb.from('claw_stores')
+            .update(updates)
+            .eq('id', parseInt(storeId));
+        
+        if (result.error) throw result.error;
+        
+        // ✅ 更新 Local 快取
+        var numericId = parseInt(storeId);
+        for (var i = 0; i < localStoreCache.stores.length; i++) {
+            if (localStoreCache.stores[i].id === numericId) {
+                localStoreCache.stores[i] = Object.assign({}, localStoreCache.stores[i], updates);
+                break;
+            }
+        }
+        
+        toast('✅ 已保存修改');
+        closeModal();
+        loadStoreManagement();
+        updateTopBarFromLocalCache();
+    } catch (e) {
+        toast('❌ 保存失敗: ' + e.message, 'error');
+    }
+}
 // ============================================================
 // 從列表直接已查閱
 // ============================================================
