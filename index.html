@@ -4434,6 +4434,16 @@ function openVerifyForm(storeId) {
   var existingVerification = STATE.verifications && STATE.verifications[s.id];
   if (existingVerification) { toast('你已經實證過這間店鋪了', 'gold'); return; }
   
+  // ✅ 清除殘留照片和 GPS
+window._cam = window._cam || {};
+window._camPreview = window._camPreview || {};
+window._cam['vf'] = null;
+window._camPreview['vf'] = null;
+window._cam['vr'] = null;
+window._camPreview['vr'] = null;
+_finalGpsLat = null;
+_finalGpsLng = null;
+_finalGpsLocked = false;
   _verifyMode = 'confirm';
   _verifyStoreId = storeId;
   _verifyReportCategory = '';
@@ -4663,25 +4673,31 @@ function onVerifyReportCategoryChange(category) {
 function updateVerifySubmitButton() {
     var btn = document.getElementById('vf-submit-btn');
     if (!btn) return;
-    // ✅ 新增：提交中鎖定按鈕
+    
+    // ✅ 提交中鎖定按鈕
     if (isSubmittingVerification) {
         btn.disabled = true;
         btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
         btn.innerHTML = '⏳ 提交中...';
         return;
     }
+    
     if (_verifyMode === 'confirm') {
-        var photoReady = window._camPreview && window._camPreview.vf;
-        var gpsReady = _finalGpsLocked;
+        var photoReady = !!(window._camPreview && window._camPreview.vf);
+        var gpsReady = !!_finalGpsLocked;
         
-        if (photoReady && gpsReady) {
-            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-            btn.disabled = false;
-            btn.innerHTML = '✅ 提交實證（+15 積分）';
-        } else {
+        if (!photoReady) {
             btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
             btn.disabled = true;
-            btn.innerHTML = photoReady ? '📍 等待 GPS 鎖定...' : '📷 請先拍攝店鋪照片';
+            btn.innerHTML = '📷 請拍下店鋪全貌';
+        } else if (!gpsReady) {
+            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+            btn.disabled = true;
+            btn.innerHTML = '📍 GPS 定位鎖定中';
+        } else {
+            btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
+            btn.disabled = false;
+            btn.innerHTML = '✅ 按此提交 (+15 積分)';
         }
     } else {
         // 檢舉模式
@@ -4689,27 +4705,35 @@ function updateVerifySubmitButton() {
         var ready = false;
         
         if (category === 'store_not_exist' || category === 'location_wrong' || category === 'photo_fake') {
-            var reportPhotoReady = window._camPreview && window._camPreview.vr;
-            var reportGpsReady = _finalGpsLocked;
-            ready = reportPhotoReady && reportGpsReady;
-            if (!ready) {
-                btn.innerHTML = reportPhotoReady ? '📍 等待 GPS 鎖定...' : '📷 請先拍攝現場照片';
+            var reportPhotoReady = !!(window._camPreview && window._camPreview.vr);
+            var reportGpsReady = !!_finalGpsLocked;
+            
+            if (!reportPhotoReady) {
+                btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+                btn.disabled = true;
+                btn.innerHTML = '📷 請拍下現場情況';
+            } else if (!reportGpsReady) {
+                btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+                btn.disabled = true;
+                btn.innerHTML = '📍 GPS 定位鎖定中';
+            } else {
+                btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
+                btn.disabled = false;
+                btn.innerHTML = '🚨 按此提交檢舉';
             }
         } else if (category === 'name_wrong' || category === 'other') {
             var inputVal = document.getElementById('vr-input')?.value.trim();
             ready = !!inputVal;
-            if (!ready) {
+            
+            if (ready) {
+                btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
+                btn.disabled = false;
+                btn.innerHTML = '🚨 按此提交檢舉';
+            } else {
+                btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+                btn.disabled = true;
                 btn.innerHTML = '📝 請輸入說明';
             }
-        }
-        
-        if (ready) {
-            btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
-            btn.disabled = false;
-            btn.innerHTML = '🚨 提交檢舉';
-        } else {
-            btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-            btn.disabled = true;
         }
     }
 }
