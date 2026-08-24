@@ -3885,6 +3885,14 @@ function updateMapMarkers() {
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
         '👆 點擊查看店鋪列表' +
       '</div>';
+    // 綁定 popup
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false
+    });
+
         // ✅ 點擊圖釘時不移動地圖
     marker.on('click', function(e) {
         var currentCenter = map.getCenter();
@@ -3894,13 +3902,7 @@ function updateMapMarkers() {
             map.setView(currentCenter, currentZoom, { animate: false });
         }, 10);
     });
-    // 綁定 popup
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false
-    });
+
     
     // 點擊 popup 本身打開商場視圖
     marker.on('popupopen', function() {
@@ -3949,6 +3951,14 @@ function updateMapMarkers() {
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
         '👆 點擊查看詳情' +
       '</div>';
+
+          // 綁定 popup
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false
+    });
         // ✅ 點擊圖釘時不移動地圖
     marker.on('click', function(e) {
         var currentCenter = map.getCenter();
@@ -3958,13 +3968,7 @@ function updateMapMarkers() {
             map.setView(currentCenter, currentZoom, { animate: false });
         }, 10);
     });
-    // 綁定 popup
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false
-    });
+
     
     // 點擊 popup 本身打開店鋪詳情
     marker.on('popupopen', function() {
