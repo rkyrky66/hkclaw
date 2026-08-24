@@ -6608,7 +6608,7 @@ function viewLive() {
       var reactionHtml = '';
      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
 var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
-      var allReactions = visibleReactions.concat(hiddenReactions);f
+      var allReactions = visibleReactions.concat(hiddenReactions);
       
       if (allReactions.length > 0) {
         reactionHtml = allReactions.map(function(r) {
