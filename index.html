@@ -768,6 +768,8 @@ var mapStoresList = [];
 var CURRENT = "map";
 var mapSelectionMode = null;  // null = 正常模式, 'lp' = 發佈戰報, 'lo' = 台主宣傳
 var findState = { region: "全部", group: "kl" };
+var regionGroupOpen = { hk: false, kl: false, nt: false };
+var moreRegionsOpenMap = { hk: false, kl: false, nt: false };
 var liveTrack = "player";
 var intelStep = 1;
 var selectedRegion = '';
@@ -7174,9 +7176,6 @@ function selectStoreSuggestion(prefix, storeId, storeName) {
 // ============================================================
 function viewFind() {
   var recent = STATE.recentRegions || [];
-  var regionGroupOpen = { hk: false, kl: false, nt: false };
-  var moreRegionsOpenMap = { hk: false, kl: false, nt: false };
-  
   var renderRegionGroupFn = function(groupKey) {
     var data = REGIONS[groupKey];
     var isOpen = regionGroupOpen[groupKey];
@@ -7271,8 +7270,15 @@ function loadMoreStores() {
   }
 }
 
-function toggleRegionGroup(group) { showView("find"); }
-function toggleMoreRegions(group) { showView("find"); }
+function toggleRegionGroup(group) { 
+    regionGroupOpen[group] = !regionGroupOpen[group];
+    showView("find"); 
+}
+
+function toggleMoreRegions(group) { 
+    moreRegionsOpenMap[group] = !moreRegionsOpenMap[group];
+    showView("find"); 
+}
 
 // ============================================================
 // 🎯 任務頁面 (完整重構)
@@ -8139,7 +8145,18 @@ async function submitMachine(sid) {
             photo: photoUrl 
         };
         s.machines.unshift(newMachine);
-        
+        // ✅ 同步 claw_stores.machines 快取
+if (CLOUD_ON) {
+    try {
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({ machines: s.machines })
+            .eq('id', parseInt(sid));
+        console.log('✅ claw_stores.machines 已同步');
+    } catch (e) {
+        console.warn('⚠️ machines 同步失敗:', e.message);
+    }
+}
         if (CLOUD_ON) {
             try {
                 var numericMachineStoreId = parseInt(sid);
