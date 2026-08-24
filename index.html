@@ -5834,13 +5834,26 @@ console.log('🔍 updateData keys:', Object.keys(updateData).length);
             if (updatedStore) {
                 var totalVerifications = (updatedStore.verification_count || 0) + (updatedStore.verification_count_2 || 0);
                 if (totalVerifications >= 2) {
-                    toast('🎉 ' + updatedStore.name + ' 已通過實證！', 'green');
-                    updateAchievementStat('store_complete');
-                    var regionStat = getRegionStat(updatedStore.region);
-                    if (regionStat) updateAchievementStat(regionStat);
-                } else {
-                    toast('✅ 實證提交成功！目前 ' + totalVerifications + '/2 人實證', 'green');
-                }
+    toast('🎉 ' + updatedStore.name + ' 已通過實證！', 'green');
+    updateAchievementStat('store_complete');
+    var regionStat = getRegionStat(updatedStore.region);
+    if (regionStat) updateAchievementStat(regionStat);
+    
+    // ✅ 標記提交者可領取獎勵（不直接給認證者加分）
+    if (CLOUD_ON) {
+        try {
+            await supabaseClientInstance
+                .from('claw_stores')
+                .update({ submitter_reward_claimed: false })
+                .eq('id', numericStoreId);
+            console.log('✅ 已標記提交者可領取 +35 獎勵');
+        } catch (e) {
+            console.warn('⚠️ 標記獎勵失敗:', e.message);
+        }
+    }
+} else {
+    toast('✅ 實證提交成功！目前 ' + totalVerifications + '/2 人實證', 'green');
+}
             }
             
             await recordTaskCompletion('verify_store');
@@ -6990,7 +7003,7 @@ async function saveEditedTags(postId) {
 // ============================================================
 function openPlayerPost() {
   var tagCategories = [
-    { name: '出貨方式', tags: ['出貨', '夾送', '刮中', '推幣'] },
+    { name: '分享類型', tags: ['出貨', '夾送', '刮中', '推幣'] },
     { name: '結果評價', tags: ['大LAM', 'LAM', '小LAM', '平手', '小損', '損', '大損'] },
     { name: '獎品類型', tags: ['一番賞', '景品', '盒玩', '布偶', '吊飾', '扭蛋'] },
     { name: '難度評價', tags: ['佛心台', '標準台', '技術台', '山崩台'] }
@@ -7350,7 +7363,31 @@ function viewTask() {
     
     var coreHtml = coreTasks.map(function(t) { return buildTaskCell(t, 3); }).join('');
     var dailyHtml = dailyTasks.map(function(t) { return buildTaskCell(t, t.limit); }).join('');
-    
+      // 計算可領取獎勵
+  var mySubmittedStores = STORES.filter(function(s) { 
+      return s.submitted_by_device === STATE.user.device; 
+  });
+  var verifiedStores = mySubmittedStores.filter(function(s) { 
+      return (s.verification_count || 0) + (s.verification_count_2 || 0) >= 2; 
+  });
+  var claimableStores = verifiedStores.filter(function(s) { 
+      return !s.submitter_reward_claimed; 
+  });
+  
+  var rewardHtml = '';
+  if (mySubmittedStores.length > 0) {
+      if (claimableStores.length > 0) {
+          var firstClaimable = claimableStores[0];
+          rewardHtml = '<div class="mt-3 rounded-xl border border-neongreen/30 bg-neongreen/5 p-3">' +
+              '<p class="text-xs text-white/60">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 35 分！</p>' +
+              '<button onclick="claimSubmitterReward(\'' + firstClaimable.id + '\')" class="mt-2 w-full rounded-xl bg-neongreen py-2.5 text-sm font-black text-black glow-green">🎉 點此領取：35 積分</button>' +
+          '</div>';
+      } else {
+          rewardHtml = '<div class="mt-3 rounded-xl border border-gold/20 bg-gold/5 p-3">' +
+              '<p class="text-xs text-white/40">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 35 分！</p>' +
+          '</div>';
+      }
+  }
     return '\n    <!-- 今日進度總覽 -->\n' +
         '<div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">' +
             '<div class="flex items-center justify-between">' +
@@ -7372,7 +7409,7 @@ function viewTask() {
         
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 獵人任務</h3>\n' +
         '<div class="task-grid">' + coreHtml + '</div></div>\n' +
-        
+        rewardHtml + '\n' +
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常任務</h3>\n' +
         '<div class="task-grid">' + dailyHtml + '</div></div>\n' +
         
@@ -7394,6 +7431,40 @@ function viewTask() {
         '<button onclick="refreshAllData()" class="text-xs text-white/30 hover:text-white/60 transition-colors">🔄 同步資料</button>\n' +
         '</div>\n';
 }
+
+async function claimSubmitterReward(storeId) {
+    if (!requireLogin('領取獎勵')) return;
+    
+    var store = STORES.find(function(s) { return s.id === storeId; });
+    if (!store) return;
+    
+    if (store.submitter_reward_claimed) {
+        toast('已領取', 'gold');
+        return;
+    }
+    
+    if (store.submitted_by_device !== STATE.user.device) {
+        toast('只有提交者可以領取', 'pink');
+        return;
+    }
+    
+    try {
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({ submitter_reward_claimed: true })
+            .eq('id', parseInt(storeId));
+        
+        store.submitter_reward_claimed = true;
+        save();
+        
+        await addPoints(35, '提交店鋪通過認證追加獎勵');
+        toast('🎉 領取 35 積分成功！', 'green');
+        showView('task');
+    } catch (e) {
+        toast('❌ 領取失敗: ' + e.message, 'pink');
+    }
+}
+
 function renderWeeklyCheckin() {
   var progress = getWeeklyCheckinProgress();
   var dayNames = ['一', '二', '三', '四', '五', '六', '日'];
