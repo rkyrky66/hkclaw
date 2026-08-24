@@ -6960,12 +6960,14 @@ async function toggleLike(postId) {
 }
 
 async function toggleReaction(postId, reactionKey) {
+  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
+  if (!post) return;
+  
   if (post.author_device === STATE.user.device) {
     toast('不能對自己的貼文發表感受', 'pink');
     return;
 }
-  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
-  if (!post) return;
+  
   
   if (!post.reactions) post.reactions = {};
   
