@@ -23,6 +23,7 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -120,7 +121,48 @@ input, select, textarea { font-size: 16px; }
 .form-label-enabled { color: #D4AF37 !important; }
 .quick-action-btn { transition: all 0.15s; }
 .quick-action-btn:active { transform: scale(0.9); }
-
+/* ============================================================
+   🎉 特效動畫 CSS
+   ============================================================ */
+@keyframes buttonPress {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.92); }
+    100% { transform: scale(1); }
+}
+.btn-press {
+    animation: buttonPress 0.3s ease;
+}
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(212,175,55,0.3); }
+    50% { box-shadow: 0 0 30px rgba(212,175,55,0.8), 0 0 60px rgba(212,175,55,0.4); }
+}
+.glow-pulse {
+    animation: glowPulse 0.6s ease;
+}
+@keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.slide-up-fade {
+    animation: slideUpFade 0.5s ease-out;
+}
+@keyframes regionUnlock {
+    0% { transform: scale(0.8); opacity: 0.3; border-color: rgba(255,255,255,0.1); }
+    50% { transform: scale(1.1); opacity: 1; border-color: #00FF00; box-shadow: 0 0 20px rgba(0,255,0,0.6); }
+    100% { transform: scale(1); opacity: 1; border-color: rgba(0,255,0,0.3); }
+}
+.region-unlock {
+    animation: regionUnlock 0.8s ease-out;
+}
+@keyframes achievementUnlock {
+    0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
+    40% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+    70% { transform: scale(0.95) rotate(-2deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.achievement-unlock {
+    animation: achievementUnlock 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 /* ============================================================
    🎯 任務系統 CSS (新增)
    ============================================================ */
@@ -1670,7 +1712,18 @@ async function addPoints(n, why) {
       console.warn('⚠️ 積分雲端同步失敗:', e.message);
     }
   }
-  
+  // 特效觸發
+if (n > 0) {
+    if (why && (why.includes('成就') || why.includes('解鎖'))) {
+        fireAchievementConfetti();
+    } else if (why && why.includes('提交')) {
+        fireConfetti();
+    } else if (why && why.includes('補充')) {
+        fireConfetti();
+    } else if (why && why.includes('認證') || why && why.includes('實證')) {
+        fireConfetti();
+    }
+}
   toast((n >= 0 ? "+" : "") + n + " 積分 · " + why, n >= 0 ? "green" : "pink");
 }
 
@@ -2118,10 +2171,11 @@ function getAchievementProgress(key) {
 }
 
 function showAchievementUnlock(def) {
+  fireAchievementConfetti();
   var root = document.getElementById('toast-root');
   if (!root) return;
   var el = document.createElement('div');
-  el.className = 'animate-pop pointer-events-auto rounded-2xl border border-gold bg-black/90 px-5 py-3 text-center glow-gold max-w-sm';
+  el.className = 'animate-pop achievement-unlock pointer-events-auto rounded-2xl border border-gold bg-black/90 px-5 py-3 text-center glow-gold max-w-sm';
   el.innerHTML = '<div class="text-2xl">' + def.icon + '</div><div class="text-xs text-white/50 mt-0.5">🏆 成就解鎖！</div><div class="text-sm font-bold text-gold">' + def.name + '</div><div class="text-[10px] text-white/40">' + def.description + '</div>' + (def.reward.points > 0 ? '<div class="text-[10px] text-neongreen mt-1">+' + def.reward.points + ' 積分</div>' : '') + (def.reward.title ? '<div class="text-[10px] text-neonpink">獲得稱號：' + def.reward.title + '</div>' : '');
   root.appendChild(el);
   setTimeout(function() { return el.remove(); }, 4000);
@@ -2592,7 +2646,7 @@ function openReportForm(targetType, targetId, targetName) {
       </div>
     </div>
     <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-      <button onclick="submitReport('${targetType}', '${targetId}')" 
+      <button onclick="this.classList.add('btn-press'); submitReport('${targetType}', '${targetId}')" 
         id="report-submit-btn" 
         class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
         請選擇檢舉類別
@@ -5982,7 +6036,7 @@ function openSupplementForm(storeId) {
   _finalGpsLng = null;
   _finalGpsLocked = false;
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 機台數量 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型<br><span class="text-[9px]">10台以下</span></button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型<br><span class="text-[9px]">10-30台</span></button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型<br><span class="text-[9px]">30台以上</span></button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button><button onclick="selectStaffUI(null)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === undefined || s.has_staff === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">💳 電子兌幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 無電子兌幣</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🕐 24小時營業 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectHour24UI(true)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 是</button><button onclick="selectHour24UI(false)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 否</button><button onclick="selectHour24UI(null)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === undefined || s.hour24 === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🎟️ 代幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectTokenUI(\'5dollar\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === '5dollar' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 5元</button><button onclick="selectTokenUI(\'token\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === 'token' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 代幣</button></div></div>\n      <div id="sf-coin-photo-section" class="hidden">\n        <label class="text-xs font-bold text-gold">📷 <span id="sf-coin-photo-label">兌幣機照片</span> <span class="text-neonpink">（必填）</span></label>\n        <div id="sf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="sf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="sf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="sf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>\n        </div>\n      </div>\n      <button onclick="submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 機台數量 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型<br><span class="text-[9px]">10台以下</span></button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型<br><span class="text-[9px]">10-30台</span></button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型<br><span class="text-[9px]">30台以上</span></button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button><button onclick="selectStaffUI(null)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === undefined || s.has_staff === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">💳 電子兌幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 無電子兌幣</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🕐 24小時營業 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectHour24UI(true)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 是</button><button onclick="selectHour24UI(false)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 否</button><button onclick="selectHour24UI(null)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === undefined || s.hour24 === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🎟️ 代幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectTokenUI(\'5dollar\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === '5dollar' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 5元</button><button onclick="selectTokenUI(\'token\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === 'token' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 代幣</button></div></div>\n      <div id="sf-coin-photo-section" class="hidden">\n        <label class="text-xs font-bold text-gold">📷 <span id="sf-coin-photo-label">兌幣機照片</span> <span class="text-neonpink">（必填）</span></label>\n        <div id="sf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="sf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="sf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="sf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>\n        </div>\n      </div>\n      <button onclick="this.classList.add(\'btn-press\'); submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   window._sfSelections = { size: null, staff: null, coin: null, hour24: null, token: null };
   
@@ -6871,7 +6925,7 @@ function openPlayerPost() {
     }).join('') + '\n      </div>\n    </div>\n  ';
   }).join('');
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">\n        <p class="text-xs text-white/40">分享你的夾娃娃戰果！</p>\n        <p class="text-xs text-neongreen mt-1">📸 拍照 + 🏷️ 選擇標籤 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <div style="display:flex; gap:6px;">\n          <input id="lp-store-search" placeholder="輸入店名搜尋..." \n            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" \n            autocomplete="off" oninput="filterStoreSuggestions(\'lp\')" onfocus="filterStoreSuggestions(\'lp\')" />\n          <button onclick="selectStoreFromMap(\'lp\')" \n            class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">\n            🗺️ 地圖選\n          </button>\n        </div>\n        <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lp-store-id" value="" />\n        <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏷️ 戰報標籤 <span class="text-white/40">（選填，可多選）</span></label>\n        ' + tagsHtml + '\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lp\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請選擇店鋪並拍照</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">\n        <p class="text-xs text-white/40">分享你的夾娃娃戰果！</p>\n        <p class="text-xs text-neongreen mt-1">📸 拍照 + 🏷️ 選擇標籤 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <div style="display:flex; gap:6px;">\n          <input id="lp-store-search" placeholder="輸入店名搜尋..." \n            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" \n            autocomplete="off" oninput="filterStoreSuggestions(\'lp\')" onfocus="filterStoreSuggestions(\'lp\')" />\n          <button onclick="selectStoreFromMap(\'lp\')" \n            class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">\n            🗺️ 地圖選\n          </button>\n        </div>\n        <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lp-store-id" value="" />\n        <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏷️ 戰報標籤 <span class="text-white/40">（選填，可多選）</span></label>\n        ' + tagsHtml + '\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lp\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lp-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請選擇店鋪並拍照</button>\n    </div>\n  ');
   
   var checkInterval = setInterval(function() {
     var storeId = document.getElementById('lp-store-id')?.value;
@@ -6896,7 +6950,7 @@ function openOwnerPost() {
   var myStores = STORES.filter(function(s) { return s.submitted_by === STATE.user.device; });
   if (myStores.length === 0) { toast('你還沒有提交過店鋪，無法使用台主宣傳功能', 'gold'); return; }
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">\n        <p class="text-xs text-white/40">宣傳你的店鋪和機台，吸引更多夾客！</p>\n        <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions(\'lo\')" onfocus="filterStoreSuggestions(\'lo\')" />\n        <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lo-store-id" value="" />\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>\n        <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lo\')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>\n        <div class="mt-2 grid grid-cols-3 gap-2">\n          <button onclick="selectLinkPlan(3, 50)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 3天<br><span class="text-gold">50分</span></button>\n          <button onclick="selectLinkPlan(5, 70)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 5天<br><span class="text-gold">70分</span></button>\n          <button onclick="selectLinkPlan(7, 80)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">80分</span></button>\n        </div>\n        <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">\n        <p class="text-xs text-white/40">宣傳你的店鋪和機台，吸引更多夾客！</p>\n        <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions(\'lo\')" onfocus="filterStoreSuggestions(\'lo\')" />\n        <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lo-store-id" value="" />\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>\n        <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lo\')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>\n        <div class="mt-2 grid grid-cols-3 gap-2">\n          <button onclick="selectLinkPlan(3, 50)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 3天<br><span class="text-gold">50分</span></button>\n          <button onclick="selectLinkPlan(5, 70)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 5天<br><span class="text-gold">70分</span></button>\n          <button onclick="selectLinkPlan(7, 80)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">80分</span></button>\n        </div>\n        <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>\n    </div>\n  ');
   
   setTimeout(function() {
     var input = document.getElementById('lo-store-search');
@@ -7496,7 +7550,7 @@ async function renderRegionCollectionCards() {
                 var actions = unlockedRegions[district] || {};
                 
                 if (isUnlocked) {
-                    html += '<div class="region-cell unlocked">';
+                    html += '<div class="region-cell unlocked region-unlock">';
                     html += '<span class="region-cell-name">' + district + ' ✅</span>';
                     html += '<div class="region-cell-icons">';
                     html += '<span class="region-icon ' + (actions['checkin'] ? 'done' : '') + '">📍</span>';
@@ -7860,7 +7914,7 @@ function openMachineForm(sid) {
         return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
       }).join('') + `</div>
     </div>
-    <button onclick="submitMachine('` + sid + `')" id="mf-submit-btn" 
+    <button onclick="this.classList.add('btn-press'); submitMachine('` + sid + `')" id="mf-submit-btn" 
       class="mt-5 w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed">
       📷 請先拍照
     </button>
@@ -8211,7 +8265,7 @@ function openIntelForm(prefillMall, prefillRegion) {
   // ============================================================
 // 提交店鋪情報表單 (GPS 每2秒更新版)
 // ============================================================
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="nt-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">📝 1. 請輸入店名　　　（0/4）</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🧭 提交店鋪情報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div>\n        <label class="text-xs font-bold text-gold">店名 <span class="text-neonpink">（必填）</span></label>\n        <input id="nt-name" placeholder="請輸入店名" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="updateNameSuggestions(this.value); updateFormState();" />\n        <div id="name-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden"></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">地區 <span class="text-neonpink">（必填）</span></label>\n        <div id="region-selector"><div class="region-selector-container mt-2"></div></div>\n        <div id="region-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">📍 <span id="selected-region-display"></span></span><button onclick="reselectRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n      </div>\n      <div class="border-t border-white/10"></div>\n      <div>\n        <label for="store-type" class="text-xs font-bold text-gold">店鋪類型 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="selectType(\'street\')" data-type="street" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏪 地鋪</button>\n          <button onclick="selectType(\'mall\')" data-type="mall" class="type-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45 transition-all hover:border-gold/40 hover:text-gold" disabled>🏬 商場鋪</button>\n        </div>\n      </div>\n      <div id="mall-section" class="hidden">\n        <div id="mall-selector"><label class="text-xs font-bold text-gold">商場 <span class="text-neonpink">（必填）</span></label><div id="mall-options" class="mt-2"></div></div>\n        <div id="mall-confirmed" class="hidden mt-2"><div class="flex items-center gap-2"><span class="text-sm text-gold">🏬 <span id="mall-display"></span></span><button onclick="reselectMall()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button></div></div>\n        <div id="floor-section" class="hidden mt-3"><label class="text-xs font-bold text-gold">樓層 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex items-center gap-2"><span class="text-xs text-white/40">只填 G、1、2、3...</span></div><input id="nt-floor" placeholder="如：G、2、4" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onFloorInput(this.value)" /><div id="address-preview" class="hidden mt-2 text-[11px] text-white/40 bg-zinc-900/50 rounded-lg px-3 py-2">📍 <span id="address-preview-text"></span></div></div>\n      </div>\n      <div id="street-address-section" class="hidden"><label class="text-xs font-bold text-gold">詳細地址 <span class="text-white/40">（選填）</span></label><input id="nt-addr" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="onStreetAddressInput(this.value)" /></div>\n      <div>\n        <label for="gps-section" class="text-xs font-bold text-gold">定位 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="nt-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n        </div>\n      </div>\n      <label class="mt-4 block text-xs font-bold text-gold">📷 強制現拍店鋪照（壓縮 ~80KB）</label>' + cameraBlock("nt", 80) + '\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="nt-submit-btn" onclick="this.classList.add(\'btn-press\'); submitIntel()" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">📝 1. 請輸入店名　　　（0/4）</button>\n    </div>\n  ');
 
   renderRegionSelectorTab();
   
@@ -9443,6 +9497,78 @@ function toast(msg, color) {
   el.textContent = msg;
   root.appendChild(el);
   setTimeout(function() { return el.remove(); }, 2200);
+}
+// ============================================================
+// 特效觸發
+// ============================================================
+function fireConfetti() {
+    if (typeof confetti !== 'function') return;
+    
+    confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#D4AF37', '#00FF00', '#FF007F', '#ffffff']
+    });
+    setTimeout(function() {
+        confetti({
+            particleCount: 50,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ['#D4AF37', '#00FF00']
+        });
+    }, 200);
+    setTimeout(function() {
+        confetti({
+            particleCount: 50,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ['#FF007F', '#ffffff']
+        });
+    }, 400);
+}
+
+function fireAchievementConfetti() {
+    if (typeof confetti !== 'function') return;
+    
+    confetti({
+        particleCount: 150,
+        spread: 100,
+        startVelocity: 40,
+        origin: { y: 0.5 },
+        colors: ['#D4AF37', '#FFD700', '#FFA500', '#ffffff', '#00FF00']
+    });
+    setTimeout(function() {
+        confetti({
+            particleCount: 100,
+            spread: 120,
+            startVelocity: 35,
+            origin: { y: 0.4 },
+            colors: ['#D4AF37', '#FFD700', '#FFA500']
+        });
+    }, 300);
+    setTimeout(function() {
+        confetti({
+            particleCount: 80,
+            spread: 90,
+            startVelocity: 30,
+            origin: { y: 0.5 },
+            colors: ['#00FF00', '#ffffff', '#FF007F']
+        });
+    }, 600);
+}
+
+function fireRegionUnlockConfetti() {
+    if (typeof confetti !== 'function') return;
+    
+    confetti({
+        particleCount: 50,
+        spread: 50,
+        origin: { y: 0.7 },
+        colors: ['#00FF00', '#D4AF37', '#ffffff']
+    });
 }
 
 // ============================================================
