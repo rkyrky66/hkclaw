@@ -4065,12 +4065,30 @@ function renderMapStoreListWithData(inBounds) {
     return distA - distB;
   });
   
+    // ✅ 合併商場和地鋪，統一按距離排序
+  var allItems = [];
+  
+  mallList.forEach(function(group) {
+    var dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, group.stores[0].lat, group.stores[0].lng) : 9999;
+    allItems.push({ type: 'mall', group: group, dist: dist });
+  });
+  
+  standaloneStores.forEach(function(s) {
+    var dist = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999;
+    allItems.push({ type: 'store', store: s, dist: dist });
+  });
+  
+  allItems.sort(function(a, b) { return a.dist - b.dist; });
+  
   var itemIndex = 0;
   var htmlParts = [];
-  mallList.forEach(function(group) { htmlParts.push(renderMallGroup(group)); });
-  standaloneStores.forEach(function(s) {
-    htmlParts.push(renderStoreItem(s, itemIndex));
-    itemIndex++;
+  allItems.forEach(function(item) {
+    if (item.type === 'mall') {
+      htmlParts.push(renderMallGroup(item.group));
+    } else {
+      htmlParts.push(renderStoreItem(item.store, itemIndex));
+      itemIndex++;
+    }
   });
   
   var totalStores = inBounds.length;
@@ -4638,6 +4656,7 @@ _finalGpsLocked = false;
 // 店鋪實證模式切換
 // ============================================================
 var _verifyMode = 'confirm';
+var isSubmittingVerification = false;
 var _verifyStoreId = null;
 var _verifyReportCategory = '';
 
@@ -5871,7 +5890,7 @@ async function upsertVerificationReview(storeId, verification) {
 function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  var isStreetStore = s.type !== 'mall' && s.mall === '';
+  var isStreetStore = !s.mall || s.mall === '';
   var existing = { address: s.addr && s.addr !== '', size: s.size && s.size !== null, staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
   var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
   var allCompleted = completedCount === 4;
@@ -5903,7 +5922,7 @@ function openSupplementForm(storeId) {
   }, 300);
   
   var checkInterval = setInterval(function() {
-    var isStreet = s.type !== 'mall' && s.mall === '';
+    var isStreet = !s.mall || s.mall === '';
     var addrInput = document.getElementById('sf-address');
     var hasAddress = isStreet ? (addrInput && addrInput.value.trim() !== '') : true;
     var hasSize = window._sfSelections.size !== null;
