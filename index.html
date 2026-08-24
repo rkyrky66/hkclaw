@@ -6600,13 +6600,13 @@ function viewLive() {
       
       // 顯示前 3 個有反應的感想 + 更多按鈕
       var reactionHtml = '';
-      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
+     var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
 var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
-      var allReactions = visibleReactions.concat(hiddenReactions);
+      var allReactions = visibleReactions.concat(hiddenReactions);f
       
       if (allReactions.length > 0) {
         reactionHtml = allReactions.map(function(r) {
-          return '<span class="text-[9px] text-white/40">' + reactions[r.key].length + ' 人表示「' + r.label + '」</span>';
+          return '<span class="text-[10px] text-white/60">' + reactions[r.key].length + ' 人表示「' + r.label + '」</span>';
         }).join(' · ');
       }
       
@@ -6614,19 +6614,37 @@ var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && rea
       var firstThree = REACTIONS_LIST.filter(function(r) { return !r.hidden; });
       var hiddenOnes = REACTIONS_LIST.filter(function(r) { return r.hidden; });
       
-      var interactionHtml = '';
+var interactionHtml = '';
 if (!isOwner) {
+    // 檢查用戶已選的感受
+    var userReactionKey = '';
+    Object.keys(reactions).forEach(function(key) {
+        if (reactions[key] && reactions[key].includes(STATE.user.device)) {
+            userReactionKey = key;
+        }
+    });
+    
     interactionHtml += '<div class="mt-2 flex flex-wrap gap-1.5">';
     firstThree.forEach(function(r) {
-        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
+        var isSelected = userReactionKey === r.key;
+        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
     });
-    interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">更多</button>';
+    interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-gold/40 px-2 py-1 text-[10px] font-bold text-gold hover:bg-gold/10 transition-all">更多</button>';
     interactionHtml += '</div>';
     interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
     hiddenOnes.forEach(function(r) {
-        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
+        var isSelected = userReactionKey === r.key;
+        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
     });
     interactionHtml += '</div>';
+    
+    // 顯示用戶已選的感受
+    if (userReactionKey) {
+        var selectedLabel = REACTIONS_LIST.find(function(r) { return r.key === userReactionKey; });
+        if (selectedLabel) {
+            interactionHtml += '<p class="mt-1 text-[10px] text-neongreen">你已表示「' + selectedLabel.label + '」</p>';
+        }
+    }
 }
       
       return '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
