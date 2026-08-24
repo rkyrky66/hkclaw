@@ -3944,18 +3944,11 @@ function updateMapMarkers() {
       maxWidth: 220, 
       minWidth: 180, 
       className: 'custom-popup',
-      closeButton: false
+      closeButton: false,
+      autoPan: false
     });
 
-        // ✅ 點擊圖釘時不移動地圖
-marker.on('click', function(e) {
-    // 不呼叫 openPopup，由 bindPopup 自動處理
-    var currentCenter = map.getCenter();
-    var currentZoom = map.getZoom();
-    setTimeout(function() {
-        map.setView(currentCenter, currentZoom, { animate: false });
-    }, 50);
-});
+
 
     
     // 點擊 popup 本身打開商場視圖
@@ -4011,17 +4004,9 @@ marker.on('click', function(e) {
       maxWidth: 220, 
       minWidth: 180, 
       className: 'custom-popup',
-      closeButton: false
+      closeButton: false,
+      autoPan: false
     });
-        // ✅ 點擊圖釘時不移動地圖
-marker.on('click', function(e) {
-    // 不呼叫 openPopup，由 bindPopup 自動處理
-    var currentCenter = map.getCenter();
-    var currentZoom = map.getZoom();
-    setTimeout(function() {
-        map.setView(currentCenter, currentZoom, { animate: false });
-    }, 50);
-});
 
     
     // 點擊 popup 本身打開店鋪詳情
