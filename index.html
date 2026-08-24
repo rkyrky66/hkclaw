@@ -1712,18 +1712,14 @@ async function addPoints(n, why) {
       console.warn('⚠️ 積分雲端同步失敗:', e.message);
     }
   }
-  // 特效觸發
-if (n > 0) {
+    // 特效觸發（防重複）
+  if (n > 0) {
     if (why && (why.includes('成就') || why.includes('解鎖'))) {
-        fireAchievementConfetti();
-    } else if (why && why.includes('提交')) {
-        fireConfetti();
-    } else if (why && why.includes('補充')) {
-        fireConfetti();
-    } else if (why && why.includes('認證') || why && why.includes('實證')) {
-        fireConfetti();
+        fireAchievementConfettiOnce();
+    } else if (why && (why.includes('提交') || why.includes('補充') || why.includes('認證') || why.includes('實證'))) {
+        fireConfettiOnce();
     }
-}
+  }
   toast((n >= 0 ? "+" : "") + n + " 積分 · " + why, n >= 0 ? "green" : "pink");
 }
 
@@ -2171,7 +2167,7 @@ function getAchievementProgress(key) {
 }
 
 function showAchievementUnlock(def) {
-  fireAchievementConfetti();
+  fireAchievementConfettiOnce();
   var root = document.getElementById('toast-root');
   if (!root) return;
   var el = document.createElement('div');
@@ -9487,64 +9483,82 @@ function toast(msg, color) {
 // ============================================================
 // 特效觸發
 // ============================================================
+var _lastConfettiTime = 0;
+
+function fireConfettiOnce() {
+    var nowTime = Date.now();
+    if (nowTime - _lastConfettiTime < 1500) return;
+    _lastConfettiTime = nowTime;
+    if (typeof confetti === 'function') {
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#D4AF37', '#00FF00', '#FF007F', '#ffffff']
+        });
+        setTimeout(function() {
+            confetti({
+                particleCount: 50,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 },
+                colors: ['#D4AF37', '#00FF00']
+            });
+        }, 200);
+        setTimeout(function() {
+            confetti({
+                particleCount: 50,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 },
+                colors: ['#FF007F', '#ffffff']
+            });
+        }, 400);
+    }
+}
+
+function fireAchievementConfettiOnce() {
+    var nowTime = Date.now();
+    if (nowTime - _lastConfettiTime < 1500) return;
+    _lastConfettiTime = nowTime;
+    if (typeof confetti === 'function') {
+        confetti({
+            particleCount: 150,
+            spread: 100,
+            startVelocity: 40,
+            origin: { y: 0.5 },
+            colors: ['#D4AF37', '#FFD700', '#FFA500', '#ffffff', '#00FF00']
+        });
+        setTimeout(function() {
+            confetti({
+                particleCount: 100,
+                spread: 120,
+                startVelocity: 35,
+                origin: { y: 0.4 },
+                colors: ['#D4AF37', '#FFD700', '#FFA500']
+            });
+        }, 300);
+        setTimeout(function() {
+            confetti({
+                particleCount: 80,
+                spread: 90,
+                startVelocity: 30,
+                origin: { y: 0.5 },
+                colors: ['#00FF00', '#ffffff', '#FF007F']
+            });
+        }, 600);
+    }
+}
+
+// 保留原函數（供手動呼叫）
 function fireConfetti() {
-    if (typeof confetti !== 'function') return;
-    
-    confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#D4AF37', '#00FF00', '#FF007F', '#ffffff']
-    });
-    setTimeout(function() {
-        confetti({
-            particleCount: 50,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0 },
-            colors: ['#D4AF37', '#00FF00']
-        });
-    }, 200);
-    setTimeout(function() {
-        confetti({
-            particleCount: 50,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1 },
-            colors: ['#FF007F', '#ffffff']
-        });
-    }, 400);
+    fireConfettiOnce();
 }
 
 function fireAchievementConfetti() {
-    if (typeof confetti !== 'function') return;
-    
-    confetti({
-        particleCount: 150,
-        spread: 100,
-        startVelocity: 40,
-        origin: { y: 0.5 },
-        colors: ['#D4AF37', '#FFD700', '#FFA500', '#ffffff', '#00FF00']
-    });
-    setTimeout(function() {
-        confetti({
-            particleCount: 100,
-            spread: 120,
-            startVelocity: 35,
-            origin: { y: 0.4 },
-            colors: ['#D4AF37', '#FFD700', '#FFA500']
-        });
-    }, 300);
-    setTimeout(function() {
-        confetti({
-            particleCount: 80,
-            spread: 90,
-            startVelocity: 30,
-            origin: { y: 0.5 },
-            colors: ['#00FF00', '#ffffff', '#FF007F']
-        });
-    }, 600);
+    fireAchievementConfettiOnce();
 }
+
 
 function fireRegionUnlockConfetti() {
     if (typeof confetti !== 'function') return;
