@@ -813,8 +813,20 @@ var REGIONS = {
   }
 };
 
-var FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台", "標準盒", "一番賞", "Sanrio", "chiikawa", "jellycat"];
-var PLAY_TAGS = ["刮盤", "夾送", "翻牌", "推幣"];
+var FEATURE_TAGS = ["技術台", "實爪台", "幸運台", "山崩台"];
+
+var MACHINE_SIZE_TAGS = ["迷你機", "標準機", "大機"];
+
+var GOODS_CATEGORIES = [
+    { label: '盒裝', tags: ['標準盒', '闊盒', '長盒', '一番賞', '其他盒裝'] },
+    { label: '公仔', tags: ['Popmart', 'Sanrio', 'Chiikawa', 'Jellycat', '其他公仔'] },
+    { label: '電子產品', tags: ['電子產品'] },
+    { label: '電器', tags: ['電器'] },
+    { label: '生活用品', tags: ['生活用品'] },
+    { label: '雜物', tags: ['雜物'] }
+];
+
+var PLAY_TAGS = ["刮盤", "夾換/夾送", "連投"];
 
 var SUBTITLES = {
   map: "📍 附近店鋪 · 地圖探索",
@@ -6548,7 +6560,6 @@ function viewLive() {
   var allPosts = STATE.livePosts || [];
   var validPosts = allPosts.filter(function(p) { return p.expire > now(); });
   
-  // ✅ 只在貼文少於 5 篇時背景載入，不重置 scrollTop
   if (CLOUD_ON && allPosts.length < 5) {
     setTimeout(function() {
       loadLivePosts().then(function(posts) {
@@ -6567,8 +6578,8 @@ function viewLive() {
   var filteredPosts = validPosts.filter(function(x) { return x.track === liveTrack; });
   
   html += '<div class="flex gap-2">';
-  html += '<button onclick="setLiveTrack(\'player\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45") + '">🎯 夾客</button>';
-  html += '<button onclick="setLiveTrack(\'owner\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45") + '">🏬 台主</button>';
+  html += '<button onclick="setLiveTrack(\'player\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45") + '">🎯 夾客分享</button>';
+  html += '<button onclick="setLiveTrack(\'owner\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45") + '">🏬 台主宣傳</button>';
   html += '</div>';
   
   html += '<div class="mt-3 rounded-xl border ' + (liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30") + ' bg-zinc-950 p-3 text-[11px] text-white/60">';
@@ -6581,12 +6592,53 @@ function viewLive() {
   
   html += '<div class="mt-4 space-y-3">';
   
+  var REACTIONS_LIST = [
+    { key: 'too_strong', label: '會唔會太勁🤯' },
+    { key: 'looks_fun', label: '好似幾好玩😛' },
+    { key: 'unbelievable', label: '難以置信😱' },
+    { key: 'beat_owner', label: '打爆台主😦', hidden: true },
+    { key: 'not_easy', label: '感覺唔容易🤨', hidden: true },
+    { key: 'you_took_all', label: '比你LAM晒啦😠', hidden: true },
+    { key: 'bow', label: '大佬受我一拜🙇', hidden: true },
+    { key: 'learned', label: '學到嘢😯', hidden: true },
+    { key: 'disappointed', label: '灰咗🤕', hidden: true }
+  ];
+  
   if (filteredPosts.length > 0) {
     html += filteredPosts.map(function(p) {
       var hasLiked = p.likes && p.likes.includes(STATE.user.device);
       var isOwner = p.author_device === STATE.user.device;
       var storeName = p.store_name ? '📍 ' + p.store_name : '';
       var daysLeft = Math.ceil((p.expire - now()) / DAY);
+      var reactions = p.reactions || {};
+      
+      // 顯示前 3 個有反應的感想 + 更多按鈕
+      var reactionHtml = '';
+      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] > 0; });
+      var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] > 0; });
+      var allReactions = visibleReactions.concat(hiddenReactions);
+      
+      if (allReactions.length > 0) {
+        reactionHtml = allReactions.map(function(r) {
+          return '<span class="text-[9px] text-white/40">' + reactions[r.key] + ' 人表示「' + r.label + '」</span>';
+        }).join(' · ');
+      }
+      
+      // 互動按鈕
+      var firstThree = REACTIONS_LIST.filter(function(r) { return !r.hidden; });
+      var hiddenOnes = REACTIONS_LIST.filter(function(r) { return r.hidden; });
+      
+      var interactionHtml = '<div class="mt-2 flex flex-wrap gap-1.5">';
+      firstThree.forEach(function(r) {
+        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
+      });
+      interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">更多</button>';
+      interactionHtml += '</div>';
+      interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
+      hiddenOnes.forEach(function(r) {
+        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
+      });
+      interactionHtml += '</div>';
       
       return '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
         (p.photo ? '<img src="' + p.photo + '" class="h-48 w-full rounded-lg object-cover" alt="貼文照片" />' : '<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">' + (p.track === "player" ? "🎉" : "🖼️") + '</div>') +
@@ -6605,9 +6657,11 @@ function viewLive() {
           (isOwner ? 
             '<button onclick="openEditTags(\'' + p.id + '\')" class="text-white/30 hover:text-gold transition-colors">✏️</button>' +
             '<button onclick="deletePost(\'' + p.id + '\')" class="text-white/30 hover:text-neonpink transition-colors">🗑️</button>' : 
-            '<button onclick="openReportForm(\'post\', \'' + p.id + '\', \'貼文\')" class="text-white/30 hover:text-neonpink transition-colors">🚨</button>'
+            '<button onclick="reportPost(\'' + p.id + '\')" class="text-white/30 hover:text-neonpink transition-colors">🚨</button>'
           ) +
         '</div>' +
+        (reactionHtml ? '<div class="mt-1">' + reactionHtml + '</div>' : '') +
+        interactionHtml +
       '</div>';
     }).join('');
   } else {
@@ -6617,6 +6671,7 @@ function viewLive() {
   html += '</div>';
   return html;
 }
+
 
 function setLiveTrack(track) { liveTrack = track; showView('live'); }
 // ============================================================
@@ -6891,6 +6946,104 @@ async function toggleLike(postId) {
   }
 }
 
+async function toggleReaction(postId, reactionKey) {
+  var post = STATE.livePosts.find(function(p) { return p.id === postId; });
+  if (!post) return;
+  
+  if (!post.reactions) post.reactions = {};
+  
+  var userDevice = STATE.user.device;
+  
+  // 移除用戶之前的所有反應（只能選一個）
+  Object.keys(post.reactions).forEach(function(key) {
+    if (Array.isArray(post.reactions[key])) {
+      post.reactions[key] = post.reactions[key].filter(function(d) { return d !== userDevice; });
+      if (post.reactions[key].length === 0) delete post.reactions[key];
+    }
+  });
+  
+  // 加入新反應
+  if (!post.reactions[reactionKey]) post.reactions[reactionKey] = [];
+  if (!post.reactions[reactionKey].includes(userDevice)) {
+    post.reactions[reactionKey].push(userDevice);
+  } else {
+    // 點選同一個則取消
+    post.reactions[reactionKey] = post.reactions[reactionKey].filter(function(d) { return d !== userDevice; });
+    if (post.reactions[reactionKey].length === 0) delete post.reactions[reactionKey];
+  }
+  
+  save();
+  
+  // 雲端同步
+  if (CLOUD_ON) {
+    try {
+      await fetch(
+        SUPABASE_URL + "/rest/v1/live_posts?id=eq." + encodeURIComponent(postId),
+        {
+          method: 'PATCH',
+          headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ reactions: post.reactions, updated_at: new Date().toISOString() })
+        }
+      );
+    } catch (e) {
+      console.warn('⚠️ 感想同步失敗:', e.message);
+    }
+  }
+  
+  // 只更新感想按鈕區域
+  if (CURRENT === 'live') {
+    var overlay = document.getElementById('page-overlay');
+    if (overlay) {
+      overlay.innerHTML = VIEWS.live();
+      overlay.scrollTop = 0;
+    }
+  }
+}
+
+function toggleMoreReactions(btn) {
+  var postId = btn.closest('.rounded-2xl')?.querySelector('[data-post-id]')?.getAttribute('data-post-id');
+  if (!postId) return;
+  var moreDiv = document.getElementById('more-reactions-' + postId);
+  if (moreDiv) {
+    moreDiv.classList.toggle('hidden');
+    btn.textContent = moreDiv.classList.contains('hidden') ? '更多' : '收起';
+  }
+}
+
+function reportPost(postId) {
+  if (!confirm('是否檢舉此貼文為不當內容？')) return;
+  
+  if (!requireLogin('檢舉')) return;
+  
+  var reportData = {
+    target_type: 'post',
+    target_id: postId,
+    reporter_device: STATE.user.device,
+    reporter_user_id: STATE.user.user_id || null,
+    category: 'inappropriate',
+    reason: '不當內容',
+    status: 'pending',
+    created_at: new Date().toISOString()
+  };
+  
+  if (CLOUD_ON) {
+    fetch(SUPABASE_URL + "/rest/v1/reports", {
+      method: 'POST',
+      headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify([reportData])
+    }).then(function(response) {
+      if (response.ok) {
+        toast('✅ 檢舉已提交', 'green');
+      } else {
+        toast('⚠️ 檢舉失敗', 'pink');
+      }
+    }).catch(function(e) {
+      console.warn('⚠️ 檢舉失敗:', e.message);
+      toast('⚠️ 檢舉失敗', 'pink');
+    });
+  }
+}
+
 async function deletePost(postId) {
   if (!confirm('確定要刪除這篇貼文嗎？\n\n⚠️ 刪除後將扣除 10 積分')) return;
   
@@ -7002,12 +7155,11 @@ async function saveEditedTags(postId) {
 // 發布貼文 UI
 // ============================================================
 function openPlayerPost() {
-  var tagCategories = [
-    { name: '分享類型', tags: ['出貨', '夾送', '刮中', '推幣'] },
-    { name: '結果評價', tags: ['大LAM', 'LAM', '小LAM', '平手', '小損', '損', '大損'] },
-    { name: '獎品類型', tags: ['一番賞', '景品', '盒玩', '布偶', '吊飾', '扭蛋'] },
-    { name: '難度評價', tags: ['佛心台', '標準台', '技術台', '山崩台'] }
-  ];
+var tagCategories = [
+    { name: '分享類型', tags: ['出貨', '夾送', '刮中'], multi: true },
+    { name: '感想', tags: ['大LAM', 'LAM', '小LAM', '平手', '小損', '損', '大損'], multi: false },
+    { name: '體驗', tags: ['非常好玩😆', '佛心無邊😇', '成功出貨🎉', '設定合理👍', '千辛萬苦😫', '十萬伏特⚡'], multi: false }
+];
   var tagsHtml = tagCategories.map(function(cat) {
     return '\n    <div class="mt-3">\n      <p class="text-[10px] text-white/40 mb-1">' + cat.name + '</p>\n      <div class="flex flex-wrap gap-1.5">\n        ' + cat.tags.map(function(t) {
       return '\n          <button onclick="this.classList.toggle(\'chip-active-gold\')" \n            data-tag="' + t + '" \n            class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] text-gold hover:border-gold/60 transition-all">\n            ' + t + '\n          </button>\n        ';
@@ -8080,14 +8232,33 @@ function openMachineForm(sid) {
           <span id="mf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>
         </div>
       </div>
-      <p class="mt-4 text-xs font-bold text-gold">台性標籤（多選）</p>
-      <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">` + FEATURE_TAGS.map(function(t) { 
-        return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
-      }).join('') + `</div>
-      <p class="mt-4 text-xs font-bold text-gold">玩法（多選）</p>
-      <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">` + PLAY_TAGS.map(function(t) { 
-        return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
-      }).join('') + `</div>
+      <div>
+        <p class="text-xs font-bold text-gold">台性（選 1）</p>
+        <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">` + FEATURE_TAGS.map(function(t) { 
+          return '<button onclick="selectSingleTag(this, \'mf-feats\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
+        }).join('') + `</div>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-gold">機台大小（選 1）</p>
+        <div id="mf-sizes" class="mt-2 flex flex-wrap gap-2">` + MACHINE_SIZE_TAGS.map(function(t) { 
+          return '<button onclick="selectSingleTag(this, \'mf-sizes\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
+        }).join('') + `</div>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-gold">貨品（多選）</p>
+        <div id="mf-goods" class="mt-2 space-y-2">` + GOODS_CATEGORIES.map(function(cat) {
+          var subTags = cat.tags.map(function(t) {
+            return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] text-gold">' + t + '</button>';
+          }).join('');
+          return '<div><span class="text-[10px] text-white/40">' + cat.label + '</span><div class="mt-1 flex flex-wrap gap-1.5">' + subTags + '</div></div>';
+        }).join('') + `</div>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-gold">額外玩法（多選）</p>
+        <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">` + PLAY_TAGS.map(function(t) { 
+          return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
+        }).join('') + `</div>
+      </div>
     </div>
     <button onclick="this.classList.add('btn-press'); submitMachine('` + sid + `')" id="mf-submit-btn" 
       class="mt-5 w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed">
@@ -8136,6 +8307,16 @@ function openMachineForm(sid) {
     }
   }, 500);
   setTimeout(function() { return clearInterval(checkInterval); }, 60000);
+}
+
+// 單選標籤
+function selectSingleTag(btn, containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('button').forEach(function(b) {
+    b.classList.remove('chip-active-green');
+  });
+  btn.classList.add('chip-active-green');
 }
 
 // ============================================================
@@ -8196,6 +8377,13 @@ async function submitMachine(sid) {
         var feats = document.querySelectorAll('#mf-feats .chip-active-green');
         var featsArray = [];
         feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
+        // 機台大小
+var sizesArray = [];
+document.querySelectorAll('#mf-sizes .chip-active-green').forEach(function(b) { sizesArray.push(b.dataset.tag); });
+
+// 貨品
+var goodsArray = [];
+document.querySelectorAll('#mf-goods .chip-active-green').forEach(function(b) { goodsArray.push(b.dataset.tag); });
         if (!featsArray.length) { 
             toast("請至少選一個台性標籤", "pink"); 
             enableSubmitButton(submitBtn, '✅ 提交機台情報');
@@ -8207,14 +8395,15 @@ async function submitMachine(sid) {
         
         // 只添加一次機台
         var newMachine = { 
-            id: sid + "_u" + uid(), 
-            no: "新" + (s.machines.length + 1), 
-            feats: featsArray, 
-            plays: playsArray, 
-            prize: "台主自報", 
-            updated: now(), 
-            photo: photoUrl 
-        };
+    id: sid + "_u" + uid(), 
+    no: "新" + (s.machines.length + 1), 
+    feats: featsArray,
+    sizes: sizesArray,
+    goods: goodsArray,
+    plays: playsArray, 
+    updated: now(), 
+    photo: photoUrl 
+};
         s.machines.unshift(newMachine);
         // ✅ 同步 claw_stores.machines 快取
 if (CLOUD_ON) {
@@ -9563,8 +9752,8 @@ async function submitIntel() {
             }
         }
         
-        toast('✅ 店鋪提交成功！獲得 10 積分', 'green');
-        await addPoints(10, '提交店鋪情報');
+        toast('✅ 店鋪提交成功！獲得 15 積分', 'green');
+        await addPoints(15, '提交店鋪情報');
         closeModal();
     } finally {
         releaseSubmitLock('submitIntel');
