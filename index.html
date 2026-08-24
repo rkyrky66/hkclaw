@@ -4467,10 +4467,57 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         }
         
         if (votes.length === 1) {
-            fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + answerDisplay + '</span>';
-        } else {
-            fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + '</span>';
+    fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + answerDisplay + '</span>';
+} else if (votes.length <= 10) {
+    var otherCounts = sorted.slice(1).map(function(a) { return answerCounts[a]; });
+    var totalOther = otherCounts.reduce(function(sum, c) { return sum + c; }, 0);
+    
+    if (totalOther > 0) {
+        // 有異議
+        var otherAnswer = sorted[1];
+        var otherDisplay = '';
+        if (field.key === 'size') {
+            otherDisplay = otherAnswer === 'small' ? '小型' : otherAnswer === 'large' ? '大型' : '中型';
+        } else if (field.key === 'has_staff') {
+            otherDisplay = otherAnswer === 'true' ? '有場務' : '無場務';
+        } else if (field.key === 'has_e_coin') {
+            otherDisplay = otherAnswer === 'true' ? '有電子兌幣' : '無電子兌幣';
+        } else if (field.key === 'hour24') {
+            otherDisplay = otherAnswer === 'true' ? '24小時' : '非24小時';
+        } else if (field.key === 'token') {
+            otherDisplay = otherAnswer === 'true' ? '需代幣' : '不需代幣';
         }
+        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · ' + totalOther + ' 人表示 ' + otherDisplay + '</span>';
+    } else {
+        // 無異議
+        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人皆表示 ' + answerDisplay + '</span>';
+    }
+} else {
+    // > 10 票：使用最近 5 票異議規則
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    var recentVotes = votes.filter(function(v) { return new Date(v.voted_at) >= thirtyDaysAgo; });
+    var recentDissent = recentVotes.filter(function(v) { return v.answer !== mainAnswer; });
+    
+    if (recentDissent.length > 0) {
+        var dissentAnswer = recentDissent[0].answer;
+        var dissentDisplay = '';
+        if (field.key === 'size') {
+            dissentDisplay = dissentAnswer === 'small' ? '小型' : dissentAnswer === 'large' ? '大型' : '中型';
+        } else if (field.key === 'has_staff') {
+            dissentDisplay = dissentAnswer === 'true' ? '有場務' : '無場務';
+        } else if (field.key === 'has_e_coin') {
+            dissentDisplay = dissentAnswer === 'true' ? '有電子兌幣' : '無電子兌幣';
+        } else if (field.key === 'hour24') {
+            dissentDisplay = dissentAnswer === 'true' ? '24小時' : '非24小時';
+        } else if (field.key === 'token') {
+            dissentDisplay = dissentAnswer === 'true' ? '需代幣' : '不需代幣';
+        }
+        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · 最近 ' + recentDissent.length + ' 人表示 ' + dissentDisplay + '</span>';
+    } else {
+        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + '</span>';
+    }
+}
     });
     // 機台 HTML 生成 (分離邏輯避免嵌套 return)
     var machinesHtml = '';
@@ -5895,7 +5942,7 @@ function openSupplementForm(storeId) {
   var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
   var allCompleted = completedCount === 4;
   var isMallStore = s.type === 'mall' || s.mall !== '';
-  var addressRequired = isStreetStore && (!s.addr || s.addr === '');
+  var addressRequired = isStreetStore && (!s.addr || s.addr === '' || s.addr === '（未填地址）');
   var addressCompleted = isMallStore ? true : existing.address;
   
   // ✅ 清除殘留照片
@@ -5932,7 +5979,7 @@ function openSupplementForm(storeId) {
     var hasToken = window._sfSelections.token !== null;
     var hasPhoto = !!(window._camPreview && window._camPreview.sf);
     
-    var addressDone = isStreet ? (s.addr && s.addr !== '') || hasAddress : true;
+    var addressDone = isStreet ? (s.addr && s.addr !== '' && s.addr !== '（未填地址）') || hasAddress : true;
     var sizeDone = hasSize;
     var staffDone = hasStaff;
     var coinDone = hasCoin;
