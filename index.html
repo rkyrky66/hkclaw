@@ -6967,7 +6967,6 @@ async function toggleReaction(postId, reactionKey) {
   if (!post.reactions[reactionKey].includes(userDevice)) {
     post.reactions[reactionKey].push(userDevice);
   } else {
-    // 點選同一個則取消
     post.reactions[reactionKey] = post.reactions[reactionKey].filter(function(d) { return d !== userDevice; });
     if (post.reactions[reactionKey].length === 0) delete post.reactions[reactionKey];
   }
