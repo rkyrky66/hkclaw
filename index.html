@@ -6614,17 +6614,20 @@ var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && rea
       var firstThree = REACTIONS_LIST.filter(function(r) { return !r.hidden; });
       var hiddenOnes = REACTIONS_LIST.filter(function(r) { return r.hidden; });
       
-      var interactionHtml = '<div class="mt-2 flex flex-wrap gap-1.5">';
-      firstThree.forEach(function(r) {
+      var interactionHtml = '';
+if (!isOwner) {
+    interactionHtml += '<div class="mt-2 flex flex-wrap gap-1.5">';
+    firstThree.forEach(function(r) {
         interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
-      });
-      interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">更多</button>';
-      interactionHtml += '</div>';
-      interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
-      hiddenOnes.forEach(function(r) {
+    });
+    interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">更多</button>';
+    interactionHtml += '</div>';
+    interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
+    hiddenOnes.forEach(function(r) {
         interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border border-white/20 px-2 py-0.5 text-[9px] text-white/50 hover:border-gold/40 hover:text-gold transition-all">' + r.label + '</button>';
-      });
-      interactionHtml += '</div>';
+    });
+    interactionHtml += '</div>';
+}
       
       return '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
         (p.photo ? '<img src="' + p.photo + '" class="h-48 w-full rounded-lg object-cover" alt="貼文照片" />' : '<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">' + (p.track === "player" ? "🎉" : "🖼️") + '</div>') +
@@ -6933,6 +6936,10 @@ async function toggleLike(postId) {
 }
 
 async function toggleReaction(postId, reactionKey) {
+  if (post.author_device === STATE.user.device) {
+    toast('不能對自己的貼文發表感受', 'pink');
+    return;
+}
   var post = STATE.livePosts.find(function(p) { return p.id === postId; });
   if (!post) return;
   
