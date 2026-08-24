@@ -3948,14 +3948,14 @@ function updateMapMarkers() {
     });
 
         // ✅ 點擊圖釘時不移動地圖
-    marker.on('click', function(e) {
-        var currentCenter = map.getCenter();
-        var currentZoom = map.getZoom();
-        marker.openPopup();
-        setTimeout(function() {
-            map.setView(currentCenter, currentZoom, { animate: false });
-        }, 10);
-    });
+marker.on('click', function(e) {
+    // 不呼叫 openPopup，由 bindPopup 自動處理
+    var currentCenter = map.getCenter();
+    var currentZoom = map.getZoom();
+    setTimeout(function() {
+        map.setView(currentCenter, currentZoom, { animate: false });
+    }, 50);
+});
 
     
     // 點擊 popup 本身打開商場視圖
@@ -4014,14 +4014,14 @@ function updateMapMarkers() {
       closeButton: false
     });
         // ✅ 點擊圖釘時不移動地圖
-    marker.on('click', function(e) {
-        var currentCenter = map.getCenter();
-        var currentZoom = map.getZoom();
-        marker.openPopup();
-        setTimeout(function() {
-            map.setView(currentCenter, currentZoom, { animate: false });
-        }, 10);
-    });
+marker.on('click', function(e) {
+    // 不呼叫 openPopup，由 bindPopup 自動處理
+    var currentCenter = map.getCenter();
+    var currentZoom = map.getZoom();
+    setTimeout(function() {
+        map.setView(currentCenter, currentZoom, { animate: false });
+    }, 50);
+});
 
     
     // 點擊 popup 本身打開店鋪詳情
