@@ -6600,13 +6600,13 @@ function viewLive() {
       
       // 顯示前 3 個有反應的感想 + 更多按鈕
       var reactionHtml = '';
-      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] > 0; });
-      var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] > 0; });
+      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
+var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
       var allReactions = visibleReactions.concat(hiddenReactions);
       
       if (allReactions.length > 0) {
         reactionHtml = allReactions.map(function(r) {
-          return '<span class="text-[9px] text-white/40">' + reactions[r.key] + ' 人表示「' + r.label + '」</span>';
+          return '<span class="text-[9px] text-white/40">' + reactions[r.key].length + ' 人表示「' + r.label + '」</span>';
         }).join(' · ');
       }
       
