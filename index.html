@@ -183,6 +183,98 @@ input, select, textarea { font-size: 16px; }
 .task-item:active {
     transform: scale(0.98);
 }
+.task-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.task-cell {
+    background: #09090b;
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 16px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.task-cell:active {
+    transform: scale(0.95);
+}
+.task-cell .task-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+}
+.task-cell .task-points {
+    font-size: 10px;
+    color: #D4AF37;
+}
+.task-cell .task-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+    display: flex;
+    gap: 2px;
+}
+.task-cell .task-bar-segment {
+    flex: 1;
+    background: rgba(255,255,255,0.1);
+    border-radius: 1px;
+    transition: all 0.4s;
+}
+.task-cell .task-bar-segment.done {
+    background: #D4AF37;
+}
+.task-cell .task-count {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+}
+.task-cell .task-action {
+    font-size: 10px;
+    color: #D4AF37;
+    margin-top: 6px;
+    font-weight: 700;
+}
+.task-cell.completed {
+    border-color: #D4AF37;
+    background: rgba(212,175,55,0.1);
+    cursor: default;
+}
+.task-cell.completed .task-action {
+    color: #00FF00;
+}
+
+@keyframes taskProgressGlow {
+    0%, 100% { box-shadow: 0 0 5px rgba(0,255,0,0.3); }
+    50% { box-shadow: 0 0 20px rgba(0,255,0,0.7), 0 0 40px rgba(0,255,0,0.3); }
+}
+.task-cell.progress-update {
+    animation: taskProgressGlow 1s ease;
+}
+
+@keyframes taskCompleteGlow {
+    0% { box-shadow: 0 0 0 rgba(212,175,55,0); transform: scale(1); }
+    30% { box-shadow: 0 0 30px rgba(212,175,55,0.8), 0 0 60px rgba(212,175,55,0.4); transform: scale(1.05); }
+    100% { box-shadow: 0 0 5px rgba(212,175,55,0.3); transform: scale(1); }
+}
+.task-cell.complete-animation {
+    animation: taskCompleteGlow 1.5s ease;
+}
+
+@keyframes badgePop {
+    0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+    60% { transform: scale(1.3) rotate(5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.task-cell .complete-badge {
+    animation: badgePop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 .task-item .task-icon {
     width: 36px;
     height: 36px;
@@ -7192,44 +7284,66 @@ function viewTask() {
     var isReached = isDailyGoalReached(progress);
     var levelInfo = getUserLevel();
     
-    var tasksHtml = '';
-    for (var key in TASK_TYPES) {
-        var task = TASK_TYPES[key];
-        var done = progress[key] || 0;
-        var limit = task.limit;
-        var isCore = task.category === 'core';
-        var isComplete = done >= limit;
-        var progressPercent = Math.min(100, (done / limit) * 100);
-        
-        var stars = '';
-        for (var s = 0; s < task.efficiency; s++) stars += '⭐';
-        for (var s = task.efficiency; s < 3; s++) stars += '☆';
-        
-        var statusText = isComplete ? '✅ 已達上限' : (done > 0 ? '⏳ 進行中' : '');
-        var statusColor = isComplete ? 'text-white/30' : (done > 0 ? 'text-neongreen' : '');
-        
-        tasksHtml += 
-            '<div class="task-item flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3" data-task="' + key + '">' +
-                '<div class="flex-1 min-w-0">' +
-                    '<div class="flex items-center gap-2">' +
-                        '<div class="task-icon ' + (isCore ? 'core' : 'daily') + '">' + task.icon + '</div>' +
-                        '<div class="min-w-0">' +
-                            '<p class="text-sm font-bold text-white/90 truncate">' + task.label + '</p>' +
-                            '<p class="text-[10px] text-white/40">+' + task.points + ' 分/次 · ' + stars + '</p>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="mt-1 flex items-center gap-2">' +
-                        '<div class="task-progress-mini flex-1">' +
-                            '<div class="fill" style="width:' + progressPercent + '%;background:' + (isComplete ? '#00FF00' : '#D4AF37') + ';"></div>' +
-                        '</div>' +
-                        '<span class="text-[10px] ' + statusColor + ' whitespace-nowrap">' + done + '/' + limit + ' ' + statusText + '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<button onclick="quickTaskAction(\'' + key + '\')" class="rounded-lg bg-gold text-black glow-gold px-3 py-1.5 text-xs font-black flex-shrink-0 ml-2">' + 
-                    (isComplete ? '✅ 已完成' : '前往') +
-                '</button>' +
-            '</div>';
+    // ✅ 初始化 _lastSeen
+    if (!progress._lastSeen) {
+        progress._lastSeen = {};
     }
+    
+    // 核心任務（3 段）
+    var coreTasks = [
+        { key: 'submit_store', label: '提交', icon: '🏪', points: 15 },
+        { key: 'verify_store', label: '認證', icon: '🔍', points: 15 },
+        { key: 'supplement', label: '補充', icon: '📝', points: 15 }
+    ];
+    
+    // 日常任務（5 段或 3 段）
+    var dailyTasks = [
+        { key: 'checkin', label: '打卡', icon: '📍', points: 5, limit: 5 },
+        { key: 'machine_checkin', label: '機台更新', icon: '🔄', points: 5, limit: 5 },
+        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 }
+    ];
+    
+    function buildTaskCell(task, limit) {
+        var done = progress[task.key] || 0;
+        var isComplete = done >= limit;
+        var wasComplete = (progress._lastSeen[task.key] || 0) >= limit;
+        var hasUpdate = done > (progress._lastSeen[task.key] || 0);
+        
+        var barHtml = '';
+        for (var i = 0; i < limit; i++) {
+            barHtml += '<div class="task-bar-segment ' + (i < done ? 'done' : '') + '"></div>';
+        }
+        
+        var actionText = isComplete ? '✅ 已完成' : '前往';
+        var cellClass = 'task-cell';
+        if (hasUpdate && isComplete && !wasComplete) {
+            cellClass += ' complete-animation';
+        } else if (hasUpdate) {
+            cellClass += ' progress-update';
+        }
+        if (isComplete) {
+            cellClass += ' completed';
+        }
+        
+        return '<div class="' + cellClass + '" onclick="' + (isComplete ? 'toast(\'今天的' + task.label + '任務已完成\', \'gold\')' : 'quickTaskAction(\'' + task.key + '\')') + '">' +
+            '<div class="task-name">' + task.icon + ' ' + task.label + '<span class="task-points">(+' + task.points + '分)</span></div>' +
+            '<div class="task-bar">' + barHtml + '</div>' +
+            '<div class="task-count">' + done + '/' + limit + '</div>' +
+            '<div class="task-action ' + (isComplete ? 'complete-badge' : '') + '">' + actionText + '</div>' +
+        '</div>';
+    }
+    
+    // ✅ 更新 _lastSeen
+    coreTasks.forEach(function(t) {
+        progress._lastSeen[t.key] = progress[t.key] || 0;
+    });
+    dailyTasks.forEach(function(t) {
+        progress._lastSeen[t.key] = progress[t.key] || 0;
+    });
+    save();
+    
+    var coreHtml = coreTasks.map(function(t) { return buildTaskCell(t, 3); }).join('');
+    var dailyHtml = dailyTasks.map(function(t) { return buildTaskCell(t, t.limit); }).join('');
     
     return '\n    <!-- 今日進度總覽 -->\n' +
         '<div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">' +
@@ -7251,7 +7365,10 @@ function viewTask() {
         '</div>' +
         
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 獵人任務</h3>\n' +
-        '<div class="space-y-2">' + tasksHtml + '</div></div>\n' +
+        '<div class="task-grid">' + coreHtml + '</div></div>\n' +
+        
+        '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常任務</h3>\n' +
+        '<div class="task-grid">' + dailyHtml + '</div></div>\n' +
         
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 打卡</h3>\n' +
         '<div class="space-y-2">\n' +
@@ -7271,7 +7388,6 @@ function viewTask() {
         '<button onclick="refreshAllData()" class="text-xs text-white/30 hover:text-white/60 transition-colors">🔄 同步資料</button>\n' +
         '</div>\n';
 }
-
 function renderWeeklyCheckin() {
   var progress = getWeeklyCheckinProgress();
   var dayNames = ['一', '二', '三', '四', '五', '六', '日'];
