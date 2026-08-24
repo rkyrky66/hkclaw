@@ -1054,9 +1054,9 @@ async function loadTaskProgressFromCloud() {
 
 // 區域定義
 var REGION_KEYS = {
-    hk: { label: '港島區', icon: '🏝️', districts: ['銅鑼灣', '天后', '北角', '中環', '金鐘', '上環', '灣仔', '鰂魚涌', '太古', '筲箕灣', '香港仔', '杏花邨', '黃竹坑'] },
-    kl: { label: '九龍區', icon: '🏙️', districts: ['旺角', '尖沙咀', '觀塘', '深水埗', '紅磡', '藍田', '油麻地', '九龍城', '土瓜灣', '黃大仙', '牛頭角', '九龍灣', '秀茂坪', '油塘', '樂富', '啟德', '黃埔', '慈雲山', '大角咀', '荔枝角'] },
-    nt: { label: '新界區', icon: '🌳', districts: ['屯門', '荃灣', '元朗', '葵芳', '將軍澳', '大埔', '葵興', '天水圍', '沙田', '大圍', '馬鞍山', '上水', '粉嶺', '青衣', '東涌', '昂坪', '坑口', '調景嶺', '日出康城', '西貢'] }
+    hk: { label: '港島區', icon: '🏝️', districts: ['銅鑼灣', '天后', '炮台山', '北角', '中環', '金鐘', '上環', '西營盤', '堅尼地城', '灣仔', '鰂魚涌', '太古', '筲箕灣', '香港仔', '杏花邨', '黃竹坑'] },
+    kl: { label: '九龍區', icon: '🏙️', districts: ['旺角', '尖沙咀', '佐敦', '柯士甸', '油麻地', '觀塘', '深水埗', '長沙灣', '南昌', '紅磡', '藍田', '九龍城', '土瓜灣', '黃大仙', '牛頭角', '九龍灣', '秀茂坪', '油塘', '樂富', '啟德', '黃埔', '慈雲山', '大角咀', '荔枝角', '何文田', '宋皇臺'] },
+    nt: { label: '新界區', icon: '🌳', districts: ['屯門', '荃灣', '元朗', '葵芳', '將軍澳', '大埔', '葵興', '天水圍', '沙田', '石門', '大圍', '馬鞍山', '上水', '粉嶺', '青衣', '東涌', '昂坪', '坑口', '調景嶺', '日出康城', '康城', '西貢'] }
 };
 // ============================================================
 // 貢獻值定義
@@ -3122,7 +3122,7 @@ async function loadCloud() {
         id: String(s.id),
         name: s.name || "未命名店鋪",
         region: s.region || "旺角",
-        addr: s.addr || "（未填地址）",
+        addr: s.addr || "",
         ig: s.ig || "",
         fb: s.fb || "",
         status: s.status || "pending",
@@ -3885,7 +3885,15 @@ function updateMapMarkers() {
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
         '👆 點擊查看店鋪列表' +
       '</div>';
-    
+        // ✅ 點擊圖釘時不移動地圖
+    marker.on('click', function(e) {
+        var currentCenter = map.getCenter();
+        var currentZoom = map.getZoom();
+        marker.openPopup();
+        setTimeout(function() {
+            map.setView(currentCenter, currentZoom, { animate: false });
+        }, 10);
+    });
     // 綁定 popup
     marker.bindPopup(popupContent, { 
       maxWidth: 220, 
@@ -3941,7 +3949,15 @@ function updateMapMarkers() {
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
         '👆 點擊查看詳情' +
       '</div>';
-    
+        // ✅ 點擊圖釘時不移動地圖
+    marker.on('click', function(e) {
+        var currentCenter = map.getCenter();
+        var currentZoom = map.getZoom();
+        marker.openPopup();
+        setTimeout(function() {
+            map.setView(currentCenter, currentZoom, { animate: false });
+        }, 10);
+    });
     // 綁定 popup
     marker.bindPopup(popupContent, { 
       maxWidth: 220, 
@@ -4463,8 +4479,8 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         } else if (field.key === 'hour24') {
             answerDisplay = mainAnswer === 'true' ? '24小時' : '非24小時';
         } else if (field.key === 'token') {
-            answerDisplay = mainAnswer === 'true' ? '需代幣' : '不需代幣';
-        }
+    answerDisplay = mainAnswer === '5dollar' ? '用5元' : '用代幣';
+}
         
         if (votes.length === 1) {
     fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + answerDisplay + '</span>';
@@ -4485,7 +4501,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         } else if (field.key === 'hour24') {
             otherDisplay = otherAnswer === 'true' ? '24小時' : '非24小時';
         } else if (field.key === 'token') {
-            otherDisplay = otherAnswer === 'true' ? '需代幣' : '不需代幣';
+            otherDisplay = otherAnswer === '5dollar' ? '用5元' : '用代幣';
         }
         fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · ' + totalOther + ' 人表示 ' + otherDisplay + '</span>';
     } else {
@@ -4511,7 +4527,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         } else if (field.key === 'hour24') {
             dissentDisplay = dissentAnswer === 'true' ? '24小時' : '非24小時';
         } else if (field.key === 'token') {
-            dissentDisplay = dissentAnswer === 'true' ? '需代幣' : '不需代幣';
+            dissentDisplay = dissentAnswer === '5dollar' ? '用5元' : '用代幣';
         }
         fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · 最近 ' + recentDissent.length + ' 人表示 ' + dissentDisplay + '</span>';
     } else {
@@ -5180,7 +5196,10 @@ function getRegionStat(region) {
     '大圍': 'region_nt', '馬鞍山': 'region_nt', '上水': 'region_nt',
     '粉嶺': 'region_nt', '青衣': 'region_nt', '東涌': 'region_nt',
     '昂坪': 'region_nt', '坑口': 'region_nt', '調景嶺': 'region_nt',
-    '日出康城': 'region_nt', '西貢': 'region_nt'
+    '日出康城': 'region_nt', '西貢': 'region_nt',
+    '炮台山': 'region_hk_island', '西營盤': 'region_hk_island', '堅尼地城': 'region_hk_island',
+'佐敦': 'region_kowloon', '柯士甸': 'region_kowloon', '長沙灣': 'region_kowloon', '南昌': 'region_kowloon', '何文田': 'region_kowloon', '宋皇臺': 'region_kowloon',
+'石門': 'region_nt', '康城': 'region_nt'
   };
   return regionMap[region] || null;
 }
@@ -5230,27 +5249,27 @@ async function recordRegionContribution(actionType, storeRegion, storeId) {
 // 店鋪欄位投票系統
 // ============================================================
 var VOTABLE_FIELDS = [
-    { key: 'size', label: '機台數量', question: '這間店的機台數量？', options: [
-        { value: 'small', label: '少於 6 台' },
-        { value: 'medium', label: '7-12 台' },
-        { value: 'large', label: '12 台以上' }
-    ]},
-    { key: 'has_staff', label: '場務', question: '這間店有場務嗎？', options: [
+    { key: 'size', label: '機台數量', question: '機台數量：', options: [
+    { value: 'small', label: '10台以下' },
+    { value: 'medium', label: '10-30台' },
+    { value: 'large', label: '30台以上' }
+]},
+    { key: 'has_staff', label: '場務', question: '有場務嗎？', options: [
         { value: 'true', label: '有場務' },
         { value: 'false', label: '無場務' }
     ]},
-    { key: 'has_e_coin', label: '電子兌幣', question: '有電子兌幣機嗎？', options: [
+    { key: 'has_e_coin', label: '電子兌幣', question: '有電子兌幣嗎？', options: [
         { value: 'true', label: '有電子兌幣' },
         { value: 'false', label: '無電子兌幣' }
     ]},
-    { key: 'hour24', label: '24小時', question: '是 24 小時營業嗎？', options: [
+    { key: 'hour24', label: '24小時', question: ' 24 小時營業嗎？', options: [
         { value: 'true', label: '是' },
         { value: 'false', label: '否' }
     ]},
-    { key: 'token', label: '代幣', question: '需要代幣嗎？', options: [
-        { value: 'true', label: '需要' },
-        { value: 'false', label: '不需要' }
-    ]}
+    { key: 'token', label: '遊戲幣', question: '5元店還是代幣店？', options: [
+    { value: '5dollar', label: '5元' },
+    { value: 'token', label: '代幣' }
+]}
 ];
 
 // 寫入投票
@@ -5938,13 +5957,12 @@ function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
   var isStreetStore = !s.mall || s.mall === '';
-  var existing = { address: s.addr && s.addr !== '', size: s.size && s.size !== null, staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
+  var existing = { address: s.addr && s.addr !== '' && s.addr !== '（未填地址）', size: s.size && s.size !== null, staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
   var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
   var allCompleted = completedCount === 4;
-  var isMallStore = s.type === 'mall' || s.mall !== '';
+  var isMallStore = !!s.mall && s.mall !== '';
   var addressRequired = isStreetStore && (!s.addr || s.addr === '' || s.addr === '（未填地址）');
   var addressCompleted = isMallStore ? true : existing.address;
-  
   // ✅ 清除殘留照片
   window._cam = window._cam || {};
   window._camPreview = window._camPreview || {};
@@ -5954,7 +5972,7 @@ function openSupplementForm(storeId) {
   _finalGpsLng = null;
   _finalGpsLocked = false;
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 機台數量 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型<br><span class="text-[9px]">10台以下</span></button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型<br><span class="text-[9px]">10-30台</span></button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型<br><span class="text-[9px]">30台以上</span></button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button><button onclick="selectStaffUI(null)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === undefined || s.has_staff === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">💳 電子兌幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 無電子兌幣</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🕐 24小時營業 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectHour24UI(true)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 是</button><button onclick="selectHour24UI(false)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 否</button><button onclick="selectHour24UI(null)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === undefined || s.hour24 === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🎟️ 代幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectTokenUI(true)" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 需要代幣</button><button onclick="selectTokenUI(false)" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 不需代幣</button></div></div>\n      <div id="sf-coin-photo-section" class="hidden">\n        <label class="text-xs font-bold text-gold">📷 <span id="sf-coin-photo-label">兌幣機照片</span> <span class="text-neonpink">（必填）</span></label>\n        <div id="sf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="sf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="sf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="sf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>\n        </div>\n      </div>\n      <button onclick="submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 機台數量 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'small' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">小型<br><span class="text-[9px]">10台以下</span></button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'medium' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">中型<br><span class="text-[9px]">10-30台</span></button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.size === 'large' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">大型<br><span class="text-[9px]">30台以上</span></button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">👤 無場務</button><button onclick="selectStaffUI(null)" class="sf-staff-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_staff === undefined || s.has_staff === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">💳 電子兌幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.has_e_coin === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">💳 無電子兌幣</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🕐 24小時營業 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectHour24UI(true)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === true ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 是</button><button onclick="selectHour24UI(false)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === false ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🕐 否</button><button onclick="selectHour24UI(null)" class="sf-hour24-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.hour24 === undefined || s.hour24 === null ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🤷 不確定</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🎟️ 代幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectTokenUI(\'5dollar\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === '5dollar' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 5元</button><button onclick="selectTokenUI(\'token\')" class="sf-token-btn flex-1 rounded-lg border py-2 text-sm transition-all ' + (s.token === 'token' ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-white/20 text-white/45 hover:border-gold/40') + '">🎟️ 代幣</button></div></div>\n      <div id="sf-coin-photo-section" class="hidden">\n        <label class="text-xs font-bold text-gold">📷 <span id="sf-coin-photo-label">兌幣機照片</span> <span class="text-neonpink">（必填）</span></label>\n        <div id="sf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="sf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="sf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="sf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>\n        </div>\n      </div>\n      <button onclick="submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   window._sfSelections = { size: s.size || null, staff: s.has_staff !== undefined && s.has_staff !== null ? s.has_staff : null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null ? s.has_e_coin : null, hour24: s.hour24 !== undefined && s.hour24 !== null ? s.hour24 : null, token: s.token !== undefined && s.token !== null ? s.token : null };
   
@@ -5979,7 +5997,7 @@ function openSupplementForm(storeId) {
     var hasToken = window._sfSelections.token !== null;
     var hasPhoto = !!(window._camPreview && window._camPreview.sf);
     
-    var addressDone = isStreet ? (s.addr && s.addr !== '' && s.addr !== '（未填地址）') || hasAddress : true;
+    var addressDone = isStreet ? (s.addr && s.addr !== '') || hasAddress : true;
     var sizeDone = hasSize;
     var staffDone = hasStaff;
     var coinDone = hasCoin;
@@ -6080,7 +6098,7 @@ function selectTokenUI(value) {
     btn.classList.remove('border-neongreen', 'bg-neongreen/20', 'text-neongreen');
     btn.classList.add('border-white/20', 'text-white/45');
   });
-  var label = value ? '需要代幣' : '不需代幣';
+  var label = value === '5dollar' ? '5元' : '代幣';
   document.querySelectorAll('.sf-token-btn').forEach(function(btn) {
     if (btn.textContent.includes(label)) {
       btn.classList.remove('border-white/20', 'text-white/45');
@@ -6299,18 +6317,6 @@ updates.supplement_photo = photoUrl;
             }
         }
         // ✅ 補充資料寫入投票（5 個欄位，不確定不寫入）
-if (CLOUD_ON) {
-    var votePromises = [];
-    if (size) votePromises.push(castFieldVote(storeId, 'size', size));
-    if (staff === true || staff === false) votePromises.push(castFieldVote(storeId, 'has_staff', String(staff)));
-    if (coin === true || coin === false) votePromises.push(castFieldVote(storeId, 'has_e_coin', String(coin)));
-    if (hour24 === true || hour24 === false) votePromises.push(castFieldVote(storeId, 'hour24', String(hour24)));
-    if (token === true || token === false) votePromises.push(castFieldVote(storeId, 'token', String(token)));
-    await Promise.all(votePromises);
-    console.log('✅ 補充資料已寫入投票');
-}
-
-        // ✅ 補充資料寫入投票（5 個欄位，不確定不寫入）
         if (CLOUD_ON) {
             try {
                 var votePromises = [];
@@ -6318,7 +6324,7 @@ if (CLOUD_ON) {
                 if (staff === true || staff === false) votePromises.push(castFieldVote(storeId, 'has_staff', String(staff)));
                 if (coin === true || coin === false) votePromises.push(castFieldVote(storeId, 'has_e_coin', String(coin)));
                 if (hour24 === true || hour24 === false) votePromises.push(castFieldVote(storeId, 'hour24', String(hour24)));
-                if (token === true || token === false) votePromises.push(castFieldVote(storeId, 'token', String(token)));
+                if (token === '5dollar' || token === 'token') votePromises.push(castFieldVote(storeId, 'token', token));
                 await Promise.all(votePromises);
                 console.log('✅ 補充資料已寫入投票');
             } catch (e) {
@@ -9471,7 +9477,8 @@ function doLocationRequest() {
       gpsLat = userLocation.lat;
       gpsLng = userLocation.lng;
       toast("✅ 定位成功！已更新附近店舖", "green");
-      const region = getRegionFromCoords(userLocation.lat, userLocation.lng);
+      // ✅ 改用「最接近店鋪的地區」判斷
+var region = getNearestStoreRegion(userLocation.lat, userLocation.lng);
       if (region) findState.region = region;
       if (map && mapInitialized) {
         map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1 });
@@ -9524,6 +9531,27 @@ function getRegionFromCoords(lat, lng) {
     return '荃灣';
   }
   return null;
+}
+
+function getNearestStoreRegion(lat, lng) {
+    if (!STORES || STORES.length === 0) return null;
+    
+    var nearestStore = null;
+    var nearestDist = Infinity;
+    
+    STORES.forEach(function(s) {
+        if (!s.lat || !s.lng) return;
+        var dist = calculateDistance(lat, lng, s.lat, s.lng);
+        if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestStore = s;
+        }
+    });
+    
+    if (nearestStore && nearestDist < 5) {  // 5 公里內才算
+        return nearestStore.region;
+    }
+    return null;
 }
 
 function showIOSLocationGuide() {
