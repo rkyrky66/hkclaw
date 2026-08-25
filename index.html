@@ -4732,7 +4732,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
       '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡 (+5分)</button>\n' +
       '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🔄 更新機台 (+5分)</button>\n' +
       '<button onclick="quickAction(\'post\', \'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neonpink/30 py-2.5 text-xs font-black text-neonpink whitespace-nowrap">📢 戰報 (+5分)</button>\n' +
-    '</div>\n    \n    <!-- 投票結果 -->\n    <div class="mt-3 flex flex-wrap gap-2 text-[11px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    \n    <!-- 回報按鈕靠右 -->\n    <div class="mt-2 flex justify-end flex-shrink-0">\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink whitespace-nowrap">🚨 回報</button>\n    </div>\n    \n    <!-- 現場機台流 -->\n    <div class="mt-4 flex-1 overflow-y-auto">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n    </div>\n  ';
+    '</div>\n    \n    <!-- 投票結果 -->\n    <div class="mt-3 flex flex-wrap gap-2 text-[11px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    \n    <!-- 回報按鈕靠右 -->\n    <div class="mt-2 flex justify-end flex-shrink-0">\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink whitespace-nowrap">🚨 回報</button>\n    </div>\n    \n    <!-- 現場機台流 -->\n    <div class="mt-4">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n    </div>\n  ';
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -4749,7 +4749,7 @@ function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
   
   var photosHtml = photos.map(function(p, idx) {
     return '<div class="photo-slide" data-index="' + idx + '" style="min-width:100%;height:100%;flex-shrink:0;">' +
-      '<img src="' + p.url + '" class="w-full h-full object-cover" alt="' + p.label + '" />' +
+      '<img src="' + p.url + '" class="w-full h-full object-cover cursor-pointer" onclick="openImageLightbox(\'' + p.url + '\')" alt="' + p.label + '" />' +
     '</div>';
   }).join('');
   
@@ -4759,7 +4759,13 @@ function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
   
   return '\n    <div class="relative mt-3 rounded-xl overflow-hidden" style="height:200px; flex-shrink:0; background:#111; position:relative;">\n      <div id="photo-track" style="display:flex;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">\n        ' + photosHtml + '\n      </div>\n      ' + (photos.length > 1 ? '<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;z-index:10;">' + dotsHtml + '</div>' : '') + '\n      ' + (locationLabel ? '<div class="absolute bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/70 text-xs text-gold font-bold border border-gold/30" style="z-index:10;">' + locationLabel + '</div>' : '') + '\n    </div>\n    <script>\n      (function() {\n        var track = document.getElementById("photo-track");\n        var dots = document.querySelectorAll(".photo-dot");\n        if (track && dots.length > 0) {\n          track.addEventListener("scroll", function() {\n            var index = Math.round(track.scrollLeft / track.clientWidth);\n            for (var i = 0; i < dots.length; i++) {\n              dots[i].style.background = i === index ? "#D4AF37" : "rgba(255,255,255,0.3)";\n            }\n          });\n          for (var i = 0; i < dots.length; i++) {\n            (function(idx) {\n              dots[idx].addEventListener("click", function() {\n                track.scrollTo({ left: idx * track.clientWidth, behavior: "smooth" });\n              });\n            })(i);\n          }\n        }\n      })();\n    <\/script>\n  ';
 }
-
+function openImageLightbox(src) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;overflow:auto;';
+    overlay.innerHTML = '<img src="' + src + '" style="max-width:100%;max-height:100vh;object-fit:contain;" />';
+    overlay.onclick = function() { overlay.remove(); };
+    document.body.appendChild(overlay);
+}
 function switchStore(id) { updateStoreContent(id); }
 
 function closeStoreModal() {
@@ -6527,15 +6533,7 @@ updates.supplement_photo = photoUrl;
         updateAchievementStat('supplement');
         checkPerfectFile(storeId);
         updateStreak();
-        // ✅ 補充資料寫入投票（5 個欄位）
-if (CLOUD_ON) {
-    var votePromises = [];
-    if (size) votePromises.push(castFieldVote(storeId, 'size', size));
-    if (staff !== null && staff !== undefined) votePromises.push(castFieldVote(storeId, 'has_staff', String(staff)));
-    if (coin !== null && coin !== undefined) votePromises.push(castFieldVote(storeId, 'has_e_coin', String(coin)));
-    await Promise.all(votePromises);
-    console.log('✅ 補充資料已寫入投票');
-}
+        
         await recordRegionContribution('supplement', s.region, storeId);
         
         toast('✅ 全部資料補充完成！獲得 15 積分', 'green');
@@ -6654,7 +6652,13 @@ if (!isOwner) {
 }
       
       return '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
-        (p.photo ? '<img src="' + p.photo + '" class="h-48 w-full rounded-lg object-cover" alt="貼文照片" />' : '<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">' + (p.track === "player" ? "🎉" : "🖼️") + '</div>') +
+        (p.photos && p.photos.length > 0 ? 
+    '<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">' + 
+    p.photos.map(function(ph, idx) {
+        return '<img src="' + ph + '" class="h-48 w-full flex-shrink-0 rounded-lg object-cover cursor-pointer" style="scroll-snap-align:center;" onclick="openImageLightbox(\'' + ph + '\')" />';
+    }).join('') + 
+    '</div>' : 
+    (p.photo ? '<img src="' + p.photo + '" class="h-48 w-full rounded-lg object-cover cursor-pointer" onclick="openImageLightbox(\'' + p.photo + '\')" />' : '<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">' + (p.track === "player" ? "🎉" : "🖼️") + '</div>')) +
         '<div class="mt-2 flex items-start justify-between">' +
           '<div>' +
             '<p class="text-sm text-white/80">' + (p.content || p.prize || '無內容') + '</p>' +
@@ -6695,22 +6699,15 @@ async function submitPlayerPost() {
     if (!acquireSubmitLock('submitPlayerPost')) return;
     if (!requireLogin('發布戰報')) return;
     if (isUserBanned()) {
-    showBannedMessage();
-    return;
-}
+        showBannedMessage();
+        return;
+    }
     var submitBtn = disableSubmitButton('lp-submit-btn', '⏳ 發布中...');
     
     try {
         var storeId = document.getElementById('lp-store-id')?.value;
         if (!storeId) { 
             toast('請選擇店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
-            return; 
-        }
-        
-        var photoBlob = window._cam?.lp;
-        if (!photoBlob) { 
-            toast('請先拍照', 'pink'); 
             enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
             return; 
         }
@@ -6748,18 +6745,48 @@ async function submitPlayerPost() {
             selectedTags.push(btn.dataset.tag);
         });
         
-        var photoUrl = '';
-        if (CLOUD_ON) {
-            try {
-                var file = new File([photoBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-                photoUrl = await uploadImage(file, 'posts');
-            } catch (e) {
-                toast('圖片上傳失敗: ' + e.message, 'pink');
-                enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
-                return;
+        // ✅ 上傳多張照片（最多 3 張）
+        var photos = [];
+        var multiPhotos = window._camMulti?.['lp'] || [];
+        
+        if (multiPhotos.length > 0) {
+            for (var i = 0; i < multiPhotos.length; i++) {
+                var photoBlob = multiPhotos[i].blob;
+                if (CLOUD_ON) {
+                    try {
+                        var file = new File([photoBlob], "post_" + Date.now() + "_" + i + ".jpg", { type: 'image/jpeg' });
+                        var url = await uploadImage(file, 'posts');
+                        photos.push(url);
+                    } catch (e) {
+                        toast('第 ' + (i + 1) + ' 張圖片上傳失敗: ' + e.message, 'pink');
+                        enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                        return;
+                    }
+                } else {
+                    photos.push(multiPhotos[i].dataUrl);
+                }
             }
-        } else {
-            photoUrl = window._camPreview?.lp || '';
+        } else if (window._cam?.['lp']) {
+            var singleBlob = window._cam['lp'];
+            if (CLOUD_ON) {
+                try {
+                    var singleFile = new File([singleBlob], "post_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                    var singleUrl = await uploadImage(singleFile, 'posts');
+                    photos.push(singleUrl);
+                } catch (e) {
+                    toast('圖片上傳失敗: ' + e.message, 'pink');
+                    enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                    return;
+                }
+            } else {
+                photos.push(window._camPreview?.['lp'] || '');
+            }
+        }
+        
+        if (photos.length === 0) {
+            toast('請先拍照', 'pink');
+            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            return;
         }
         
         var content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
@@ -6771,7 +6798,8 @@ async function submitPlayerPost() {
             store_region: store ? store.region : '',
             content: content,
             tags: selectedTags,
-            photo: photoUrl,
+            photo: photos[0] || '',
+            photos: photos,
             author: STATE.user.name,
             author_device: STATE.user.device,
             author_user_id: STATE.user.user_id || null,
@@ -6795,6 +6823,12 @@ async function submitPlayerPost() {
         // 記錄任務進度 (分享戰績)
         await recordTaskCompletion('share');
         await recordRegionContribution('post', store.region, storeId);
+        
+        // ✅ 清除多張照片
+        if (window._camMulti) window._camMulti['lp'] = [];
+        window._cam['lp'] = null;
+        window._camPreview['lp'] = null;
+        
         closeModal();
         showView('live');
     } finally {
@@ -7895,25 +7929,25 @@ async function renderRegionCollectionCards() {
                 var actions = unlockedRegions[district] || {};
                 
                 if (isUnlocked) {
-                    html += '<div class="region-cell unlocked region-unlock">';
-                    html += '<span class="region-cell-name">' + district + ' ✅</span>';
-                    html += '<div class="region-cell-icons">';
-                    html += '<span class="region-icon ' + (actions['checkin'] ? 'done' : '') + '">📍</span>';
-                    html += '<span class="region-icon ' + (actions['verify_store'] ? 'done' : '') + '">🔍</span>';
-                    html += '<span class="region-icon ' + (actions['submit_store'] ? 'done' : '') + '">🏪</span>';
-                    html += '<span class="region-icon ' + (actions['supplement'] ? 'done' : '') + '">📝</span>';
-                    html += '</div>';
-                    html += '</div>';
+                    html += '<div class="region-cell unlocked">';
+html += '<span class="region-cell-name">' + district + '<span class="region-icon ' + (actions['checkin'] ? 'done' : '') + '">📍</span></span>';
+html += '<div class="region-cell-icons">';
+html += '<span class="region-icon ' + (actions['verify_store'] ? 'done' : '') + '">🔍</span>';
+html += '<span class="region-icon ' + (actions['submit_store'] ? 'done' : '') + '">🏪</span>';
+html += '<span class="region-icon ' + (actions['supplement'] ? 'done' : '') + '">📝</span>';
+html += '<span class="region-icon ' + (actions['post'] ? 'done' : '') + '">📢</span>';
+html += '</div>';
+html += '</div>';
                 } else {
                     html += '<div class="region-cell locked">';
-                    html += '<span class="region-cell-name">' + district + '</span>';
-                    html += '<div class="region-cell-icons">';
-                    html += '<span class="region-icon">📍</span>';
-                    html += '<span class="region-icon">🔍</span>';
-                    html += '<span class="region-icon">🏪</span>';
-                    html += '<span class="region-icon">📝</span>';
-                    html += '</div>';
-                    html += '</div>';
+html += '<span class="region-cell-name">' + district + '<span class="region-icon">📍</span></span>';
+html += '<div class="region-cell-icons">';
+html += '<span class="region-icon">🔍</span>';
+html += '<span class="region-icon">🏪</span>';
+html += '<span class="region-icon">📝</span>';
+html += '<span class="region-icon">📢</span>';
+html += '</div>';
+html += '</div>';
                 }
             });
             
@@ -7990,44 +8024,42 @@ window._camPreview = {};
 window._camStreams = {};
 
 function openCamera(key) {
-  var container = document.getElementById(key + "-camera-container");
-  if (!container) return;
+  // ✅ 全屏相機
+  var cameraOverlay = document.createElement('div');
+  cameraOverlay.id = 'fullscreen-camera';
+  cameraOverlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column;';
+  cameraOverlay.innerHTML = 
+      '<div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+          '<video id="' + key + '-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;"></video>' +
+      '</div>' +
+      '<div style="padding:20px;display:flex;gap:12px;justify-content:center;background:#111;">' +
+          '<button onclick="capturePhoto(\'' + key + '\')" style="flex:1;padding:16px;border-radius:50px;background:#00FF00;border:none;font-size:18px;font-weight:900;color:#000;cursor:pointer;">📸 拍照</button>' +
+          '<button onclick="closeFullscreenCamera(\'' + key + '\')" style="flex:1;padding:16px;border-radius:50px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);font-size:16px;font-weight:700;color:#fff;cursor:pointer;">取消</button>' +
+      '</div>';
+  document.body.appendChild(cameraOverlay);
   
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      gpsLat = pos.coords.latitude;
-      gpsLng = pos.coords.longitude;
-      isGpsReady = true;
-      if (document.getElementById('nt-gps')) {
-        var el = document.getElementById('nt-gps');
-        el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-        el.className = 'text-neongreen text-xs';
-      }
-      if (document.getElementById('vf-gps')) {
-        var el = document.getElementById('vf-gps');
-        el.textContent = '📍 定位成功：' + gpsLat.toFixed(2) + ', ' + gpsLng.toFixed(2);
-        el.className = 'text-neongreen text-xs';
-        _vfGpsReady = true;
-        _vfGpsLat = gpsLat;
-        _vfGpsLng = gpsLng;
-      }
-      updateFormState();
-    }, function() { console.log('⚠️ 拍照時定位失敗，使用上次位置'); }, { enableHighAccuracy: true, timeout: 5000 });
-  }
-  
-  if (window._camPreview && window._camPreview[key]) {
-    container.innerHTML = '<div class="relative"><img src="' + window._camPreview[key] + '" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto(\'' + key + '\')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>';
-    return;
-  }
-  
-  container.innerHTML = '<video id="' + key + '-video" autoplay playsinline class="w-full rounded-lg bg-black" style="max-height:300px;"></video><div class="mt-2 flex gap-2"><button onclick="capturePhoto(\'' + key + '\')" class="flex-1 rounded-lg bg-neongreen py-2.5 text-sm font-black text-black">📸 拍照</button><button onclick="closeCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-white/30 py-2.5 text-xs text-white/60">取消</button></div>';
-  
-  var videoEl = document.getElementById(key + "-video");
-  if (!videoEl) return;
-  
+  // 啟動相機
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(function(stream) { videoEl.srcObject = stream; videoEl.play(); window._camStreams[key] = stream; })
-    .catch(function(err) { handleCameraError(err, key); });
+    .then(function(stream) { 
+        var videoEl = document.getElementById(key + '-video');
+        if (videoEl) {
+            videoEl.srcObject = stream; 
+            videoEl.play(); 
+        }
+        window._camStreams[key] = stream; 
+    })
+    .catch(function(err) { 
+        closeFullscreenCamera(key);
+        handleCameraError(err, key); 
+    });
+}
+
+// 關閉全屏相機
+function closeFullscreenCamera(key) {
+    var overlay = document.getElementById('fullscreen-camera');
+    if (overlay) overlay.remove();
+    var stream = window._camStreams?.[key];
+    if (stream) { stream.getTracks().forEach(function(t) { return t.stop(); }); delete window._camStreams[key]; }
 }
 
 function handleCameraError(err, key) {
@@ -8070,7 +8102,6 @@ async function capturePhoto(key) {
     var videoEl = document.getElementById(key + "-video");
     if (!videoEl) return toast('請先開啟相機', 'pink');
     
-    // 創建 canvas 並縮小尺寸
     var canvas = document.createElement('canvas');
     var MAX_WIDTH = 800;
     var MAX_HEIGHT = 800;
@@ -8093,45 +8124,11 @@ async function capturePhoto(key) {
         dataUrl = canvas.toDataURL('image/jpeg', quality);
     }
     
-    if (dataUrl.length > 100 * 1024) {
-        var smallerCanvas = document.createElement('canvas');
-        smallerCanvas.width = Math.round(canvas.width * 0.5);
-        smallerCanvas.height = Math.round(canvas.height * 0.5);
-        var smallerCtx = smallerCanvas.getContext('2d');
-        smallerCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
-        dataUrl = smallerCanvas.toDataURL('image/jpeg', 0.5);
-        canvas = smallerCanvas;
-        quality = 0.5;
-    }
-    
-    var img = document.getElementById(key + "-preview");
-    if (img) { 
-        img.src = dataUrl; 
-        img.classList.remove('hidden'); 
-        img.style.display = 'block'; 
-    }
-    
     var blob = await new Promise(function(resolve) { 
         canvas.toBlob(function(b) { resolve(b); }, 'image/jpeg', quality); 
     });
     
-    if (blob && blob.size > 100 * 1024) {
-        var smallerCanvas2 = document.createElement('canvas');
-        smallerCanvas2.width = Math.round(canvas.width * 0.5);
-        smallerCanvas2.height = Math.round(canvas.height * 0.5);
-        var smallerCtx2 = smallerCanvas2.getContext('2d');
-        smallerCtx2.drawImage(canvas, 0, 0, smallerCanvas2.width, smallerCanvas2.height);
-        dataUrl = smallerCanvas2.toDataURL('image/jpeg', 0.5);
-        blob = await new Promise(function(resolve) { 
-            smallerCanvas2.toBlob(function(b) { resolve(b); }, 'image/jpeg', 0.5); 
-        });
-        if (img) img.src = dataUrl;
-    }
-    
-    window._cam[key] = blob;
-    window._camPreview[key] = dataUrl;
-    
-    // ✅ 拍照時鎖定最終 GPS
+    // ✅ 拍照時鎖定 GPS
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function(pos) {
             _finalGpsLat = pos.coords.latitude;
@@ -8140,53 +8137,55 @@ async function capturePhoto(key) {
             gpsLat = _finalGpsLat;
             gpsLng = _finalGpsLng;
             isGpsReady = true;
-            
-            // 更新對應的 GPS 顯示
-            var elId = key + '-gps';
-            var el = document.getElementById(elId);
-            if (el) {
-                el.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
-                el.className = 'text-gold text-xs';
-            }
-            
-            // 如果是認證/實證模式，也更新 vf-gps
-            if (key === 'vf') {
-                var vfEl = document.getElementById('vf-gps');
-                if (vfEl) {
-                    vfEl.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
-                    vfEl.className = 'text-gold text-xs';
-                }
-            }
-            
-            // 如果是檢舉模式，也更新 vr-gps
-            if (key === 'vr') {
-                var vrEl = document.getElementById('vr-gps');
-                if (vrEl) {
-                    vrEl.textContent = '已定位：' + _finalGpsLat.toFixed(6) + ', ' + _finalGpsLng.toFixed(6) + '（用於最終提交）';
-                    vrEl.className = 'text-gold text-xs';
-                }
-            }
-            
             updateFormState();
             if (typeof updateVerifySubmitButton === 'function') updateVerifySubmitButton();
         }, function() {
             toast('⚠️ 拍照時定位失敗，請重試', 'pink');
         }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+    }
+    
+    // ✅ 戰績支援多張（最多 3 張）
+    if (key === 'lp' || key === 'lo') {
+        if (!window._camMulti) window._camMulti = {};
+        if (!window._camMulti[key]) window._camMulti[key] = [];
+        if (window._camMulti[key].length >= 3) {
+            toast('最多 3 張照片', 'pink');
+            closeFullscreenCamera(key);
+            return;
+        }
+        window._camMulti[key].push({ blob: blob, dataUrl: dataUrl });
+        window._cam[key] = blob;
+        window._camPreview[key] = dataUrl;
     } else {
-        toast('⚠️ 此裝置不支援 GPS 定位', 'pink');
+        window._cam[key] = blob;
+        window._camPreview[key] = dataUrl;
     }
     
-    closeCamera(key);
-    var container = document.getElementById(key + "-camera-container");
-    if (container) {
-        container.innerHTML = '<div class="relative"><img src="' + dataUrl + '" class="w-full rounded-lg" alt="店鋪照片" /><div class="mt-2 flex gap-2"><button onclick="reopenCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold hover:bg-gold/10 transition-all">🔄 重新拍攝</button><button onclick="clearPhoto(\'' + key + '\')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40 hover:bg-white/5 transition-all">✕ 移除</button></div></div>';
-    }
+    // 關閉全屏相機
+    closeFullscreenCamera(key);
     
-    if (typeof checkPostForm === 'function') {
-        var postPrefix = key === 'lp' ? 'lp' : key === 'lo' ? 'lo' : null;
-        if (postPrefix) checkPostForm(postPrefix);
-    }
+    // 更新預覽
+    updatePhotoPreview(key);
+    
     toast('✅ 已拍照！GPS 位置已鎖定', 'green');
+}
+
+// 更新照片預覽
+function updatePhotoPreview(key) {
+    var container = document.getElementById(key + "-camera-container");
+    if (!container) return;
+    
+    if (key === 'lp' || key === 'lo') {
+        var photos = window._camMulti?.[key] || [];
+        var imgTags = photos.map(function(p, idx) {
+            return '<img src="' + p.dataUrl + '" class="w-20 h-20 rounded-lg object-cover" />';
+        }).join('');
+        container.innerHTML = '<div class="flex gap-2 flex-wrap">' + imgTags + '</div>' +
+            (photos.length < 3 ? '<button onclick="openCamera(\'' + key + '\')" class="mt-2 w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 拍第 ' + (photos.length + 1) + ' 張</button>' : '') +
+            '<button onclick="clearPhoto(\'' + key + '\')" class="mt-2 w-full rounded-lg border border-white/20 py-2 text-sm text-white/40">✕ 清除全部</button>';
+    } else {
+        container.innerHTML = '<div class="relative"><img src="' + (window._camPreview?.[key] || '') + '" class="w-full rounded-lg" alt="預覽" /><div class="mt-2 flex gap-2"><button onclick="openCamera(\'' + key + '\')" class="flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold">🔄 重新拍攝</button><button onclick="clearPhoto(\'' + key + '\')" class="flex-1 rounded-lg border border-white/20 py-2 text-sm text-white/40">✕ 移除</button></div></div>';
+    }
 }
 
 function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = null; openCamera(key); }
@@ -8194,28 +8193,16 @@ function reopenCamera(key) { window._cam[key] = null; window._camPreview[key] = 
 function clearPhoto(key) {
   window._cam[key] = null;
   window._camPreview[key] = null;
-  var container = document.getElementById(key + "-camera-container");
-  if (container) container.innerHTML = '<button onclick="openCamera(\'' + key + '\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>';
-  var img = document.getElementById(key + "-preview");
-  if (img) { img.classList.add('hidden'); img.style.display = 'none'; }
+  if (window._camMulti) window._camMulti[key] = [];
   
-  // ✅ 解除 GPS 鎖定
+  var container = document.getElementById(key + "-camera-container");
+  if (container) {
+      container.innerHTML = '<button onclick="openCamera(\'' + key + '\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>';
+  }
+  
   _finalGpsLat = null;
   _finalGpsLng = null;
   _finalGpsLocked = false;
-  
-  // 恢復對應的 GPS 顯示
-  var elId = key + '-gps';
-  var el = document.getElementById(elId);
-  if (el) {
-    if (gpsLat && gpsLng) {
-      el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
-      el.className = 'text-neongreen text-xs';
-    } else {
-      el.textContent = '無法定位，請確保開啟GPS定位功能。';
-      el.className = 'text-neonpink text-xs';
-    }
-  }
   
   updateFormState();
   if (typeof updateVerifySubmitButton === 'function') updateVerifySubmitButton();
@@ -8227,6 +8214,14 @@ function clearPhoto(key) {
 // 機台上架
 // ============================================================
 function openMachineForm(sid) {
+  // ✅ 清除殘留照片和 GPS
+window._cam = window._cam || {};
+window._camPreview = window._camPreview || {};
+window._cam['mf'] = null;
+window._camPreview['mf'] = null;
+_finalGpsLat = null;
+_finalGpsLng = null;
+_finalGpsLocked = false;
   openModal(`
     <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
       <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>
@@ -8550,7 +8545,13 @@ async function doStoreCheckin(storeId) {
             toast('📍 今日已在「' + s.name + '」打卡，明天再來吧！', 'gold');
             return;
         }
-        
+        // ✅ 檢查每日打卡任務限額
+var progress = getTaskProgress();
+var checkinTask = TASK_TYPES['checkin'];
+if (progress['checkin'] >= checkinTask.limit) {
+    toast('⚠️ 今日打卡任務已達上限 (' + checkinTask.limit + ' 次)，明天再來！', 'pink');
+    return;
+}
         if (!gpsLat || !gpsLng) {
             toast('📍 請先開啟 GPS 定位', 'pink');
             return;
@@ -9862,7 +9863,7 @@ function timeAgo(ts) {
 function openModal(html) {
   var root = document.getElementById("modal-root");
   root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
-  root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; display:flex; flex-direction:column;">' + html + '</div>';
+  root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + html + '</div>';
 }
 
 function closeModal() {
@@ -9870,6 +9871,16 @@ function closeModal() {
   stopIntelGpsTracking();
   stopVerifyGpsTracking();
   if (typeof stopVerifyReportGpsTracking === 'function') stopVerifyReportGpsTracking();
+  
+  // ✅ 停止所有相機串流
+  Object.keys(window._camStreams || {}).forEach(function(key) {
+      var stream = window._camStreams[key];
+      if (stream) {
+          stream.getTracks().forEach(function(t) { t.stop(); });
+      }
+      delete window._camStreams[key];
+  });
+  
   _finalGpsLat = null;
   _finalGpsLng = null;
   _finalGpsLocked = false;
