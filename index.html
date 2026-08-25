@@ -7581,11 +7581,11 @@ function renderStoreList() {
   var pageItems = list.slice(start, end);
   var hasMore = list.length > PAGE_SIZE;
   
-  var formatDist = function(s) {
-    if (s._dist === 9999) return '📍 位置未知';
+var formatDist = function(s) {
+    if (!s._dist || s._dist === 9999 || isNaN(s._dist)) return '📍 位置未知';
     if (s._dist < 1) return Math.round(s._dist * 1000) + "m";
     return s._dist.toFixed(1) + "km";
-  };
+};
   
   function renderStoreCard(s) {
     var isVerified = s.status === "verified" || s.verified === "verified";
