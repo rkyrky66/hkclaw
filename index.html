@@ -1424,7 +1424,16 @@ function createPersonalizedMarker(store) {
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
     
     var glowStyle = '';
-    var iconDisplay = '●';
+    // 取得該店在目前列表中的編號
+var storeIndex = 0;
+var allVisibleStores = getStoresInBounds();
+for (var i = 0; i < allVisibleStores.length; i++) {
+    if (allVisibleStores[i].id === store.id) {
+        storeIndex = i + 1;
+        break;
+    }
+}
+var iconDisplay = String(storeIndex);
     var levelClass = '';
     // ✅ 如果店鋪有爭議，顯示警告
 if (store.is_suspicious) {
@@ -3942,6 +3951,12 @@ function getArithmeticCenter(coords) {
         lng: lngSum / coords.length
     };
 }
+map.on('dragstart', function() {
+    // 保持 popup 開啟
+    if (map._popup) {
+        map._popup._closeOnMove = false;
+    }
+});
     map.on('moveend zoomend', function() {
       if (CURRENT === 'map') {
         updateMapList();
@@ -3961,7 +3976,7 @@ function getArithmeticCenter(coords) {
           return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
         }
         return L.divIcon({
-          html: '<div class="marker-cluster-custom">' + totalStores + '</div>',
+          html: '<div class="marker-cluster-custom">' + totalStores + ' 間</div>',
           className: '',
           iconSize: L.point(36, 36)
         });
@@ -4836,7 +4851,6 @@ function backToMall() {
 
 function openStoreFromMap(id) {
   if (mapSelectionMode) {
-    // ✅ 地圖選模式 → 返回發佈戰報頁面並選中
     var prefix = mapSelectionMode;
     mapSelectionMode = null;
     var store = STORES.find(function(s) { return s.id === id; });
@@ -4844,14 +4858,31 @@ function openStoreFromMap(id) {
       if (prefix === 'lp') {
         openPlayerPostWithStore(prefix, store);
       } else if (prefix === 'lo') {
-        // 台主宣傳模式
         openOwnerPostWithStore(prefix, store);
       }
     }
-  } else {
-    // 正常模式 → 打開店鋪頁面
-    if (map) map.closePopup();
-    openStore(id);
+    return;
+  }
+  
+  // ✅ 地圖置中 + 調整 zoom + 開 popup
+  var s = STORES.find(function(x) { return x.id === id; });
+  if (!s || !s.lat || !s.lng) return;
+  
+  if (map) {
+    map.closePopup();
+    map.flyTo([s.lat, s.lng], 16, { duration: 1 });
+    
+    setTimeout(function() {
+      // 找到該店的 marker 並打開 popup
+      markerCluster.eachLayer(function(layer) {
+        if (layer.options && layer.options.storeId === id) {
+          layer.openPopup();
+        }
+        if (layer.options && layer.options.mallName && s.mall === layer.options.mallName) {
+          layer.openPopup();
+        }
+      });
+    }, 1100);
   }
 }
 
