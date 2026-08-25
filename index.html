@@ -2913,6 +2913,10 @@ async function processOfflineReports() {
 // 最近搜索同步 (P3)
 // ============================================================
 function setRegion(r) {
+  setRegionPreserveSearch(r);
+}
+
+function setRegionPreserveSearch(r) {
   findState.region = r;
   if (r !== "全部" && r !== "") {
     STATE.recentRegions = STATE.recentRegions.filter(function(x) { return x !== r; });
@@ -2920,12 +2924,23 @@ function setRegion(r) {
     if (STATE.recentRegions.length > 6) STATE.recentRegions = STATE.recentRegions.slice(0, 6);
     save();
     
-    // 雲端同步最近搜索
     if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
       syncRecentRegions();
     }
   }
-  showView("find");
+  
+  // ✅ 保留搜索文字，只更新列表
+  var listContainer = document.getElementById('store-list');
+  if (listContainer) {
+      listContainer.innerHTML = renderStoreList();
+  }
+  
+  var currentRegionEl = document.getElementById('find-current-region');
+  if (currentRegionEl) {
+      currentRegionEl.textContent = findState.region;
+  }
+  
+  regionGroupOpen = { hk: false, kl: false, nt: false };
 }
 
 async function syncRecentRegions() {
@@ -4091,14 +4106,25 @@ function updateMapMarkers() {
         '👆 點擊查看店鋪列表' +
       '</div>';
     // 綁定 popup
-marker.bindPopup(popupContent, { 
-    maxWidth: 220, 
-    minWidth: 180, 
-    className: 'custom-popup',
-    closeButton: false,
-    autoClose: false,
-    closeOnClick: false
-});
+    // 綁定 popup（只設定內容，不自動開啟）
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false,
+      autoPan: false,
+      autoClose: true,
+      closeOnClick: false
+    });
+    
+    // ✅ 點擊圖釘：先 pan 再開 popup
+    marker.on('click', function(e) {
+        var targetLatLng = e.latlng;
+        map.panTo(targetLatLng, { duration: 0.4 });
+        setTimeout(function() {
+            marker.openPopup();
+        }, 450);
+    });
 
 
 
@@ -4151,15 +4177,25 @@ marker.bindPopup(popupContent, {
         '👆 點擊查看詳情' +
       '</div>';
 
-          // 綁定 popup
-marker.bindPopup(popupContent, { 
-    maxWidth: 220, 
-    minWidth: 180, 
-    className: 'custom-popup',
-    closeButton: false,
-    autoClose: false,
-    closeOnClick: false
-});
+    // 綁定 popup（只設定內容，不自動開啟）
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, 
+      minWidth: 180, 
+      className: 'custom-popup',
+      closeButton: false,
+      autoPan: false,
+      autoClose: true,
+      closeOnClick: false
+    });
+    
+    // ✅ 點擊圖釘：先 pan 再開 popup
+    marker.on('click', function(e) {
+        var targetLatLng = e.latlng;
+        map.panTo(targetLatLng, { duration: 0.4 });
+        setTimeout(function() {
+            marker.openPopup();
+        }, 450);
+    });
 
     
     // 點擊 popup 本身打開店鋪詳情
@@ -4873,22 +4909,26 @@ function openStoreFromMap(id) {
   
   if (map) {
     map.closePopup();
-    map.flyTo([s.lat, s.lng], 16, { duration: 1 });
     
-    setTimeout(function() {
+    var found = false;
     markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.storeId === id) {
+            found = true;
             markerCluster.zoomToShowLayer(layer, function() {
                 layer.openPopup();
             });
         }
         if (layer.options && layer.options.mallName && s.mall === layer.options.mallName) {
+            found = true;
             markerCluster.zoomToShowLayer(layer, function() {
                 layer.openPopup();
             });
         }
     });
-}, 1100);
+    
+    if (!found) {
+        map.flyTo([s.lat, s.lng], 16, { duration: 1 });
+    }
   }
 }
 
@@ -4898,17 +4938,20 @@ function openMallFromMap(mallName) {
   
   if (map) {
     map.closePopup();
-    map.flyTo([stores[0].lat, stores[0].lng], 16, { duration: 1 });
     
-    setTimeout(function() {
-      markerCluster.eachLayer(function(layer) {
+    var found = false;
+    markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.mallName === mallName) {
-          markerCluster.zoomToShowLayer(layer, function() {
-            layer.openPopup();
-          });
+            found = true;
+            markerCluster.zoomToShowLayer(layer, function() {
+                layer.openPopup();
+            });
         }
-      });
-    }, 1100);
+    });
+    
+    if (!found) {
+        map.flyTo([stores[0].lat, stores[0].lng], 16, { duration: 1 });
+    }
   }
 }
 // ============================================================
@@ -7556,6 +7599,17 @@ function viewFind() {
   setTimeout(function() { showFindAd(); }, 1000);
   var recent = STATE.recentRegions || [];
   
+  // ✅ 最近 3 個地區（排除目前選擇）
+  var recentRegions = recent.filter(function(r) { return r !== findState.region; }).slice(0, 3);
+  var recentHtml = '';
+  if (recentRegions.length > 0) {
+      recentHtml = '<div class="mb-3"><p class="mb-1.5 text-[10px] font-bold text-white/40">🕐 最近</p><div class="flex flex-wrap gap-2">' + 
+          recentRegions.map(function(r) { 
+              return '<button onclick="setRegionPreserveSearch(\'' + r + '\')" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + r + '</button>'; 
+          }).join('') + 
+      '</div></div>';
+  }
+  
   var renderRegionGroupFn = function(groupKey) {
     var data = REGIONS[groupKey];
     var isOpen = regionGroupOpen[groupKey];
@@ -7568,11 +7622,19 @@ function viewFind() {
       if (item === '📍 更多' || item === '📍 收起') {
         return '<button onclick="toggleMoreRegions(\'' + groupKey + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (isMoreOpen ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
       }
-      return '<button onclick="setRegion(\'' + item + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (findState.region === item ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
+      return '<button onclick="setRegionPreserveSearch(\'' + item + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (findState.region === item ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
     }).join('') + '</div></div>';
   };
   
-  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStoresDebounced(this)" />\n    </div>\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n        <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
+  // ✅ 恢復搜索欄的值
+  setTimeout(function() {
+      var searchInput = document.getElementById('find-search');
+      if (searchInput && findSearchQuery) {
+          searchInput.value = findSearchQuery;
+      }
+  }, 100);
+  
+  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStoresDebounced(this)" value="' + findSearchQuery + '" />\n    </div>\n    ' + recentHtml + '\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n        <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
 }
 
 // FILTER 狀態
@@ -7608,14 +7670,19 @@ function updateTypeFilterUI() {
 
 function resetFindFilters() {
     findState.region = '全部';
-    findTypeFilters = { all: true, mall: true, mallStore: true, street: true };
+    findSearchQuery = '';
     regionGroupOpen = { hk: false, kl: false, nt: false };
     moreRegionsOpenMap = { hk: false, kl: false, nt: false };
-    document.getElementById('find-search') ? document.getElementById('find-search').value = '' : '';
-    document.getElementById('find-sort') ? document.getElementById('find-sort').value = 'name' : '';
+    
+    var searchInput = document.getElementById('find-search');
+    if (searchInput) searchInput.value = '';
+    
+    var sortSelect = document.getElementById('find-sort');
+    if (sortSelect) sortSelect.value = 'name';
+    findSortMethod = 'name';
+    
     showView('find');
 }
-
 var findSearchQuery = '';
 var searchTimeout = null;
 
