@@ -7547,7 +7547,7 @@ function viewFind() {
     }).join('') + '</div></div>';
   };
   
-  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStores()" />\n    </div>\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n    <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">類型</p>\n      <div class="flex flex-wrap gap-2">\n        <button onclick="toggleTypeFilter(\'all\')" id="type-all" class="chip-active-gold rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☑ 全部</button>\n        <button onclick="toggleTypeFilter(\'mall\')" id="type-mall" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 商場</button>\n        <button onclick="toggleTypeFilter(\'mall-store\')" id="type-mall-store" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 商場鋪</button>\n        <button onclick="toggleTypeFilter(\'street\')" id="type-street" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 地鋪</button>\n      </div>\n    </div>\n    <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
+  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStoresDebounced(this)" />\n    </div>\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n        <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
 }
 
 // FILTER 狀態
@@ -7592,10 +7592,31 @@ function resetFindFilters() {
 }
 
 var findSearchQuery = '';
+var searchTimeout = null;
+
 function searchStores() {
-    var input = document.getElementById('find-search');
-    findSearchQuery = input ? input.value.trim() : '';
-    showView('find');
+      var input = document.getElementById('find-search');
+    if (!input) return;
+    findSearchQuery = input.value.trim();
+    
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() {
+        var listContainer = document.getElementById('store-list');
+        if (listContainer) {
+            listContainer.innerHTML = renderStoreList();
+        }
+    }, 300);
+}
+function searchStoresDebounced(input) {
+    var query = input.value.trim();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() {
+        findSearchQuery = query;
+        var listContainer = document.getElementById('store-list');
+        if (listContainer) {
+            listContainer.innerHTML = renderStoreList();
+        }
+    }, 300);
 }
 
 var findSortMethod = 'name';
@@ -7670,18 +7691,7 @@ function filteredStores() {
   
   // 地區篩選
   if (findState.region !== "全部" && findState.region !== "") list = list.filter(function(s) { return s.region === findState.region; });
-  
-  // 類型篩選
-  if (!findTypeFilters.all) {
-      list = list.filter(function(s) {
-          var isMall = s.mall && s.mall !== '';
-          var isStreet = !isMall;
-          if (findTypeFilters.mall && isMall) return true;
-          if (findTypeFilters.mallStore && isMall) return true;
-          if (findTypeFilters.street && isStreet) return true;
-          return false;
-      });
-  }
+
   
   // 搜索
   if (findSearchQuery) {
@@ -7740,7 +7750,9 @@ function loadMoreStores() {
 }
 
 function toggleRegionGroup(group) { 
-    regionGroupOpen[group] = !regionGroupOpen[group];
+    var isOpen = regionGroupOpen[group];
+    regionGroupOpen = { hk: false, kl: false, nt: false };
+    regionGroupOpen[group] = !isOpen;
     showView("find"); 
 }
 
