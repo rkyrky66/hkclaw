@@ -4120,10 +4120,10 @@ function updateMapMarkers() {
     // ✅ 點擊圖釘：先 pan 再開 popup
     marker.on('click', function(e) {
         var targetLatLng = e.latlng;
-        map.panTo(targetLatLng, { duration: 0.4 });
-        setTimeout(function() {
+        map.once('moveend', function() {
             marker.openPopup();
-        }, 450);
+        });
+        map.panTo(targetLatLng, { duration: 0.4 });
     });
 
 
@@ -4191,10 +4191,10 @@ function updateMapMarkers() {
     // ✅ 點擊圖釘：先 pan 再開 popup
     marker.on('click', function(e) {
         var targetLatLng = e.latlng;
-        map.panTo(targetLatLng, { duration: 0.4 });
-        setTimeout(function() {
+        map.once('moveend', function() {
             marker.openPopup();
-        }, 450);
+        });
+        map.panTo(targetLatLng, { duration: 0.4 });
     });
 
     
