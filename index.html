@@ -1422,32 +1422,30 @@ function createPersonalizedMarker(store) {
     
     var baseColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
-    
     var glowStyle = '';
-    // 取得該店在目前列表中的編號
-var storeIndex = 0;
-var allVisibleStores = getStoresInBounds();
-for (var i = 0; i < allVisibleStores.length; i++) {
-    if (allVisibleStores[i].id === store.id) {
-        storeIndex = i + 1;
-        break;
+    
+    // ✅ 取得該店在目前列表中的編號（預設）
+    var storeIndex = 0;
+    var allVisibleStores = getStoresInBounds();
+    for (var i = 0; i < allVisibleStores.length; i++) {
+        if (allVisibleStores[i].id === store.id) {
+            storeIndex = i + 1;
+            break;
+        }
     }
-}
-var iconDisplay = String(storeIndex);
+    var iconDisplay = String(storeIndex);
     var levelClass = '';
-    // ✅ 如果店鋪有爭議，顯示警告
-if (store.is_suspicious) {
-    iconDisplay = '⚠️';
-    glowStyle = 'box-shadow:0 0 20px rgba(255,184,0,0.8),0 0 40px rgba(255,184,0,0.4);';
-    borderColor = '#FFB800';
-    baseColor = '#FF6B00';
-}
-
-
-    if (levelInfo.level === 1) {
-        iconDisplay = '⭐';
-        levelClass = 'marker-level-1';
-    } else if (levelInfo.level === 2) {
+    
+    // ⚠️ 爭議店鋪優先顯示警告
+    if (store.is_suspicious) {
+        iconDisplay = '⚠️';
+        glowStyle = 'box-shadow:0 0 20px rgba(255,184,0,0.8),0 0 40px rgba(255,184,0,0.4);';
+        borderColor = '#FFB800';
+        baseColor = '#FF6B00';
+    }
+    
+    // ✅ 等級 2 和 3 的個人標記才覆蓋編號
+    if (levelInfo.level === 2) {
         iconDisplay = '✨';
         glowStyle = 'box-shadow:0 0 20px rgba(212,175,55,0.6),0 0 40px rgba(212,175,55,0.3);';
         levelClass = 'marker-level-2';
@@ -1456,9 +1454,10 @@ if (store.is_suspicious) {
         glowStyle = 'box-shadow:0 0 30px rgba(255,215,0,0.5),0 0 60px rgba(255,215,0,0.25);';
         levelClass = 'marker-level-3';
     }
+    // 等級 1 不覆蓋編號
     
     var markerHtml = '<div class="' + levelClass + '" style="position:relative;width:36px;height:44px;background:' + baseColor + ';border:2px solid ' + borderColor + ';border-radius:50% 50% 50% 0;transform:rotate(-45deg);' + glowStyle + 'display:flex;align-items:center;justify-content:center;cursor:pointer;">' +
-        '<span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);line-height:1;z-index:2;">' + iconDisplay + '</span>' +
+        '<span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:12px;text-shadow:0 1px 4px rgba(0,0,0,0.5);line-height:1;z-index:2;">' + iconDisplay + '</span>' +
     '</div>';
     
     return L.divIcon({
@@ -1469,6 +1468,7 @@ if (store.is_suspicious) {
         popupAnchor: [0, -48]
     });
 }
+
 // ============================================================
 // STATE 管理 (load/save/renderPoints)
 // ============================================================
@@ -3953,7 +3953,7 @@ function getArithmeticCenter(coords) {
 }
 map.on('dragstart', function() {
     // 保持 popup 開啟
-    if (map._popup) {
+    if (map._popup && map._popup._content) {
         map._popup._closeOnMove = false;
     }
 });
@@ -4063,13 +4063,14 @@ function updateMapMarkers() {
     var marker = L.marker([group.lat, group.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="position:relative;width:36px;height:44px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;">' +
-              '<span style="transform:rotate(45deg);color:' + textColor + ';font-weight:900;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;">' + count + '</span>' +
+        html: '<div style="position:relative;min-width:50px;height:36px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;">' +
+              '<span style="color:' + textColor + ';font-weight:900;font-size:10px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + key + '</span>' +
               '</div>',
-        iconSize: [36, 44],
-        iconAnchor: [18, 44],
-        popupAnchor: [0, -48]
+        iconSize: [80, 36],
+        iconAnchor: [40, 18],
+        popupAnchor: [0, -20]
       }),
+
       isMall: true,
       mallName: key,
       totalStores: count
@@ -4864,7 +4865,6 @@ function openStoreFromMap(id) {
     return;
   }
   
-  // ✅ 地圖置中 + 調整 zoom + 開 popup
   var s = STORES.find(function(x) { return x.id === id; });
   if (!s || !s.lat || !s.lng) return;
   
@@ -4873,7 +4873,6 @@ function openStoreFromMap(id) {
     map.flyTo([s.lat, s.lng], 16, { duration: 1 });
     
     setTimeout(function() {
-      // 找到該店的 marker 並打開 popup
       markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.storeId === id) {
           layer.openPopup();
@@ -4885,7 +4884,6 @@ function openStoreFromMap(id) {
     }, 1100);
   }
 }
-
 // ============================================================
 // 店鋪實證表單 (雙向驗證版)
 // ============================================================
