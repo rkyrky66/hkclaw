@@ -796,20 +796,20 @@ var REGIONS = {
   hk: {
     label: "港島區",
     icon: "🏝️",
-    hot: ["銅鑼灣", "天后", "北角"],
-    more: ["中環", "金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔", "杏花邨", "黃竹坑"]
+    hot: ["銅鑼灣", "天后", "炮台山", "北角", "中環", "西營盤", "堅尼地城"],
+    more: ["金鐘", "上環", "灣仔", "鰂魚涌", "太古", "筲箕灣", "香港仔", "杏花邨", "黃竹坑"]
   },
   kl: {
     label: "九龍區",
     icon: "🏙️",
-    hot: ["旺角", "尖沙咀", "觀塘", "深水埗", "紅磡", "藍田"],
-    more: ["油麻地", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣", "秀茂坪", "油塘", "樂富", "啟德", "黃埔", "慈雲山", "大角咀", "荔枝角"]
+    hot: ["旺角", "尖沙咀", "佐敦", "油麻地", "觀塘", "深水埗", "長沙灣"],
+    more: ["紅磡", "藍田", "九龍城", "土瓜灣", "黃大仙", "牛頭角", "九龍灣", "秀茂坪", "油塘", "樂富", "啟德", "黃埔", "慈雲山", "大角咀", "荔枝角", "何文田", "宋皇臺", "南昌", "柯士甸"]
   },
   nt: {
     label: "新界區",
     icon: "🌳",
-    hot: ["屯門", "荃灣", "元朗", "葵芳", "將軍澳", "大埔"],
-    more: ["葵興", "天水圍", "沙田", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌", "昂坪", "坑口", "調景嶺", "日出康城", "西貢"]
+    hot: ["屯門", "荃灣", "元朗", "葵芳", "將軍澳", "大埔", "沙田", "石門"],
+    more: ["葵興", "天水圍", "大圍", "馬鞍山", "上水", "粉嶺", "青衣", "東涌", "昂坪", "坑口", "調景嶺", "日出康城", "康城", "西貢"]
   }
 };
 
@@ -2529,6 +2529,24 @@ const CheckinManager = {
     await recordTaskCompletion('checkin');
     
     toast(`✅ 簽到成功！獲得 ${bonus} 分（${bonusMsg}）`, 'green');
+        // ✅ 檢查是否連續簽到 7 天
+    var weeklyProgress = getWeeklyCheckinProgress();
+    if (weeklyProgress.count >= 7 && !STATE.extendedPostLifespan) {
+        STATE.extendedPostLifespan = true;
+        save();
+        toast('🎉 連續簽到 7 天！永久解鎖戰績 2 天存活！', 'gold');
+        
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            try {
+                await supabaseClientInstance
+                    .from('user_profiles')
+                    .update({ extended_post_lifespan: true })
+                    .eq('id', STATE.user.user_id);
+            } catch (e) {
+                console.warn('⚠️ 解鎖狀態同步失敗:', e.message);
+            }
+        }
+    }
     showView('task');
     return true;
   },
@@ -3094,6 +3112,10 @@ async function syncUserDataAfterBind(user) {
     if (existingResult.error) throw existingResult.error;
     
     var existingUser = existingResult.data;
+        if (existingUser && existingUser.extended_post_lifespan) {
+        STATE.extendedPostLifespan = true;
+        save();
+    }
     var isNewUser = !existingUser;  // ✅ 是否為新用戶
     var userId = null;
     
@@ -6718,14 +6740,14 @@ async function submitPlayerPost() {
         var storeId = document.getElementById('lp-store-id')?.value;
         if (!storeId) { 
             toast('請選擇店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            enableSubmitButton(submitBtn, '✅ 發布戰報');
             return; 
         }
         
         var store = STORES.find(function(s) { return s.id === storeId; });
         if (!store) { 
             toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            enableSubmitButton(submitBtn, '✅ 發布戰報');
             return; 
         }
         
@@ -6733,7 +6755,7 @@ async function submitPlayerPost() {
         
         if (!gpsLat || !gpsLng) {
             toast('📍 請先開啟 GPS 定位，以確保實況資訊的真實性', 'pink');
-            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            enableSubmitButton(submitBtn, '✅ 發布戰報');
             return;
         }
         
@@ -6741,13 +6763,11 @@ async function submitPlayerPost() {
             var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
             var distanceMeters = Math.round(distance * 1000);
             if (distance > 0.5) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布戰報\n\n實況資訊的真實性是我們的核心價值', 'pink');
-                enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布戰報', 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布戰報');
                 return;
             }
             toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
-        } else {
-            toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
         }
         
         var selectedTags = [];
@@ -6768,8 +6788,8 @@ async function submitPlayerPost() {
                         var url = await uploadImage(file, 'posts');
                         photos.push(url);
                     } catch (e) {
-                        toast('第 ' + (i + 1) + ' 張圖片上傳失敗: ' + e.message, 'pink');
-                        enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                        toast('第 ' + (i + 1) + ' 張圖片上傳失敗', 'pink');
+                        enableSubmitButton(submitBtn, '✅ 發布戰報');
                         return;
                     }
                 } else {
@@ -6784,8 +6804,8 @@ async function submitPlayerPost() {
                     var singleUrl = await uploadImage(singleFile, 'posts');
                     photos.push(singleUrl);
                 } catch (e) {
-                    toast('圖片上傳失敗: ' + e.message, 'pink');
-                    enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+                    toast('圖片上傳失敗', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 發布戰報');
                     return;
                 }
             } else {
@@ -6795,11 +6815,29 @@ async function submitPlayerPost() {
         
         if (photos.length === 0) {
             toast('請先拍照', 'pink');
-            enableSubmitButton(submitBtn, '✅ 發布戰報（+5 分）');
+            enableSubmitButton(submitBtn, '✅ 發布戰報');
             return;
         }
         
         var content = selectedTags.length > 0 ? selectedTags.join(' · ') : '🎉 出貨成功！';
+        
+        // ✅ 計算今日已發佈次數，決定是否扣分
+        var today = todayKey();
+        var dailyData = daily();
+        var postCount = dailyData.live || 0;
+        var isFree = postCount < 2;
+        
+        if (isFree) {
+            toast('🎯 今日第 ' + (postCount + 1) + ' 次免費發布（共 2 次免費）', 'green');
+        } else {
+            if (STATE.points < 10) {
+                toast('⚠️ 積分不足 10 分，無法發布（今日前 2 次免費已用完）', 'pink');
+                enableSubmitButton(submitBtn, '✅ 發布戰報');
+                return;
+            }
+            toast('💡 今日第 ' + (postCount + 1) + ' 次發布，扣除 10 積分', 'gold');
+        }
+        
         var post = {
             id: 'p' + Date.now() + '_' + uid(),
             track: 'player',
@@ -6814,7 +6852,7 @@ async function submitPlayerPost() {
             author_device: STATE.user.device,
             author_user_id: STATE.user.user_id || null,
             ts: now(),
-            expire: now() + DAY,
+            expire: now() + (STATE.extendedPostLifespan ? 2 * DAY : DAY),
             likes: [],
             likeCount: 0,
             is_linked: false,
@@ -6827,10 +6865,17 @@ async function submitPlayerPost() {
         save();
         
         await syncLivePost(post);
-        await addPoints(5, '發布出貨戰報');
-        updateStreak();
         
-        // 記錄任務進度 (分享戰績)
+        if (isFree) {
+            await addPoints(5, '發布出貨戰報');
+        } else {
+            await addPoints(-10, '發布戰報（超過免費次數）');
+        }
+        
+        dailyData.live = postCount + 1;
+        save();
+        
+        updateStreak();
         await recordTaskCompletion('share');
         await recordRegionContribution('post', store.region, storeId);
         
@@ -7445,6 +7490,7 @@ function selectStoreSuggestion(prefix, storeId, storeName) {
 // ============================================================
 function viewFind() {
   var recent = STATE.recentRegions || [];
+  
   var renderRegionGroupFn = function(groupKey) {
     var data = REGIONS[groupKey];
     var isOpen = regionGroupOpen[groupKey];
@@ -7455,13 +7501,68 @@ function viewFind() {
     if (data.more.length > 0) items.push(isMoreOpen ? '📍 收起' : '📍 更多');
     return '<div class="mb-3 animate-pop"><div class="grid grid-cols-4 gap-2">' + items.map(function(item) {
       if (item === '📍 更多' || item === '📍 收起') {
-        return '<button onclick="toggleMoreRegions(\'' + groupKey + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (isMoreOpen ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60') + '">' + item + '</button>';
+        return '<button onclick="toggleMoreRegions(\'' + groupKey + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (isMoreOpen ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
       }
-      return '<button onclick="setRegion(\'' + item + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (findState.region === item ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60') + '">' + item + '</button>';
+      return '<button onclick="setRegion(\'' + item + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (findState.region === item ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
     }).join('') + '</div></div>';
   };
   
-  return '\n    <div class="mb-3 mt-4 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> GPS · 附近店舖</div>\n      <button onclick="refreshGPS()" class="rounded-full border border-neongreen/40 px-3 py-1 text-xs text-neongreen">重新定位</button>\n    </div>\n    ' + (recent.length > 0 ? '<div class="mb-3"><p class="mb-1.5 text-[10px] font-bold text-white/40">🕐 最近搜索</p><div class="flex flex-wrap gap-2">' + recent.map(function(r) { return '<button onclick="setRegion(\'' + r + '\')" class="rounded-full border py-1.5 px-3 text-center text-xs transition-all ' + (findState.region === r ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold hover:border-gold/60') + '">' + r + '</button>'; }).join('') + '</div></div>' : '<div class="mb-3"><p class="mb-1.5 text-[10px] text-white/30">🕐 最近搜索（選擇地區後會顯示在這裡）</p></div>') + '\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45 hover:border-gold/40 hover:text-gold') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
+  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStores()" />\n    </div>\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n    <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">類型</p>\n      <div class="flex flex-wrap gap-2">\n        <button onclick="toggleTypeFilter(\'all\')" id="type-all" class="chip-active-gold rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☑ 全部</button>\n        <button onclick="toggleTypeFilter(\'mall\')" id="type-mall" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 商場</button>\n        <button onclick="toggleTypeFilter(\'mall-store\')" id="type-mall-store" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 商場鋪</button>\n        <button onclick="toggleTypeFilter(\'street\')" id="type-street" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">☐ 地鋪</button>\n      </div>\n    </div>\n    <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
+}
+
+// FILTER 狀態
+var findTypeFilters = { all: true, mall: true, mallStore: true, street: true };
+
+function toggleTypeFilter(type) {
+    if (type === 'all') {
+        var allChecked = !findTypeFilters.all;
+        findTypeFilters = { all: allChecked, mall: allChecked, mallStore: allChecked, street: allChecked };
+    } else {
+        findTypeFilters[type] = !findTypeFilters[type];
+        if (findTypeFilters.mall && findTypeFilters.mallStore && findTypeFilters.street) {
+            findTypeFilters.all = true;
+        } else {
+            findTypeFilters.all = false;
+        }
+    }
+    updateTypeFilterUI();
+    showView('find');
+}
+
+function updateTypeFilterUI() {
+    var types = ['all', 'mall', 'mall-store', 'street'];
+    types.forEach(function(t) {
+        var el = document.getElementById('type-' + t);
+        if (el) {
+            var isChecked = findTypeFilters[t];
+            el.classList.toggle('chip-active-gold', isChecked);
+            el.textContent = (isChecked ? '☑ ' : '☐ ') + el.textContent.replace(/^[☑☐] /, '');
+        }
+    });
+}
+
+function resetFindFilters() {
+    findState.region = '全部';
+    findTypeFilters = { all: true, mall: true, mallStore: true, street: true };
+    regionGroupOpen = { hk: false, kl: false, nt: false };
+    moreRegionsOpenMap = { hk: false, kl: false, nt: false };
+    document.getElementById('find-search') ? document.getElementById('find-search').value = '' : '';
+    document.getElementById('find-sort') ? document.getElementById('find-sort').value = 'name' : '';
+    showView('find');
+}
+
+var findSearchQuery = '';
+function searchStores() {
+    var input = document.getElementById('find-search');
+    findSearchQuery = input ? input.value.trim() : '';
+    showView('find');
+}
+
+var findSortMethod = 'name';
+function applySort() {
+    var select = document.getElementById('find-sort');
+    findSortMethod = select ? select.value : 'name';
+    showView('find');
 }
 
 function renderStoreList() {
@@ -7477,29 +7578,88 @@ function renderStoreList() {
     return s._dist.toFixed(1) + "km";
   };
   
-  var html = pageItems.map(function(s) {
+  function renderStoreCard(s) {
     var isVerified = s.status === "verified" || s.verified === "verified";
     var badge = isVerified ? '<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen whitespace-nowrap">✅ 已認證</span>' : '<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400 whitespace-nowrap">⏳ 審核中</span>';
     var borderClass = isVerified ? "border-gold/25 hover:border-gold/60" : "border-yellow-400/30 border-dashed hover:border-yellow-400/60";
     var distDisplay = (userLocation && s.lat && s.lng) ? '<span class="text-neonpink neon-pink whitespace-nowrap">📍 ' + formatDist(s) + '</span>' : '<span class="text-white/40 whitespace-nowrap">📍 ' + (s.dist || '?') + ' km</span>';
     
-        return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-2xl border ' + borderClass + ' bg-zinc-950 p-4 text-left transition-all">\n      <div class="flex gap-3">\n        <div class="shrink-0">' + (s.photo ? '<img src="' + s.photo + '" class="h-16 w-16 rounded-lg object-cover" alt="' + s.name + '" />' : '<div class="flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-800 text-3xl">🏪</div>') + '</div>\n        <div class="min-w-0 flex-1">\n          <div class="flex items-start justify-between gap-2">\n            <div class="min-w-0 flex-1">\n              <h3 class="font-black text-gold truncate">' + s.name + '</h3>\n              <p class="mt-0.5 text-xs text-white/50 truncate">' + s.region + ' · ' + s.addr + '</p>\n            </div>\n            <div class="shrink-0">' + badge + '</div>\n          </div>\n          <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-white/50">' + distDisplay + '<span class="whitespace-nowrap">🎰 ' + s.machines.length + ' 部機台</span><span class="whitespace-nowrap">' + (s.size === 'small' ? '小型' : s.size === 'large' ? '大型' : '中型') + (s.hour24 ? ' · 24H' : '') + (s.token ? ' · 需代幣' : '') + '</span></div>\n        </div>\n      </div>\n    </button>';
-  }).join('');
+    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-2xl border ' + borderClass + ' bg-zinc-950 p-4 text-left transition-all">\n      <div class="flex gap-3">\n        <div class="shrink-0">' + (s.photo ? '<img src="' + s.photo + '" class="h-16 w-16 rounded-lg object-cover" alt="' + s.name + '" />' : '<div class="flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-800 text-3xl">🏪</div>') + '</div>\n        <div class="min-w-0 flex-1">\n          <div class="flex items-start justify-between gap-2">\n            <div class="min-w-0 flex-1">\n              <h3 class="font-black text-gold truncate">' + s.name + '</h3>\n              <p class="mt-0.5 text-xs text-white/50 truncate">' + s.region + ' · ' + (s.addr || '') + '</p>\n            </div>\n            <div class="shrink-0">' + badge + '</div>\n          </div>\n          <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-white/50">' + distDisplay + '<span class="whitespace-nowrap">🎰 ' + (s.machines ? s.machines.length : 0) + ' 部機台</span></div>\n        </div>\n      </div>\n    </button>';
+  }
+  
+  // 分組：商場 vs 地鋪
+  var mallGroups = {};
+  var standaloneStores = [];
+  pageItems.forEach(function(s) {
+    if (s.mall && s.mall !== '') {
+      if (!mallGroups[s.mall]) mallGroups[s.mall] = [];
+      mallGroups[s.mall].push(s);
+    } else {
+      standaloneStores.push(s);
+    }
+  });
+  
+  var html = '';
+  
+  // 商場群組（摺疊，預設收起）
+  Object.keys(mallGroups).forEach(function(mallName) {
+    var stores = mallGroups[mallName];
+    var mallDist = (userLocation && stores[0].lat && stores[0].lng) ? formatDist(stores[0]) : '';
+    html += '<button onclick="toggleMallExpand(this)" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-3 text-left transition-all">\n      <div class="flex items-center justify-between">\n        <span class="font-bold text-gold text-sm">🏬 ' + mallName + '</span>\n        <span class="text-[10px] text-white/40">' + stores.length + ' 間店鋪 ' + (mallDist ? ' · 📍' + mallDist : '') + ' ▼</span>\n      </div>\n    </button>\n    <div class="hidden space-y-2 pl-2 mt-1">' + stores.map(function(s) { return renderStoreCard(s); }).join('') + '</div>\n    ';
+  });
+  
+  // 地鋪
+  standaloneStores.forEach(function(s) {
+    html += renderStoreCard(s);
+  });
   
   var moreBtn = hasMore ? '<button onclick="loadMoreStores()" class="mt-2 w-full rounded-2xl border border-gold/40 bg-zinc-950 py-4 text-center text-gold hover:border-gold/60 transition-all">🔽 顯示更多（' + (list.length - PAGE_SIZE) + ' 間）</button>' : '';
   return html + moreBtn;
 }
 
+// 商場摺疊
+function toggleMallExpand(btn) {
+  var nextDiv = btn.nextElementSibling;
+  if (nextDiv) {
+    nextDiv.classList.toggle('hidden');
+    btn.textContent = nextDiv.classList.contains('hidden') ? btn.textContent.replace('▲', '▼') : btn.textContent.replace('▼', '▲');
+  }
+}
 function filteredStores() {
   var list = STORES.slice();
+  
+  // 地區篩選
   if (findState.region !== "全部" && findState.region !== "") list = list.filter(function(s) { return s.region === findState.region; });
-  if (userLocation) {
-    list.forEach(function(s) { s._dist = (s.lat && s.lng) ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999; });
-    list.sort(function(a, b) { return a._dist - b._dist; });
-  } else {
-    list.forEach(function(s) { s._dist = parseFloat(s.dist) || 9999; });
-    list.sort(function(a, b) { return a._dist - b._dist; });
+  
+  // 類型篩選
+  if (!findTypeFilters.all) {
+      list = list.filter(function(s) {
+          var isMall = s.mall && s.mall !== '';
+          var isStreet = !isMall;
+          if (findTypeFilters.mall && isMall) return true;
+          if (findTypeFilters.mallStore && isMall) return true;
+          if (findTypeFilters.street && isStreet) return true;
+          return false;
+      });
   }
+  
+  // 搜索
+  if (findSearchQuery) {
+      list = list.filter(function(s) { return s.name.toLowerCase().includes(findSearchQuery.toLowerCase()); });
+  }
+  
+  // 排序
+  if (findSortMethod === 'name') {
+      list.sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-HK'); });
+  } else if (findSortMethod === 'hot') {
+      list.sort(function(a, b) { return (b.verification_count || 0) - (a.verification_count || 0); });
+  } else if (findSortMethod === 'distance') {
+      if (userLocation) {
+          list.forEach(function(s) { s._dist = (s.lat && s.lng) ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999; });
+          list.sort(function(a, b) { return a._dist - b._dist; });
+      }
+  }
+  
   allFilteredStores = list;
   currentPage = 0;
   return list;
