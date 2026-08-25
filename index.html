@@ -588,6 +588,9 @@ input, select, textarea { font-size: 16px; }
 <h1 class="text-2xl font-black tracking-tight">
 <span class="neon-green flicker">爪爪</span><span class="text-gold">情報站</span>
 </h1>
+<button onclick="showNotifications()" class="flex items-center gap-1 rounded-full border border-gold/50 bg-black/60 px-3 py-1 text-sm font-black text-gold">
+🔔
+</button>
 <button id="points-badge" onclick="showView('me')" class="flex items-center gap-1 rounded-full border border-gold/50 bg-black/60 px-3 py-1 text-sm font-black text-gold glow-gold">
 💎 <span id="points-top">0</span>
 </button>
@@ -4622,6 +4625,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
     }
     
     var photoHtml = buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel);
+    var adBanner = isAdFree() ? '' : '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;text-align:center;color:rgba(255,255,255,0.3);font-size:10px;margin-bottom:8px;height:50px;display:flex;align-items:center;justify-content:center;">[ 廣告 ]</div>';
         // ✅ 投票顯示
     var allVotes = window._allFieldVotes || [];
     var storeVotes = allVotes.filter(function(v) { return String(v.store_id) === String(s.id); });
@@ -4745,7 +4749,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
         machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
     }
     
-    return '\n    <div class="flex items-start justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div class="flex-1 min-w-0">\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-1">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n          <span class="ml-auto text-[10px] text-yellow-400 whitespace-nowrap">' + 
+    return adBanner + '\n    <div class="flex items-start justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div class="flex-1 min-w-0">\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-1">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n          <span class="ml-auto text-[10px] text-yellow-400 whitespace-nowrap">' + 
     (totalVerifications >= 2 ? '✅已認證' : '認證中(' + totalVerifications + '/2)') + 
     (s.supplement_photo ? ' ✅已補充' : '') + 
 '</span>\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors flex-shrink-0">✕</button>\n    </div>\n    ' + photoHtml + '\n    \n    <!-- 第一 ROW：認證 + 補充 -->\n    <div class="mt-3 flex gap-2 flex-shrink-0">\n' +
@@ -6589,24 +6593,24 @@ function viewLive() {
    
   var html = '';
   var filteredPosts = validPosts.filter(function(x) { 
-    if (liveTrack === 'mine') {
-        return x.author_device === STATE.user.device;
-    }
-    return x.track === liveTrack; 
-});
+      if (liveTrack === 'mine') {
+          return x.author_device === STATE.user.device;
+      }
+      return x.track === liveTrack; 
+  });
   
   html += '<div class="flex gap-2">';
   html += '<button onclick="setLiveTrack(\'player\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "player" ? "border-neongreen text-neongreen glow-green" : "border-white/20 text-white/45") + '">🎯 夾客分享</button>';
-  html += '<button onclick="setLiveTrack(\'owner\')" ...>🏬 台主宣傳</button>';
-html += '<button onclick="setLiveTrack(\'mine\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "mine" ? "border-gold text-gold glow-gold" : "border-white/20 text-white/45") + '">👤 我的貼文</button>';
-html += '</div>';
-  
-  html += '<div class="mt-3 rounded-xl border ' + (liveTrack === "player" ? "border-neongreen/30" : "border-neonpink/30") + ' bg-zinc-950 p-3 text-[11px] text-white/60">';
-  html += (liveTrack === "player" ? "🎯 分享你的夾娃娃戰果！" : liveTrack === "owner" ? "🏬 台主專屬宣傳區！" : "👤 你發布的貼文");
+  html += '<button onclick="setLiveTrack(\'owner\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "owner" ? "border-neonpink text-neonpink glow-pink" : "border-white/20 text-white/45") + '">🏬 台主宣傳</button>';
+  html += '<button onclick="setLiveTrack(\'mine\')" class="flex-1 rounded-xl border py-2 text-sm font-black ' + (liveTrack === "mine" ? "border-gold text-gold glow-gold" : "border-white/20 text-white/45") + '">👤 我的貼文</button>';
   html += '</div>';
   
-  html += '<button onclick="' + (liveTrack === "player" ? "openPlayerPost()" : "openOwnerPost()") + '" class="mt-3 w-full rounded-2xl py-3 font-black ' + (liveTrack === "player" ? "bg-neongreen text-black glow-green" : "bg-neonpink text-black glow-pink") + '">';
-  html += (liveTrack === "player" ? "🎯 發布出貨戰報" : "🏬 發布台主宣傳");
+  html += '<div class="mt-3 rounded-xl border ' + (liveTrack === "player" ? "border-neongreen/30" : liveTrack === "owner" ? "border-neonpink/30" : "border-gold/30") + ' bg-zinc-950 p-3 text-[11px] text-white/60">';
+  html += (liveTrack === "player" ? "🎯 分享你的夾娃娃戰果！前 2 次免費，之後每次 10 積分" : liveTrack === "owner" ? "🏬 台主專屬宣傳區！" : "👤 你發布的貼文");
+  html += '</div>';
+  
+  html += '<button onclick="' + (liveTrack === "player" ? "openPlayerPost()" : liveTrack === "owner" ? "openOwnerPost()" : "openPlayerPost()") + '" class="mt-3 w-full rounded-2xl py-3 font-black ' + (liveTrack === "player" ? "bg-neongreen text-black glow-green" : liveTrack === "owner" ? "bg-neonpink text-black glow-pink" : "bg-gold text-black glow-gold") + '">';
+  html += (liveTrack === "player" ? "🎯 發布出貨戰報" : liveTrack === "owner" ? "🏬 發布台主宣傳" : "🎯 發布出貨戰報");
   html += '</button>';
   
   html += '<div class="mt-4 space-y-3">';
@@ -6624,17 +6628,18 @@ html += '</div>';
   ];
   
   if (filteredPosts.length > 0) {
+    var postIndex = 0;
     html += filteredPosts.map(function(p) {
+      postIndex++;
       var hasLiked = p.likes && p.likes.includes(STATE.user.device);
       var isOwner = p.author_device === STATE.user.device;
       var storeName = p.store_name ? '📍 ' + p.store_name : '';
       var daysLeft = Math.ceil((p.expire - now()) / DAY);
       var reactions = p.reactions || {};
       
-      // 顯示前 3 個有反應的感想 + 更多按鈕
       var reactionHtml = '';
-     var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
-var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
+      var visibleReactions = REACTIONS_LIST.filter(function(r) { return !r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
+      var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && reactions[r.key] && reactions[r.key].length > 0; });
       var allReactions = visibleReactions.concat(hiddenReactions);
       
       if (allReactions.length > 0) {
@@ -6643,44 +6648,41 @@ var hiddenReactions = REACTIONS_LIST.filter(function(r) { return r.hidden && rea
         }).join(' · ');
       }
       
-      // 互動按鈕
       var firstThree = REACTIONS_LIST.filter(function(r) { return !r.hidden; });
       var hiddenOnes = REACTIONS_LIST.filter(function(r) { return r.hidden; });
       
-var interactionHtml = '';
-if (!isOwner) {
-    // 檢查用戶已選的感受
-    var userReactionKey = '';
-    Object.keys(reactions).forEach(function(key) {
-        if (reactions[key] && reactions[key].includes(STATE.user.device)) {
-            userReactionKey = key;
-        }
-    });
-    
-    interactionHtml += '<div class="mt-2 flex flex-wrap gap-1.5">';
-    firstThree.forEach(function(r) {
-        var isSelected = userReactionKey === r.key;
-        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
-    });
-    interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-gold/40 px-2 py-1 text-[10px] font-bold text-gold hover:bg-gold/10 transition-all">更多</button>';
-    interactionHtml += '</div>';
-    interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
-    hiddenOnes.forEach(function(r) {
-        var isSelected = userReactionKey === r.key;
-        interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
-    });
-    interactionHtml += '</div>';
-    
-    // 顯示用戶已選的感受
-    if (userReactionKey) {
-        var selectedLabel = REACTIONS_LIST.find(function(r) { return r.key === userReactionKey; });
-        if (selectedLabel) {
-            interactionHtml += '<p class="mt-1 text-[10px] text-neongreen">你已表示「' + selectedLabel.label + '」</p>';
-        }
-    }
-}
+      var interactionHtml = '';
+      if (!isOwner) {
+          var userReactionKey = '';
+          Object.keys(reactions).forEach(function(key) {
+              if (reactions[key] && reactions[key].includes(STATE.user.device)) {
+                  userReactionKey = key;
+              }
+          });
+          
+          interactionHtml += '<div class="mt-2 flex flex-wrap gap-1.5">';
+          firstThree.forEach(function(r) {
+              var isSelected = userReactionKey === r.key;
+              interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
+          });
+          interactionHtml += '<button onclick="toggleMoreReactions(this)" class="rounded-full border border-gold/40 px-2 py-1 text-[10px] font-bold text-gold hover:bg-gold/10 transition-all">更多</button>';
+          interactionHtml += '</div>';
+          interactionHtml += '<div class="hidden mt-1 flex flex-wrap gap-1.5" id="more-reactions-' + p.id + '">';
+          hiddenOnes.forEach(function(r) {
+              var isSelected = userReactionKey === r.key;
+              interactionHtml += '<button onclick="toggleReaction(\'' + p.id + '\', \'' + r.key + '\')" class="rounded-full border px-2 py-1 text-[10px] font-bold transition-all ' + (isSelected ? 'border-neongreen bg-neongreen/20 text-neongreen' : 'border-gold/40 text-gold hover:bg-gold/10') + '">' + r.label + '</button>';
+          });
+          interactionHtml += '</div>';
+          
+          if (userReactionKey) {
+              var selectedLabel = REACTIONS_LIST.find(function(r) { return r.key === userReactionKey; });
+              if (selectedLabel) {
+                  interactionHtml += '<p class="mt-1 text-[10px] text-neongreen">你已表示「' + selectedLabel.label + '」</p>';
+              }
+          }
+      }
       
-      return '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
+      var postHtml = '<div class="rounded-2xl border border-' + (p.track === "player" ? 'neongreen' : 'neonpink') + '/30 bg-zinc-950 p-3">' +
         (p.photos && p.photos.length > 0 ? 
     '<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">' + 
     p.photos.map(function(ph, idx) {
@@ -6690,7 +6692,7 @@ if (!isOwner) {
     (p.photo ? '<img src="' + p.photo + '" class="h-48 w-full rounded-lg object-cover cursor-pointer" onclick="openImageLightbox(\'' + p.photo + '\')" />' : '<div class="flex h-28 items-center justify-center rounded-lg bg-black/50 text-4xl">' + (p.track === "player" ? "🎉" : "🖼️") + '</div>')) +
         '<div class="mt-2 flex items-start justify-between">' +
           '<div>' +
-            '<p class="text-sm text-white/80">' + (p.content || p.prize || '無內容') + '</p>' +
+            '<p class="text-sm text-white/80">' + (p.content || '無內容') + '</p>' +
             (storeName ? '<p class="text-xs text-gold/60 mt-1">' + storeName + '</p>' : '') +
             (p.is_linked ? '<span class="text-[9px] text-neongreen">🔗 已連結機台 (' + daysLeft + '天)</span>' : '') +
             (isOwner ? '<span class="text-[9px] text-neonpink ml-1">👑 我的貼文</span>' : '') +
@@ -6709,15 +6711,21 @@ if (!isOwner) {
         (reactionHtml ? '<div class="mt-1">' + reactionHtml + '</div>' : '') +
         interactionHtml +
       '</div>';
+      
+      // ✅ 每 5 篇插入廣告卡
+      if (postIndex % 5 === 0 && !isAdFree()) {
+          postHtml += '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;text-align:center;color:rgba(255,255,255,0.3);font-size:10px;margin-top:12px;">[ 廣告 ]</div>';
+      }
+      
+      return postHtml;
     }).join('');
   } else {
-    html += '<p class="text-center text-sm text-white/40 py-6">暫無戰報，快來發布第一個！</p>';
+    html += '<p class="text-center text-sm text-white/40 py-6">' + (liveTrack === 'mine' ? '你還沒有發布貼文' : '暫無戰報，快來發布第一個！') + '</p>';
   }
   
   html += '</div>';
   return html;
 }
-
 
 function setLiveTrack(track) { 
     liveTrack = track; 
@@ -7489,6 +7497,7 @@ function selectStoreSuggestion(prefix, storeId, storeName) {
 // 找店頁面
 // ============================================================
 function viewFind() {
+  setTimeout(function() { showFindAd(); }, 1000);
   var recent = STATE.recentRegions || [];
   
   var renderRegionGroupFn = function(groupKey) {
@@ -10115,6 +10124,198 @@ function toast(msg, color) {
   setTimeout(function() { return el.remove(); }, 2200);
 }
 // ============================================================
+// 站內通知系統
+// ============================================================
+async function addNotification(type, message) {
+    if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
+    
+    try {
+        await supabaseClientInstance
+            .from('user_notifications')
+            .insert({
+                user_id: STATE.user.user_id,
+                type: type,
+                message: message,
+                is_read: false,
+                created_at: new Date().toISOString()
+            });
+    } catch (e) {
+        console.warn('⚠️ 通知寫入失敗:', e.message);
+    }
+}
+
+async function loadNotifications() {
+    if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return [];
+    
+    try {
+        var result = await supabaseClientInstance
+            .from('user_notifications')
+            .select('*')
+            .eq('user_id', STATE.user.user_id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+        
+        if (result.error) return [];
+        return result.data || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function showNotifications() {
+    loadNotifications().then(function(notifications) {
+        if (notifications.length === 0) {
+            toast('暫無通知', 'gold');
+            return;
+        }
+        
+        var html = notifications.map(function(n) {
+            return '<div class="flex items-center gap-3 py-2 border-b border-white/10">' +
+                '<span class="text-lg">' + (n.is_read ? '📩' : '🔔') + '</span>' +
+                '<span class="flex-1 text-xs text-white/70">' + n.message + '</span>' +
+                '<span class="text-[10px] text-white/30">' + timeAgo(new Date(n.created_at).getTime()) + '</span>' +
+            '</div>';
+        }).join('');
+        
+        openModal('<div class="flex items-center justify-between border-b border-gold/30 pb-3"><h2 class="font-black text-gold">🔔 通知</h2><button onclick="closeModal()" class="text-2xl text-white/50">✕</button></div><div class="mt-4 overflow-y-auto" style="max-height:60vh;">' + html + '</div>', '關閉');
+    });
+}
+// ============================================================
+// 廣告顯示系統（模擬）
+// ============================================================
+function isAdFree() {
+    return STATE.adFree && STATE.filterPassUntil > now();
+}
+
+function showAdBlock(containerId) {
+    if (isAdFree()) return '';
+    return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;text-align:center;color:rgba(255,255,255,0.3);font-size:10px;">[ 廣告 ]</div>';
+}
+
+function showSplashAd() {
+    if (isAdFree()) return;
+    
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    overlay.innerHTML = 
+        '<div style="text-align:center;">' +
+            '<div style="width:80%;max-width:300px;height:300px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:18px;margin-bottom:20px;">[ 廣告 ]</div>' +
+            '<div style="width:80%;max-width:300px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">' +
+                '<div id="splash-progress" style="height:100%;width:0%;background:#D4AF37;transition:width 0.3s;"></div>' +
+            '</div>' +
+            '<p id="splash-text" style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.5);">載入中...</p>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    
+    var progress = 0;
+    var interval = setInterval(function() {
+        progress += 5;
+        var progressEl = document.getElementById('splash-progress');
+        if (progressEl) progressEl.style.width = progress + '%';
+        if (progress >= 100) {
+            clearInterval(interval);
+            overlay.remove();
+        }
+    }, 150);  // 3 秒
+}
+
+function showMapAd() {
+    if (isAdFree()) return;
+    var lastShown = localStorage.getItem('map_ad_last_shown');
+    if (lastShown && (now() - parseInt(lastShown)) < HOUR) return;
+    localStorage.setItem('map_ad_last_shown', String(now()));
+    
+    var adContainer = document.createElement('div');
+    adContainer.style.cssText = 'position:fixed;bottom:80px;right:10px;z-index:100;width:120px;background:rgba(20,20,20,0.9);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:8px;';
+    adContainer.innerHTML = 
+        '<div style="display:flex;justify-content:flex-end;"><button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:14px;cursor:pointer;">✕</button></div>' +
+        '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:10px;">[ 廣告 ]</div>';
+    document.body.appendChild(adContainer);
+}
+
+function showFindAd() {
+    if (isAdFree()) return;
+    var lastShown = localStorage.getItem('find_ad_last_shown');
+    if (lastShown && (now() - parseInt(lastShown)) < HOUR) return;
+    localStorage.setItem('find_ad_last_shown', String(now()));
+    
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = 
+        '<div style="text-align:center;width:90%;max-width:320px;">' +
+            '<div style="height:200px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:16px;">[ 廣告 ]</div>' +
+            '<button id="find-ad-close" disabled style="margin-top:16px;padding:12px 24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:rgba(255,255,255,0.3);font-size:14px;cursor:not-allowed;">5 秒後關閉</button>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    
+    var countdown = 5;
+    var interval = setInterval(function() {
+        countdown--;
+        var btn = document.getElementById('find-ad-close');
+        if (btn) {
+            if (countdown <= 0) {
+                clearInterval(interval);
+                btn.textContent = '關閉';
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+                btn.style.background = '#D4AF37';
+                btn.style.color = '#000';
+                btn.onclick = function() { overlay.remove(); };
+            } else {
+                btn.textContent = countdown + ' 秒後關閉';
+            }
+        }
+    }, 1000);
+}
+
+function showRewardAd() {
+    if (!requireLogin('看廣告')) return;
+    
+    var today = todayKey();
+    var dailyData = daily();
+    var adCount = dailyData.ad || 0;
+    
+    if (adCount >= 2) {
+        toast('今日已達看廣告上限（2 次）', 'gold');
+        return;
+    }
+    
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = 
+        '<div style="text-align:center;width:90%;max-width:320px;">' +
+            '<div style="height:200px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:16px;">[ 廣告 ]</div>' +
+            '<p style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.5);">觀看廣告後 +20 積分</p>' +
+            '<button id="reward-ad-close" disabled style="margin-top:16px;padding:12px 24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:rgba(255,255,255,0.3);font-size:14px;cursor:not-allowed;">3 秒後領取</button>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    
+    var countdown = 3;
+    var interval = setInterval(function() {
+        countdown--;
+        var btn = document.getElementById('reward-ad-close');
+        if (btn) {
+            if (countdown <= 0) {
+                clearInterval(interval);
+                btn.textContent = '✅ 領取 20 積分';
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+                btn.style.background = '#00FF00';
+                btn.style.color = '#000';
+                btn.onclick = function() {
+                    overlay.remove();
+                    dailyData.ad = adCount + 1;
+                    save();
+                    addPoints(20, '觀看廣告獎勵');
+                };
+            } else {
+                btn.textContent = countdown + ' 秒後領取';
+            }
+        }
+    }, 1000);
+}
+
+// ============================================================
 // 特效觸發
 // ============================================================
 var _lastConfettiTime = 0;
@@ -10605,6 +10806,7 @@ const UserFocus = {
 // 啟動應用
 // ============================================================
 (async function initApp() {
+  showSplashAd();
   console.log('🚀 爪爪情報站啟動中...');
   await loadCloud();
   await checkUserBanStatus();
