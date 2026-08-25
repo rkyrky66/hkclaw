@@ -1426,14 +1426,15 @@ function createPersonalizedMarker(store) {
     
     // ✅ 取得該店在目前列表中的編號（預設）
     var storeIndex = 0;
-    var allVisibleStores = getStoresInBounds();
-    for (var i = 0; i < allVisibleStores.length; i++) {
-        if (allVisibleStores[i].id === store.id) {
-            storeIndex = i + 1;
-            break;
-        }
+var allVisibleStores = getStoresInBounds();
+var standaloneStores = allVisibleStores.filter(function(s) { return !s.mall || s.mall === ''; });
+for (var i = 0; i < standaloneStores.length; i++) {
+    if (standaloneStores[i].id === store.id) {
+        storeIndex = i + 1;
+        break;
     }
-    var iconDisplay = String(storeIndex);
+}
+    var iconDisplay = '#' + String(storeIndex);
     var levelClass = '';
     
     // ⚠️ 爭議店鋪優先顯示警告
@@ -4090,13 +4091,14 @@ function updateMapMarkers() {
         '👆 點擊查看店鋪列表' +
       '</div>';
     // 綁定 popup
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false,
-      autoPan: false
-    });
+marker.bindPopup(popupContent, { 
+    maxWidth: 220, 
+    minWidth: 180, 
+    className: 'custom-popup',
+    closeButton: false,
+    autoClose: false,
+    closeOnClick: false
+});
 
 
 
@@ -4150,13 +4152,14 @@ function updateMapMarkers() {
       '</div>';
 
           // 綁定 popup
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false,
-      autoPan: false
-    });
+marker.bindPopup(popupContent, { 
+    maxWidth: 220, 
+    minWidth: 180, 
+    className: 'custom-popup',
+    closeButton: false,
+    autoClose: false,
+    closeOnClick: false
+});
 
     
     // 點擊 popup 本身打開店鋪詳情
@@ -4259,7 +4262,7 @@ function renderMapStoreListWithData(inBounds) {
     var dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
     var statusLabel = '';
     var distText = formatDist(group.stores[0]);
-    return '<button onclick="openMallModal(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="text-gold font-bold text-sm">🏬</span>\n                <span class="font-bold text-gold text-sm truncate">' + group.mallName + '</span>\n                <span class="text-[9px] text-white/30">' + group.totalStores + ' 間</span>\n                              </div>\n              <p class="text-[11px] text-white/40 truncate">' + (group.stores[0]?.region || '') + ' · 點擊查看全部店鋪</p>\n            </div>\n            <span class="text-xs text-neonpink whitespace-nowrap">📍 ' + distText + '</span>\n          </div>\n        </button>';
+    return '<button onclick="openMallFromMap(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="text-gold font-bold text-sm">🏬</span>\n                <span class="font-bold text-gold text-sm truncate">' + group.mallName + '</span>\n                <span class="text-[9px] text-white/30">' + group.totalStores + ' 間</span>\n                              </div>\n              <p class="text-[11px] text-white/40 truncate">' + (group.stores[0]?.region || '') + ' · 點擊查看全部店鋪</p>\n            </div>\n            <span class="text-xs text-neonpink whitespace-nowrap">📍 ' + distText + '</span>\n          </div>\n        </button>';
   };
   
   var mallList = Object.keys(mallGroups).map(function(key) { return mallGroups[key]; });
@@ -4873,12 +4876,36 @@ function openStoreFromMap(id) {
     map.flyTo([s.lat, s.lng], 16, { duration: 1 });
     
     setTimeout(function() {
-      markerCluster.eachLayer(function(layer) {
+    markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.storeId === id) {
-          layer.openPopup();
+            markerCluster.zoomToShowLayer(layer, function() {
+                layer.openPopup();
+            });
         }
         if (layer.options && layer.options.mallName && s.mall === layer.options.mallName) {
-          layer.openPopup();
+            markerCluster.zoomToShowLayer(layer, function() {
+                layer.openPopup();
+            });
+        }
+    });
+}, 1100);
+  }
+}
+
+function openMallFromMap(mallName) {
+  var stores = STORES.filter(function(s) { return s.mall === mallName; });
+  if (!stores.length || !stores[0].lat || !stores[0].lng) return;
+  
+  if (map) {
+    map.closePopup();
+    map.flyTo([stores[0].lat, stores[0].lng], 16, { duration: 1 });
+    
+    setTimeout(function() {
+      markerCluster.eachLayer(function(layer) {
+        if (layer.options && layer.options.mallName === mallName) {
+          markerCluster.zoomToShowLayer(layer, function() {
+            layer.openPopup();
+          });
         }
       });
     }, 1100);
