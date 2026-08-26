@@ -3967,8 +3967,8 @@ function getArithmeticCenter(coords) {
         lng: lngSum / coords.length
     };
 }
-map.on('dragstart', function() {
-    // 保持 popup 開啟
+map.on('movestart', function() {
+    // ✅ 移動地圖前保存 popup 狀態
     if (map._popup && map._popup._content) {
         map._popup._closeOnMove = false;
     }
@@ -4117,14 +4117,16 @@ function updateMapMarkers() {
       closeOnClick: false
     });
     
-    // ✅ 點擊圖釘：先 pan 再開 popup
-    marker.on('click', function(e) {
-        var targetLatLng = e.latlng;
-        map.once('moveend', function() {
-            marker.openPopup();
-        });
-        map.panTo(targetLatLng, { duration: 0.4 });
+marker.on('click', function(e) {
+    if (marker.isPopupOpen()) {
+        marker.closePopup();
+        return;
+    }
+    
+    markerCluster.zoomToShowLayer(marker, function() {
+        marker.openPopup();
     });
+});
 
 
 
@@ -4188,14 +4190,16 @@ function updateMapMarkers() {
       closeOnClick: false
     });
     
-    // ✅ 點擊圖釘：先 pan 再開 popup
-    marker.on('click', function(e) {
-        var targetLatLng = e.latlng;
-        map.once('moveend', function() {
-            marker.openPopup();
-        });
-        map.panTo(targetLatLng, { duration: 0.4 });
+marker.on('click', function(e) {
+    if (marker.isPopupOpen()) {
+        marker.closePopup();
+        return;
+    }
+    
+    markerCluster.zoomToShowLayer(marker, function() {
+        marker.openPopup();
     });
+});
 
     
     // 點擊 popup 本身打開店鋪詳情
@@ -4914,20 +4918,30 @@ function openStoreFromMap(id) {
     markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.storeId === id) {
             found = true;
+            // ✅ 先 zoom 到圖釘可見，再置中，最後開 popup
             markerCluster.zoomToShowLayer(layer, function() {
-                layer.openPopup();
+                map.once('moveend', function() {
+                    layer.openPopup();
+                });
+                map.panTo([s.lat, s.lng], { duration: 0.4 });
             });
         }
         if (layer.options && layer.options.mallName && s.mall === layer.options.mallName) {
             found = true;
             markerCluster.zoomToShowLayer(layer, function() {
-                layer.openPopup();
+                map.once('moveend', function() {
+                    layer.openPopup();
+                });
+                map.panTo([s.lat, s.lng], { duration: 0.4 });
             });
         }
     });
     
     if (!found) {
         map.flyTo([s.lat, s.lng], 16, { duration: 1 });
+        setTimeout(function() {
+            toast('找不到該店鋪圖釘', 'pink');
+        }, 1100);
     }
   }
 }
@@ -4943,17 +4957,25 @@ function openMallFromMap(mallName) {
     markerCluster.eachLayer(function(layer) {
         if (layer.options && layer.options.mallName === mallName) {
             found = true;
+            // ✅ 先 zoom 到圖釘可見，再置中，最後開 popup
             markerCluster.zoomToShowLayer(layer, function() {
-                layer.openPopup();
+                map.once('moveend', function() {
+                    layer.openPopup();
+                });
+                map.panTo([stores[0].lat, stores[0].lng], { duration: 0.4 });
             });
         }
     });
     
     if (!found) {
         map.flyTo([stores[0].lat, stores[0].lng], 16, { duration: 1 });
+        setTimeout(function() {
+            toast('找不到該商場圖釘', 'pink');
+        }, 1100);
     }
   }
 }
+
 // ============================================================
 // 店鋪實證表單 (雙向驗證版)
 // ============================================================
