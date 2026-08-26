@@ -4169,15 +4169,7 @@ marker.on('click', function(e) {
         .setContent(popupContent)
         .openOn(map);
         
-        var popupEl = popup.getElement();
-        if (popupEl) {
-            popupEl.style.cursor = 'pointer';
-            popupEl.addEventListener('click', function(ev) {
-                ev.preventDefault(); ev.stopPropagation();
-                map.closePopup();
-                setTimeout(function() { openMallModal(key); }, 100);
-            });
-        }
+   
         
         isAutoMoving = false;
     }, 350);
@@ -4259,7 +4251,7 @@ popupContent.innerHTML =
         (s.lat && s.lng ? '<a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
     '</div>' +
     (tagsHtml ? '<div style="margin-top:6px;">' + tagsHtml + '</div>' : '') +
-    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 店鋪詳情</div>';
+    '<div onclick="openStore(\'' + s.id + '\')" style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;cursor:pointer;">👆 店鋪詳情</div>';
     
 marker.on('click', function(e) {
     console.log('🕵️ click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
@@ -4283,16 +4275,7 @@ marker.on('click', function(e) {
         .setContent(popupContent)
         .openOn(map);
         
-        // popup 點擊處理
-        var popupEl = popup.getElement();
-        if (popupEl) {
-            popupEl.style.cursor = 'pointer';
-            popupEl.addEventListener('click', function(ev) {
-                ev.preventDefault(); ev.stopPropagation();
-                map.closePopup();
-                setTimeout(function() { openStore(s.id); }, 100);
-            });
-        }
+
         
         isAutoMoving = false;
     }, 350);
@@ -5087,15 +5070,7 @@ function openStoreFromMap(id) {
                 .setContent(popupContent)
                 .openOn(map);
                 
-                var popupEl = popup.getElement();
-                if (popupEl) {
-                    popupEl.style.cursor = 'pointer';
-                    popupEl.addEventListener('click', function(ev) {
-                        ev.preventDefault(); ev.stopPropagation();
-                        map.closePopup();
-                        setTimeout(function() { openStore(s.id); }, 100);
-                    });
-                }
+     
             }
         });
         setTimeout(function() { isAutoMoving = false; }, 100);
@@ -5134,7 +5109,7 @@ function openMallFromMap(mallName) {
                         (stores[0].lat && stores[0].lng ? '<a href="https://www.google.com/maps?q=' + stores[0].lat + ',' + stores[0].lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
                     '</div>' +
                     '<div style="margin-top:4px;color:#aaa;font-size:11px;">' + stores.length + ' 間店鋪</div>' +
-                    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
+                    '<div onclick="openMallModal(\'' + mallName + '\')" style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
                 
                 var popup = L.popup({
                     maxWidth: 220, minWidth: 180, className: 'custom-popup',
@@ -5144,15 +5119,7 @@ function openMallFromMap(mallName) {
                 .setContent(popupContent)
                 .openOn(map);
                 
-                var popupEl = popup.getElement();
-                if (popupEl) {
-                    popupEl.style.cursor = 'pointer';
-                    popupEl.addEventListener('click', function(ev) {
-                        ev.preventDefault(); ev.stopPropagation();
-                        map.closePopup();
-                        setTimeout(function() { openMallModal(mallName); }, 100);
-                    });
-                }
+                
             }
         });
         setTimeout(function() { isAutoMoving = false; }, 100);
