@@ -4113,12 +4113,16 @@ function updateMapMarkers() {
       closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
     });
     
-    marker.on('click', function(e) {
-      if (marker.isPopupOpen()) { marker.closePopup(); return; }
-      map.closePopup();
-      map.panTo([group.lat, group.lng], { duration: 0.3 });
-      setTimeout(function() { marker.openPopup(); }, 350);
+marker.on('click', function(e) {
+    if (marker.isPopupOpen()) { marker.closePopup(); return; }
+    isAutoMoving = true;
+    map.closePopup();
+    map.panTo([group.lat, group.lng], { duration: 0.3 });
+    map.once('moveend', function() {
+        marker.openPopup();
+        setTimeout(function() { isAutoMoving = false; }, 100);
     });
+});
     
     marker.on('popupopen', function() {
       var popup = marker.getPopup();
@@ -4141,7 +4145,15 @@ function updateMapMarkers() {
     var isVerified = s.verified === "verified";
     var bgColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
-    var displayName = s.name.length > 4 ? s.name.substring(0, 4) + '..' : s.name;
+    var displayName = '';
+var charCount = 0;
+for (var i = 0; i < s.name.length; i++) {
+    var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
+    charCount += isCJK ? 2 : 1;
+    if (charCount > 14) break;
+    displayName += s.name[i];
+}
+if (displayName.length < s.name.length) displayName += '..';
     
     var marker = L.marker([s.lat, s.lng], {
       icon: L.divIcon({
@@ -4170,12 +4182,16 @@ function updateMapMarkers() {
       closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
     });
     
-    marker.on('click', function(e) {
-      if (marker.isPopupOpen()) { marker.closePopup(); return; }
-      map.closePopup();
-      map.panTo([s.lat, s.lng], { duration: 0.3 });
-      setTimeout(function() { marker.openPopup(); }, 350);
+   marker.on('click', function(e) {
+    if (marker.isPopupOpen()) { marker.closePopup(); return; }
+    isAutoMoving = true;
+    map.closePopup();
+    map.panTo([s.lat, s.lng], { duration: 0.3 });
+    map.once('moveend', function() {
+        marker.openPopup();
+        setTimeout(function() { isAutoMoving = false; }, 100);
     });
+});
     
     marker.on('popupopen', function() {
       var popup = marker.getPopup();
@@ -4869,11 +4885,8 @@ function openStoreFromMap(id) {
     mapSelectionMode = null;
     var store = STORES.find(function(s) { return s.id === id; });
     if (store) {
-      if (prefix === 'lp') {
-        openPlayerPostWithStore(prefix, store);
-      } else if (prefix === 'lo') {
-        openOwnerPostWithStore(prefix, store);
-      }
+      if (prefix === 'lp') { openPlayerPostWithStore(prefix, store); }
+      else if (prefix === 'lo') { openOwnerPostWithStore(prefix, store); }
     }
     return;
   }
@@ -4882,37 +4895,19 @@ function openStoreFromMap(id) {
   if (!s || !s.lat || !s.lng) return;
   
   if (map) {
+    isAutoMoving = true;
     map.closePopup();
-    
-    var found = false;
-    markerCluster.eachLayer(function(layer) {
-        if (layer.options && layer.options.storeId === id) {
-            found = true;
-            // ✅ 先 zoom 到圖釘可見，再置中，最後開 popup
-            markerCluster.zoomToShowLayer(layer, function() {
-                map.once('moveend', function() {
-                    layer.openPopup();
-                });
-                map.panTo([s.lat, s.lng], { duration: 0.4 });
-            });
-        }
-        if (layer.options && layer.options.mallName && s.mall === layer.options.mallName) {
-            found = true;
-            markerCluster.zoomToShowLayer(layer, function() {
-                map.once('moveend', function() {
-                    layer.openPopup();
-                });
-                map.panTo([s.lat, s.lng], { duration: 0.4 });
-            });
-        }
+    map.panTo([s.lat, s.lng], { duration: 0.3 });
+    map.once('moveend', function() {
+        var found = false;
+        markerCluster.eachLayer(function(layer) {
+            if (layer.options && layer.options.storeId === id) {
+                found = true;
+                layer.openPopup();
+            }
+        });
+        setTimeout(function() { isAutoMoving = false; }, 100);
     });
-    
-    if (!found) {
-        map.flyTo([s.lat, s.lng], 16, { duration: 1 });
-        setTimeout(function() {
-            toast('找不到該店鋪圖釘', 'pink');
-        }, 1100);
-    }
   }
 }
 
@@ -4921,28 +4916,19 @@ function openMallFromMap(mallName) {
   if (!stores.length || !stores[0].lat || !stores[0].lng) return;
   
   if (map) {
+    isAutoMoving = true;
     map.closePopup();
-    
-    var found = false;
-    markerCluster.eachLayer(function(layer) {
-        if (layer.options && layer.options.mallName === mallName) {
-            found = true;
-            // ✅ 先 zoom 到圖釘可見，再置中，最後開 popup
-            markerCluster.zoomToShowLayer(layer, function() {
-                map.once('moveend', function() {
-                    layer.openPopup();
-                });
-                map.panTo([stores[0].lat, stores[0].lng], { duration: 0.4 });
-            });
-        }
+    map.panTo([stores[0].lat, stores[0].lng], { duration: 0.3 });
+    map.once('moveend', function() {
+        var found = false;
+        markerCluster.eachLayer(function(layer) {
+            if (layer.options && layer.options.mallName === mallName) {
+                found = true;
+                layer.openPopup();
+            }
+        });
+        setTimeout(function() { isAutoMoving = false; }, 100);
     });
-    
-    if (!found) {
-        map.flyTo([stores[0].lat, stores[0].lng], 16, { duration: 1 });
-        setTimeout(function() {
-            toast('找不到該商場圖釘', 'pink');
-        }, 1100);
-    }
   }
 }
 
