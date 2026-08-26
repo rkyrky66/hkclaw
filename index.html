@@ -4133,9 +4133,13 @@ marker.bindPopup(popupContent, {
     autoOpen: false
 });
     marker.closePopup();
-    console.log('🔍 bindPopup 後 popup 狀態:', marker.isPopupOpen());
 marker.on('click', function(e) {
-    if (marker.isPopupOpen()) { marker.closePopup(); return; }
+    console.log('🔍 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
+    if (marker.isPopupOpen()) { 
+        console.log('🔍 商場 popup 已開，關閉');
+        marker.closePopup(); 
+        return; 
+    }
     isAutoMoving = true;
     map.closePopup();
     map.panTo([group.lat, group.lng], { duration: 0.3 });
@@ -4204,9 +4208,8 @@ marker.bindPopup(popupContent, {
     autoOpen: false
 });
     marker.closePopup();
-    console.log('🔍 bindPopup 後 popup 狀態:', marker.isPopupOpen());
 marker.on('click', function(e) {
-    console.log('🔍 地鋪 click 觸發:', s.name);
+    console.log('🔍 click 觸發次數, popup 狀態:', marker.isPopupOpen());
     if (marker.isPopupOpen()) { 
         console.log('🔍 popup 已開，關閉');
         marker.closePopup(); 
@@ -4214,12 +4217,9 @@ marker.on('click', function(e) {
     }
     isAutoMoving = true;
     map.closePopup();
-    console.log('🔍 開始 panTo');
     map.panTo([s.lat, s.lng], { duration: 0.3 });
     map.once('moveend', function() {
-        console.log('🔍 moveend 觸發，開 popup');
         marker.openPopup();
-        console.log('🔍 popup 狀態:', marker.isPopupOpen());
         setTimeout(function() { isAutoMoving = false; }, 100);
     });
 });
