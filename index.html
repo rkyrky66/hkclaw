@@ -4359,23 +4359,27 @@ function renderMapStoreListWithData(inBounds) {
   
   var renderStoreItem = function(s, index) {
     var isVerified = s.status === "verified" || s.verified === "verified";
-    var dotColor = isVerified ? 'text-neongreen' : 'text-yellow-400';
-    var statusLabel = isVerified ? '已認證' : '審核中';
-    var distText = formatDist(s);
+    var bgColor = isVerified ? '#00CC66' : '#FFB800';
+    var borderColor = isVerified ? '#00FF88' : '#FFD700';
+    var statusText = isVerified ? '已認證' : '待認證(' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2)';
+    var statusColor = isVerified ? '#00FF00' : '#fff';
+    var distText = '未開啟GPS定位';
+    if (userLocation && s.lat && s.lng) {
+        var dist = calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng);
+        distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+    }
     
-    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border border-gold/20 bg-zinc-950/80 p-2.5 text-left transition-all hover:border-gold/50 active:scale-[0.98]">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="text-gold font-bold text-sm min-w-[20px]">#' + (index + 1) + '</span>\n                <span class="' + dotColor + ' flex-shrink-0">●</span>\n                <span class="font-bold text-gold text-sm truncate">' + s.name + '</span>\n                <span class="text-[9px] text-white/30 whitespace-nowrap">' + statusLabel + '</span>\n              </div>\n              <p class="text-[11px] text-white/40 truncate pl-[20px]">' + s.region + ' · ' + s.addr + '</p>\n            </div>\n            <span class="text-xs text-neonpink whitespace-nowrap">📍 ' + distText + '</span>\n          </div>\n        </button>';
-  };
+    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border bg-zinc-950/80 p-2.5 text-left transition-all active:scale-[0.98]" style="border-color:' + borderColor + ';">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="font-bold text-sm truncate" style="color:' + bgColor + ';">' + s.name + '</span>\n                <span class="text-[10px] whitespace-nowrap" style="color:' + statusColor + ';">' + statusText + '</span>\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
+};
   
-  var renderMallGroup = function(group) {
-    var isAllVerified = group.stores.every(function(s) { 
-        return s.status === "verified" || s.verified === "verified"; 
-    });
-    var dotColor = isAllVerified ? 'text-neongreen' : 'text-yellow-400';
-    var statusLabel = '';
-    var distText = formatDist(group.stores[0]);
-    return '<button onclick="openMallFromMap(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border border-gold/30 bg-gold/5 p-2.5 text-left transition-all hover:border-gold/60 active:scale-[0.98]">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="text-gold font-bold text-sm">🏬</span>\n                <span class="font-bold text-gold text-sm truncate">' + group.mallName + '</span>\n                <span class="text-[9px] text-white/30">' + group.totalStores + ' 間</span>\n                              </div>\n              <p class="text-[11px] text-white/40 truncate">' + (group.stores[0]?.region || '') + ' · 點擊查看全部店鋪</p>\n            </div>\n            <span class="text-xs text-neonpink whitespace-nowrap">📍 ' + distText + '</span>\n          </div>\n        </button>';
-  };
-  
+var renderMallGroup = function(group) {
+    var distText = '未開啟GPS定位';
+    if (userLocation && group.stores[0].lat && group.stores[0].lng) {
+        var dist = calculateDistance(userLocation.lat, userLocation.lng, group.stores[0].lat, group.stores[0].lng);
+        distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+    }
+    return '<button onclick="openMallFromMap(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border border-[#FF9999] bg-[#FF6B6B]/10 p-2.5 text-left transition-all hover:border-[#FF9999] active:scale-[0.98]">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2">\n                <span class="font-bold text-sm truncate" style="color:#FF6B6B;">' + group.mallName + '</span>\n                <span class="text-[10px] text-white/60">' + group.totalStores + ' 間</span>\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
+};
   var mallList = Object.keys(mallGroups).map(function(key) { return mallGroups[key]; });
   mallList.sort(function(a, b) {
     var distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
