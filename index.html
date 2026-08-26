@@ -4132,7 +4132,7 @@ marker.bindPopup(popupContent, {
     closeButton: false, autoPan: false, autoClose: true, closeOnClick: false,
     autoOpen: false
 });
-    
+    marker.closePopup();
 marker.on('click', function(e) {
     if (marker.isPopupOpen()) { marker.closePopup(); return; }
     isAutoMoving = true;
@@ -4202,7 +4202,7 @@ marker.bindPopup(popupContent, {
     closeButton: false, autoPan: false, autoClose: true, closeOnClick: false,
     autoOpen: false
 });
-    
+    marker.closePopup();
 marker.on('click', function(e) {
     console.log('🔍 地鋪 click 觸發:', s.name);
     if (marker.isPopupOpen()) { 
