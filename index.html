@@ -4108,7 +4108,7 @@ function updateMapMarkers() {
     var marker = L.marker([group.lat, group.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="position:relative;min-width:50px;height:36px;background:#3B82F6;border:2px solid #FF9999;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;">' +
+        html: '<div style="position:relative;min-width:50px;height:36px;background:#3B82F6;border:2px solid #60A5FA;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;">' +
               '<span style="color:#fff;font-weight:900;font-size:10px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + key + '</span>' +
               '</div>',
         iconSize: [80, 36],
@@ -4356,7 +4356,7 @@ function renderMapStoreListWithData(inBounds) {
     if (dist < 1) return Math.round(dist * 1000) + "m";
     return dist.toFixed(1) + "km";
   };
-  
+
 var renderStoreItem = function(s, index) {
     var isVerified = s.status === "verified" || s.verified === "verified";
     var nameColor = isVerified ? '#00CC66' : '#FFB800';
@@ -4372,32 +4372,38 @@ var renderStoreItem = function(s, index) {
     var hasCheckedIn = hasCheckedInToday(s.id);
     var hasPosted = (STATE.livePosts || []).some(function(p) { return p.store_id === String(s.id) && p.author_device === STATE.user.device; });
     
-    var buttonsHtml = '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">';
-
-// 認證
-if (!isVerified) {
-    buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2</span>';
-} else {
-    buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
-}
-
-// 補充
-if (!hasSupplemented) {
-    buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
-} else {
-    buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">補充 ✅</span>';
-}
-
-// 打卡
-buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
-
-// 戰績
-buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasPosted ? '戰績 ✅' : '戰績 📢') + '</span>';
-
-buttonsHtml += '</div>';
+    var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
-    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2 flex-wrap">\n                <span class="font-bold text-base truncate" style="color:' + nameColor + ';">' + s.name + '</span>\n                ' + buttonsHtml + '\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
+    if (!isVerified) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2</span>';
+    } else {
+        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
+    }
+    
+    if (!hasSupplemented) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
+    } else {
+        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">補充 ✅</span>';
+    }
+    
+    buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
+    
+    buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasPosted ? '戰績 ✅' : '戰績 📢') + '</span>';
+    
+    buttonsHtml += '</div>';
+    
+    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n' +
+        '<div style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">\n' +
+            '<span class="font-bold text-base" style="color:' + nameColor + ';">' + s.name + '</span>\n' +
+            '<span style="color:#fff;font-size:13px;margin-left:8px;">' + (s.addr && s.addr !== '' ? s.addr : s.region + '地鋪') + '</span>\n' +
+        '</div>\n' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">\n' +
+            buttonsHtml + '\n' +
+            '<span class="text-xs text-white/60 whitespace-nowrap flex-shrink-0;">' + distText + '</span>\n' +
+        '</div>\n' +
+    '</button>';
 };
+  
 var renderMallGroup = function(group) {
     var distText = '未開啟GPS定位';
     if (userLocation && group.stores[0].lat && group.stores[0].lng) {
