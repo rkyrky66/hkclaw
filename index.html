@@ -604,9 +604,16 @@ input, select, textarea { font-size: 16px; }
 <div id="map-container" style="height:100%; width:100%;"></div>
 <div id="map-controls" style="position:absolute; top:12px; right:12px; z-index:1000; display:flex; flex-direction:column; gap:8px;">
     <button onclick="refreshMapData()" 
-        style="width:40px;height:40px;border-radius:50%;background:rgba(20,20,20,0.85);border:1px solid rgba(212,175,55,0.5);color:#D4AF37;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);"
+        style="width:40px;height:40px;border-radius:50%;background:rgba(20,20,20,0.85);border:1px solid rgba(255,255,255,0.5);color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);"
         title="重新整理">
-        🔄
+        ↻
+    </button>
+</div>
+<div id="map-submit-store-btn" style="position:absolute; bottom:16px; left:12px; z-index:1000;">
+    <button onclick="openIntelForm()" 
+        style="padding:0 18px;height:44px;border-radius:22px;background:#D4AF37;border:2px solid #FFD700;color:#000;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 16px rgba(212,175,55,0.4);"
+        title="提交新店鋪">
+        🏪 提交新店鋪
     </button>
 </div>
 </div>
