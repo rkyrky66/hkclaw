@@ -3973,14 +3973,15 @@ map.on('movestart', function() {
         map._popup._closeOnMove = false;
     }
 });
-    map.on('moveend zoomend', function() {
-      if (CURRENT === 'map') {
-        updateMapList();
-        updateRegionProgress();
-        updateRegionDisplay();  // 新增：更新區域顯示
-        ensureStoresVisible();
-      }
-    });
+ map.on('moveend zoomend', function() {
+  if (CURRENT === 'map') {
+    updateMapMarkers();  // ← 加入這行
+    updateMapList();
+    updateRegionProgress();
+    updateRegionDisplay();
+    ensureStoresVisible();
+  }
+});
     
     markerCluster = L.markerClusterGroup({
       iconCreateFunction: function(cluster) {
@@ -4122,10 +4123,7 @@ marker.on('click', function(e) {
         marker.closePopup();
         return;
     }
-    
-    markerCluster.zoomToShowLayer(marker, function() {
-        marker.openPopup();
-    });
+    marker.openPopup();
 });
 
 
@@ -4189,16 +4187,12 @@ marker.on('click', function(e) {
       autoClose: true,
       closeOnClick: false
     });
-    
 marker.on('click', function(e) {
     if (marker.isPopupOpen()) {
         marker.closePopup();
         return;
     }
-    
-    markerCluster.zoomToShowLayer(marker, function() {
-        marker.openPopup();
-    });
+    marker.openPopup();
 });
 
     
