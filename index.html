@@ -785,7 +785,8 @@ var _vfGpsReady = false;
 var _vfGpsLat = null;
 var _vfGpsLng = null;
 var currentTab = 'hk';
-
+var ZOOM_LEVELS = [12, 15, 17, 19];
+var currentZoomIndex = 0;
 // ============================================================
 // 常數定義
 // ============================================================
@@ -3996,8 +3997,7 @@ map.on('movestart', function() {
       zoomToBoundsOnClick: false,  // ✅ 點擊聚合點不自動 zoom
       spiderfyOnMaxZoom: true
     });
-    var ZOOM_LEVELS = [12, 15, 17, 19];
-var currentZoomIndex = 0;
+
 
 function zoomToNextLevel() {
     currentZoomIndex = Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1);
