@@ -4120,12 +4120,26 @@ function updateMapMarkers() {
       totalStores: group.totalStores
     });
     
-    var popupContent = document.createElement('div');
-    popupContent.style.cssText = 'text-align:center;padding:4px 0;';
-    popupContent.innerHTML = 
-      '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">🏬 ' + key + '</div>' +
-      '<div style="color:#aaa;font-size:11px;margin-bottom:6px;">' + group.totalStores + ' 間店鋪</div>' +
-      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看店鋪列表</div>';
+var popupContent = document.createElement('div');
+popupContent.style.cssText = 'text-align:left;padding:8px;min-width:220px;';
+
+var distText = '';
+if (userLocation && group.lat && group.lng) {
+    var dist = calculateDistance(userLocation.lat, userLocation.lng, group.lat, group.lng);
+    distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+}
+
+popupContent.innerHTML = 
+    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="color:#D4AF37;font-weight:700;font-size:14px;">' + key + '</span>' +
+        (distText ? '<span style="color:#aaa;font-size:11px;">' + distText + '</span>' : '') +
+    '</div>' +
+    '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;">' +
+        '<span style="color:#aaa;font-size:11px;">' + (group.stores[0]?.addr || '') + '</span>' +
+        (group.lat && group.lng ? '<a href="https://www.google.com/maps?q=' + group.lat + ',' + group.lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
+    '</div>' +
+    '<div style="margin-top:4px;color:#aaa;font-size:11px;">' + group.totalStores + ' 間店鋪</div>' +
+    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
     
 marker.on('click', function(e) {
     console.log('🔍 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
@@ -4195,12 +4209,50 @@ if (displayName.length < s.name.length) displayName += '..';
     });
     
     var popupContent = document.createElement('div');
-    popupContent.style.cssText = 'text-align:center;padding:4px 0;';
-    popupContent.innerHTML = 
-      '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">' + s.name + '</div>' +
-      '<div style="color:#aaa;font-size:11px;margin-bottom:2px;">' + s.region + '</div>' +
-      '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + (s.machines ? s.machines.length : 0) + ' 部機台</div>' +
-      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看詳情</div>';
+popupContent.style.cssText = 'text-align:left;padding:8px;min-width:220px;';
+
+// 距離
+var distText = '';
+if (userLocation && s.lat && s.lng) {
+    var dist = calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng);
+    distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+}
+
+// 投票結果
+var allVotes = window._allFieldVotes || [];
+var storeVotes = allVotes.filter(function(v) { return String(v.store_id) === String(s.id); });
+var staffVotes = storeVotes.filter(function(v) { return v.field_name === 'has_staff'; });
+var coinVotes = storeVotes.filter(function(v) { return v.field_name === 'has_e_coin'; });
+
+function getMainAnswer(votes) {
+    if (!votes.length) return null;
+    var counts = {};
+    votes.forEach(function(v) {
+        if (!counts[v.answer]) counts[v.answer] = 0;
+        counts[v.answer]++;
+    });
+    var mainAnswer = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; })[0];
+    return mainAnswer;
+}
+
+var staffAnswer = getMainAnswer(staffVotes);
+var coinAnswer = getMainAnswer(coinVotes);
+
+var tagsHtml = '';
+if (staffAnswer) tagsHtml += '<span style="background:rgba(255,255,255,0.1);border-radius:12px;padding:2px 10px;font-size:10px;color:#fff;margin-right:4px;">' + (staffAnswer === 'true' ? '👤 有場務' : '👤 無場務') + '</span>';
+if (coinAnswer) tagsHtml += '<span style="background:rgba(255,255,255,0.1);border-radius:12px;padding:2px 10px;font-size:10px;color:#fff;">' + (coinAnswer === 'true' ? '💳 有電子兌幣' : '💳 無電子兌幣') + '</span>';
+
+popupContent.innerHTML = 
+    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="color:#D4AF37;font-weight:700;font-size:14px;">' + s.name + '</span>' +
+        (distText ? '<span style="color:#aaa;font-size:11px;">' + distText + '</span>' : '') +
+    '</div>' +
+    '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;">' +
+        '<span style="color:#aaa;font-size:11px;">' + (s.addr && s.addr !== '' ? s.addr : s.region + '地鋪') + '</span>' +
+        (s.lat && s.lng ? '<a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
+    '</div>' +
+    (tagsHtml ? '<div style="margin-top:6px;">' + tagsHtml + '</div>' : '') +
+    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 店鋪詳情</div>';
     
 marker.on('click', function(e) {
     console.log('🔍 click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
@@ -4931,16 +4983,78 @@ function openStoreFromMap(id) {
     isAutoMoving = true;
     map.closePopup();
     map.panTo([s.lat, s.lng], { duration: 0.3 });
-    map.once('moveend', function() {
+    
+    setTimeout(function() {
         var found = false;
         markerCluster.eachLayer(function(layer) {
             if (layer.options && layer.options.storeId === id) {
                 found = true;
-                layer.openPopup();
+                
+                // 手動建立 popup
+                var popupContent = document.createElement('div');
+                popupContent.style.cssText = 'text-align:left;padding:8px;min-width:220px;';
+                
+                var distText = '';
+                if (userLocation && s.lat && s.lng) {
+                    var dist = calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng);
+                    distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+                }
+                
+                var allVotes = window._allFieldVotes || [];
+                var storeVotes = allVotes.filter(function(v) { return String(v.store_id) === String(s.id); });
+                var staffVotes = storeVotes.filter(function(v) { return v.field_name === 'has_staff'; });
+                var coinVotes = storeVotes.filter(function(v) { return v.field_name === 'has_e_coin'; });
+                
+                function getMainAnswer(votes) {
+                    if (!votes.length) return null;
+                    var counts = {};
+                    votes.forEach(function(v) {
+                        if (!counts[v.answer]) counts[v.answer] = 0;
+                        counts[v.answer]++;
+                    });
+                    return Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; })[0];
+                }
+                
+                var staffAnswer = getMainAnswer(staffVotes);
+                var coinAnswer = getMainAnswer(coinVotes);
+                
+                var tagsHtml = '';
+                if (staffAnswer) tagsHtml += '<span style="background:rgba(255,255,255,0.1);border-radius:12px;padding:2px 10px;font-size:10px;color:#fff;margin-right:4px;">' + (staffAnswer === 'true' ? '👤 有場務' : '👤 無場務') + '</span>';
+                if (coinAnswer) tagsHtml += '<span style="background:rgba(255,255,255,0.1);border-radius:12px;padding:2px 10px;font-size:10px;color:#fff;">' + (coinAnswer === 'true' ? '💳 有電子兌幣' : '💳 無電子兌幣') + '</span>';
+                
+                popupContent.innerHTML = 
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span style="color:#D4AF37;font-weight:700;font-size:14px;">' + s.name + '</span>' +
+                        (distText ? '<span style="color:#aaa;font-size:11px;">' + distText + '</span>' : '') +
+                    '</div>' +
+                    '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;">' +
+                        '<span style="color:#aaa;font-size:11px;">' + (s.addr && s.addr !== '' ? s.addr : s.region + '地鋪') + '</span>' +
+                        (s.lat && s.lng ? '<a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
+                    '</div>' +
+                    (tagsHtml ? '<div style="margin-top:6px;">' + tagsHtml + '</div>' : '') +
+                    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 店鋪詳情</div>';
+                
+                var popup = L.popup({
+                    maxWidth: 220, minWidth: 180, className: 'custom-popup',
+                    closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
+                })
+                .setLatLng([s.lat, s.lng])
+                .setContent(popupContent)
+                .openOn(map);
+                
+                var popupEl = popup.getElement();
+                if (popupEl) {
+                    popupEl.style.cursor = 'pointer';
+                    popupEl.addEventListener('click', function(ev) {
+                        ev.preventDefault(); ev.stopPropagation();
+                        map.closePopup();
+                        setTimeout(function() { openStore(s.id); }, 100);
+                    });
+                }
             }
         });
         setTimeout(function() { isAutoMoving = false; }, 100);
-    });
+    }, 350);
   }
 }
 
@@ -4952,16 +5066,52 @@ function openMallFromMap(mallName) {
     isAutoMoving = true;
     map.closePopup();
     map.panTo([stores[0].lat, stores[0].lng], { duration: 0.3 });
-    map.once('moveend', function() {
-        var found = false;
+    
+    setTimeout(function() {
         markerCluster.eachLayer(function(layer) {
             if (layer.options && layer.options.mallName === mallName) {
-                found = true;
-                layer.openPopup();
+                var popupContent = document.createElement('div');
+                popupContent.style.cssText = 'text-align:left;padding:8px;min-width:220px;';
+                
+                var distText = '';
+                if (userLocation && stores[0].lat && stores[0].lng) {
+                    var dist = calculateDistance(userLocation.lat, userLocation.lng, stores[0].lat, stores[0].lng);
+                    distText = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+                }
+                
+                popupContent.innerHTML = 
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span style="color:#D4AF37;font-weight:700;font-size:14px;">' + mallName + '</span>' +
+                        (distText ? '<span style="color:#aaa;font-size:11px;">' + distText + '</span>' : '') +
+                    '</div>' +
+                    '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;">' +
+                        '<span style="color:#aaa;font-size:11px;">' + (stores[0].addr || '') + '</span>' +
+                        (stores[0].lat && stores[0].lng ? '<a href="https://www.google.com/maps?q=' + stores[0].lat + ',' + stores[0].lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
+                    '</div>' +
+                    '<div style="margin-top:4px;color:#aaa;font-size:11px;">' + stores.length + ' 間店鋪</div>' +
+                    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
+                
+                var popup = L.popup({
+                    maxWidth: 220, minWidth: 180, className: 'custom-popup',
+                    closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
+                })
+                .setLatLng([stores[0].lat, stores[0].lng])
+                .setContent(popupContent)
+                .openOn(map);
+                
+                var popupEl = popup.getElement();
+                if (popupEl) {
+                    popupEl.style.cursor = 'pointer';
+                    popupEl.addEventListener('click', function(ev) {
+                        ev.preventDefault(); ev.stopPropagation();
+                        map.closePopup();
+                        setTimeout(function() { openMallModal(mallName); }, 100);
+                    });
+                }
             }
         });
         setTimeout(function() { isAutoMoving = false; }, 100);
-    });
+    }, 350);
   }
 }
 
