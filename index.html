@@ -3566,24 +3566,21 @@ function initMap(initialCenter, initialZoom) {
   }
   
   try {
-        map = L.map('map-container', {
-                center: [center.lat, center.lng],
-      zoom: zoom,
-      zoomControl: false,
-      attributionControl: true,
-      minZoom: 10,  // 限制最小 zoom，確保能看到整個香港
-      maxBounds: [
-        [22.0, 113.7],  // 西南角（香港西南邊界）
-        [22.7, 114.5]   // 東北角（香港東北邊界）
-      ],
-      maxBoundsViscosity: 1.0,  // 邊界限制強度
- closePopupOnClick: false
-    });
-    map.on('movestart', function() {
-    if (map._popup && map._popup._closeOnMove !== undefined) {
-        map._popup._closeOnMove = false;
-    }
+       map = L.map('map-container', {
+    center: [center.lat, center.lng],
+    zoom: zoom,
+    zoomControl: false,
+    attributionControl: true,
+    minZoom: 12,
+    maxZoom: 19,
+    maxBounds: [
+        [22.0, 113.7],
+        [22.7, 114.5]
+    ],
+    maxBoundsViscosity: 1.0,
+    closePopupOnClick: false
 });
+
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
@@ -3968,10 +3965,8 @@ function getArithmeticCenter(coords) {
     };
 }
 map.on('movestart', function() {
-    // ✅ 移動地圖前保存 popup 狀態
-    if (map._popup && map._popup._content) {
-        map._popup._closeOnMove = false;
-    }
+    // 手動移動：關閉所有 popup
+    map.closePopup();
 });
  map.on('moveend zoomend', function() {
   if (CURRENT === 'map') {
@@ -3989,20 +3984,37 @@ map.on('movestart', function() {
         cluster.getAllChildMarkers().forEach(function(marker) {
           totalStores += (marker.options && marker.options.totalStores) ? marker.options.totalStores : 1;
         });
-        if (totalStores <= 1) {
-          return L.divIcon({ html: '', className: '', iconSize: L.point(0, 0) });
-        }
         return L.divIcon({
-          html: '<div class="marker-cluster-custom">' + totalStores + ' 間</div>',
+          html: '<div style="background:rgba(59,130,246,0.8);border:2px solid rgba(59,130,246,1);border-radius:50%;color:#fff;font-weight:700;font-size:12px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(59,130,246,0.5);">' + totalStores + '</div>',
           className: '',
           iconSize: L.point(36, 36)
         });
       },
-      maxClusterRadius: 60,
-      spiderfyOnMaxZoom: true,
+      maxClusterRadius: 80,
+      disableClusteringAtZoom: 17,  // ✅ zoom 17+ 無聚合
       showCoverageOnHover: false,
-      zoomToBoundsOnClick: true
+      zoomToBoundsOnClick: false,  // ✅ 點擊聚合點不自動 zoom
+      spiderfyOnMaxZoom: true
     });
+    var ZOOM_LEVELS = [12, 15, 17, 19];
+var currentZoomIndex = 0;
+
+function zoomToNextLevel() {
+    currentZoomIndex = Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1);
+    map.setZoom(ZOOM_LEVELS[currentZoomIndex]);
+}
+
+markerCluster.on('clusterclick', function() {
+    zoomToNextLevel();
+});
+
+// 4. 設定初始 currentZoomIndex
+for (var i = 0; i < ZOOM_LEVELS.length; i++) {
+    if (map.getZoom() <= ZOOM_LEVELS[i]) {
+        currentZoomIndex = i;
+        break;
+    }
+}
     map.addLayer(markerCluster);
     
     if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
@@ -4043,11 +4055,14 @@ function addUserMarker(lat, lng) {
 function updateMapMarkers() {
   if (!map || !markerCluster) return;
   markerCluster.clearLayers();
-  var inBounds = getStoresInBounds();
+  
+  // ✅ 使用所有店鋪（不依視窗）
+  var allStores = STORES.filter(function(s) { return s.lat && s.lng; });
+  
   var mallGroups = {};
   var standaloneStores = [];
   
-  inBounds.forEach(function(s) {
+  allStores.forEach(function(s) {
     if (s.mall && s.mall.trim() !== '') {
       var key = s.mall;
       if (!mallGroups[key]) mallGroups[key] = { mallName: key, stores: [], lat: 0, lng: 0, totalStores: 0 };
@@ -4068,148 +4083,109 @@ function updateMapMarkers() {
   });
   window._mallGroups = mallGroups;
   
-  // 處理商場標記
+  // 商場圖釘：淺紅色 + 商場名
   Object.keys(mallGroups).forEach(function(key) {
     var group = mallGroups[key];
-    var count = group.totalStores;
-    var isAllVerified = group.stores.every(function(s) { return s.verified === "verified"; });
-    var bgColor = isAllVerified ? '#00CC66' : '#FFB800';
-    var borderColor = isAllVerified ? '#00FF88' : '#FFD700';
-    var textColor = isAllVerified ? '#fff' : '#1a1a1a';
-    
     var marker = L.marker([group.lat, group.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="position:relative;min-width:50px;height:36px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;">' +
-              '<span style="color:' + textColor + ';font-weight:900;font-size:10px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + key + '</span>' +
+        html: '<div style="position:relative;min-width:50px;height:36px;background:#FF6B6B;border:2px solid #FF9999;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;">' +
+              '<span style="color:#fff;font-weight:900;font-size:10px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + key + '</span>' +
               '</div>',
         iconSize: [80, 36],
         iconAnchor: [40, 18],
         popupAnchor: [0, -20]
       }),
-
       isMall: true,
       mallName: key,
-      totalStores: count
+      totalStores: group.totalStores
     });
     
-    var statusText = isAllVerified ? '✅ 已認證' : '⏳ 部分審核中';
-    var statusColor = isAllVerified ? '#00FF00' : '#FFB800';
-    
-    // 創建 popup 內容（使用 DOM 元素避免 inline onclick 問題）
     var popupContent = document.createElement('div');
     popupContent.style.cssText = 'text-align:center;padding:4px 0;';
     popupContent.innerHTML = 
       '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">🏬 ' + key + '</div>' +
-      '<div style="color:#aaa;font-size:11px;margin-bottom:2px;">' + count + ' 間店鋪</div>' +
-      '<div style="color:' + statusColor + ';font-size:10px;margin-bottom:6px;">' + statusText + '</div>' +
-      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
-        '👆 點擊查看店鋪列表' +
-      '</div>';
-    // 綁定 popup
-    // 綁定 popup（只設定內容，不自動開啟）
+      '<div style="color:#aaa;font-size:11px;margin-bottom:6px;">' + group.totalStores + ' 間店鋪</div>' +
+      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看店鋪列表</div>';
+    
     marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false,
-      autoPan: false,
-      autoClose: true,
-      closeOnClick: false
+      maxWidth: 220, minWidth: 180, className: 'custom-popup',
+      closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
     });
     
-marker.on('click', function(e) {
-    if (marker.isPopupOpen()) {
-        marker.closePopup();
-        return;
-    }
-    marker.openPopup();
-});
-
-
-
+    marker.on('click', function(e) {
+      if (marker.isPopupOpen()) { marker.closePopup(); return; }
+      map.closePopup();
+      map.panTo([group.lat, group.lng], { duration: 0.3 });
+      setTimeout(function() { marker.openPopup(); }, 350);
+    });
     
-    // 點擊 popup 本身打開商場視圖
     marker.on('popupopen', function() {
       var popup = marker.getPopup();
       if (popup && popup.getElement()) {
         var popupEl = popup.getElement();
         popupEl.style.cursor = 'pointer';
         popupEl.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var mallName = key;
-          if (map) map.closePopup();
-          setTimeout(function() {
-            openMallModal(mallName);
-          }, 100);
+          e.preventDefault(); e.stopPropagation();
+          map.closePopup();
+          setTimeout(function() { openMallModal(key); }, 100);
         });
       }
     });
     
-    // 點擊標記本身也打開 popup（默認行為）
     markerCluster.addLayer(marker);
   });
   
-  // 處理獨立店鋪標記
+  // 地鋪圖釘：黃色(未認證)/綠色(已認證)，顯示店名(最多4字)
   standaloneStores.forEach(function(s) {
-    var icon = createPersonalizedMarker(s);
+    var isVerified = s.verified === "verified";
+    var bgColor = isVerified ? '#00CC66' : '#FFB800';
+    var borderColor = isVerified ? '#00FF88' : '#FFD700';
+    var displayName = s.name.length > 4 ? s.name.substring(0, 4) + '..' : s.name;
+    
     var marker = L.marker([s.lat, s.lng], {
-      icon: icon,
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="position:relative;min-width:40px;height:30px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 6px;">' +
+              '<span style="color:#fff;font-weight:900;font-size:9px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + displayName + '</span>' +
+              '</div>',
+        iconSize: [60, 30],
+        iconAnchor: [30, 15],
+        popupAnchor: [0, -18]
+      }),
       isMall: false,
       storeId: s.id
     });
     
-    var isVerified = s.verified === "verified";
-    var statusText = isVerified ? '✅ 已認證' : '⏳ 審核中';
-    var statusColor = isVerified ? '#00FF00' : '#FFB800';
-    var machineCount = s.machines ? s.machines.length : 0;
-    
-    // 創建 popup 內容
     var popupContent = document.createElement('div');
     popupContent.style.cssText = 'text-align:center;padding:4px 0;';
     popupContent.innerHTML = 
       '<div style="color:#D4AF37;font-weight:700;font-size:14px;margin-bottom:2px;">' + s.name + '</div>' +
       '<div style="color:#aaa;font-size:11px;margin-bottom:2px;">' + s.region + '</div>' +
-      '<div style="color:' + statusColor + ';font-size:10px;margin-bottom:2px;">' + statusText + '</div>' +
-      '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + machineCount + ' 部機台</div>' +
-      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">' +
-        '👆 點擊查看詳情' +
-      '</div>';
-
-    // 綁定 popup（只設定內容，不自動開啟）
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, 
-      minWidth: 180, 
-      className: 'custom-popup',
-      closeButton: false,
-      autoPan: false,
-      autoClose: true,
-      closeOnClick: false
-    });
-marker.on('click', function(e) {
-    if (marker.isPopupOpen()) {
-        marker.closePopup();
-        return;
-    }
-    marker.openPopup();
-});
-
+      '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + (s.machines ? s.machines.length : 0) + ' 部機台</div>' +
+      '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看詳情</div>';
     
-    // 點擊 popup 本身打開店鋪詳情
+    marker.bindPopup(popupContent, { 
+      maxWidth: 220, minWidth: 180, className: 'custom-popup',
+      closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
+    });
+    
+    marker.on('click', function(e) {
+      if (marker.isPopupOpen()) { marker.closePopup(); return; }
+      map.closePopup();
+      map.panTo([s.lat, s.lng], { duration: 0.3 });
+      setTimeout(function() { marker.openPopup(); }, 350);
+    });
+    
     marker.on('popupopen', function() {
       var popup = marker.getPopup();
       if (popup && popup.getElement()) {
         var popupEl = popup.getElement();
         popupEl.style.cursor = 'pointer';
         popupEl.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var storeId = s.id;
-          if (map) map.closePopup();
-          setTimeout(function() {
-            openStoreFromMap(storeId);
-          }, 100);
+          e.preventDefault(); e.stopPropagation();
+          map.closePopup();
+          setTimeout(function() { openStoreFromMap(s.id); }, 100);
         });
       }
     });
@@ -11018,7 +10994,17 @@ const UserFocus = {
   } else {
     console.log('⚠️ 此裝置不支援 GPS 定位');
   }
-  
+  // ✅ 初載入：GPS 成功或失敗都 zoom 15
+setTimeout(function() {
+    if (map && mapInitialized) {
+        if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], 15);
+        } else {
+            map.setView([HK_CENTER.lat, HK_CENTER.lng], 15);
+        }
+        updateMapMarkers();
+    }
+}, 500);
   console.log('🚀 爪爪情報站啟動完成！');
 })();
 
