@@ -4134,6 +4134,7 @@ marker.bindPopup(popupContent, {
 });
     marker.closePopup();
 marker.on('click', function(e) {
+  L.DomEvent.stopPropagation(e);
     console.log('🔍 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
     if (marker.isPopupOpen()) { 
         console.log('🔍 商場 popup 已開，關閉');
@@ -4150,13 +4151,14 @@ marker.on('click', function(e) {
 });
     
     marker.on('popupopen', function() {
-      var popup = marker.getPopup();
-      if (popup && popup.getElement()) {
+    var popup = marker.getPopup();
+    if (popup && popup.getElement()) {
         var popupEl = popup.getElement();
         popupEl.style.cursor = 'pointer';
         popupEl.addEventListener('click', function(e) {
-          e.preventDefault(); e.stopPropagation();
-          map.closePopup();
+            e.preventDefault(); 
+            e.stopPropagation();  // ✅ 阻止冒泡到 marker
+            map.closePopup();
           setTimeout(function() { openMallModal(key); }, 100);
         });
       }
@@ -4209,6 +4211,7 @@ marker.bindPopup(popupContent, {
 });
     marker.closePopup();
 marker.on('click', function(e) {
+  L.DomEvent.stopPropagation(e);
     console.log('🔍 click 觸發次數, popup 狀態:', marker.isPopupOpen());
     if (marker.isPopupOpen()) { 
         console.log('🔍 popup 已開，關閉');
@@ -4225,13 +4228,14 @@ marker.on('click', function(e) {
 });
     
     marker.on('popupopen', function() {
-      var popup = marker.getPopup();
-      if (popup && popup.getElement()) {
+    var popup = marker.getPopup();
+    if (popup && popup.getElement()) {
         var popupEl = popup.getElement();
         popupEl.style.cursor = 'pointer';
         popupEl.addEventListener('click', function(e) {
-          e.preventDefault(); e.stopPropagation();
-          map.closePopup();
+            e.preventDefault(); 
+            e.stopPropagation();  // ✅ 阻止冒泡到 marker
+            map.closePopup();
           setTimeout(function() { openStore(s.id); }, 100);
         });
       }
