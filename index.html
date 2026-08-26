@@ -4204,42 +4204,42 @@ if (displayName.length < s.name.length) displayName += '..';
       '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + (s.machines ? s.machines.length : 0) + ' 部機台</div>' +
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看詳情</div>';
     
-marker.bindPopup(popupContent, { 
-    maxWidth: 220, minWidth: 180, className: 'custom-popup',
-    closeButton: false, autoPan: false, autoClose: true, closeOnClick: false,
-    autoOpen: false
-});
-    marker.closePopup();
 marker.on('click', function(e) {
-  L.DomEvent.stopPropagation(e);
-    console.log('🔍 click 觸發次數, popup 狀態:', marker.isPopupOpen());
+    console.log('🔍 click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
+    
     if (marker.isPopupOpen()) { 
-        console.log('🔍 popup 已開，關閉');
         marker.closePopup(); 
         return; 
     }
+    
     isAutoMoving = true;
     map.closePopup();
     map.panTo([s.lat, s.lng], { duration: 0.3 });
-    map.once('moveend', function() {
-        marker.openPopup();
-        setTimeout(function() { isAutoMoving = false; }, 100);
-    });
-});
     
-    marker.on('popupopen', function() {
-    var popup = marker.getPopup();
-    if (popup && popup.getElement()) {
+    setTimeout(function() {
+        // 手動建立 popup
+        var popup = L.popup({
+            maxWidth: 220, minWidth: 180, className: 'custom-popup',
+            closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
+        })
+        .setLatLng([s.lat, s.lng])
+        .setContent(popupContent)
+        .openOn(map);
+        
+        // popup 點擊處理
         var popupEl = popup.getElement();
-        popupEl.style.cursor = 'pointer';
-        popupEl.addEventListener('click', function(e) {
-            e.preventDefault(); 
-            e.stopPropagation();  // ✅ 阻止冒泡到 marker
-            map.closePopup();
-          setTimeout(function() { openStore(s.id); }, 100);
-        });
-      }
-    });
+        if (popupEl) {
+            popupEl.style.cursor = 'pointer';
+            popupEl.addEventListener('click', function(ev) {
+                ev.preventDefault(); ev.stopPropagation();
+                map.closePopup();
+                setTimeout(function() { openStore(s.id); }, 100);
+            });
+        }
+        
+        isAutoMoving = false;
+    }, 350);
+});
     
     markerCluster.addLayer(marker);
   });
