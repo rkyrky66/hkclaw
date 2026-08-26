@@ -4008,9 +4008,22 @@ markerCluster.on('clusterclick', function(e) {
     var cluster = e.layer;
     var clusterLatLng = cluster.getLatLng();
     
+    // ✅ 先根據目前 zoom 找出對應的 index
+    var currentZoom = map.getZoom();
+    var currentIdx = 0;
+    for (var i = ZOOM_LEVELS.length - 1; i >= 0; i--) {
+        if (currentZoom >= ZOOM_LEVELS[i]) {
+            currentIdx = i;
+            break;
+        }
+    }
+    
+    // 下一檔
+    var nextIdx = Math.min(currentIdx + 1, ZOOM_LEVELS.length - 1);
+    currentZoomIndex = nextIdx;
+    
     isAutoMoving = true;
-    map.setView(clusterLatLng, ZOOM_LEVELS[Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1)], { duration: 0.3 });
-    currentZoomIndex = Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1);
+    map.setView(clusterLatLng, ZOOM_LEVELS[nextIdx], { duration: 0.3 });
     setTimeout(function() { isAutoMoving = false; }, 400);
 });
 
