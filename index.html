@@ -4004,8 +4004,14 @@ function zoomToNextLevel() {
     map.setZoom(ZOOM_LEVELS[currentZoomIndex]);
 }
 
-markerCluster.on('clusterclick', function() {
-    zoomToNextLevel();
+markerCluster.on('clusterclick', function(e) {
+    var cluster = e.layer;
+    var clusterLatLng = cluster.getLatLng();
+    
+    isAutoMoving = true;
+    map.setView(clusterLatLng, ZOOM_LEVELS[Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1)], { duration: 0.3 });
+    currentZoomIndex = Math.min(currentZoomIndex + 1, ZOOM_LEVELS.length - 1);
+    setTimeout(function() { isAutoMoving = false; }, 400);
 });
 
 // 4. 設定初始 currentZoomIndex
