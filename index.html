@@ -4133,6 +4133,7 @@ marker.bindPopup(popupContent, {
     autoOpen: false
 });
     marker.closePopup();
+    console.log('🔍 bindPopup 後 popup 狀態:', marker.isPopupOpen());
 marker.on('click', function(e) {
     if (marker.isPopupOpen()) { marker.closePopup(); return; }
     isAutoMoving = true;
@@ -4203,6 +4204,7 @@ marker.bindPopup(popupContent, {
     autoOpen: false
 });
     marker.closePopup();
+    console.log('🔍 bindPopup 後 popup 狀態:', marker.isPopupOpen());
 marker.on('click', function(e) {
     console.log('🔍 地鋪 click 觸發:', s.name);
     if (marker.isPopupOpen()) { 
