@@ -4127,10 +4127,11 @@ function updateMapMarkers() {
       '<div style="color:#aaa;font-size:11px;margin-bottom:6px;">' + group.totalStores + ' 間店鋪</div>' +
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看店鋪列表</div>';
     
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, minWidth: 180, className: 'custom-popup',
-      closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
-    });
+marker.bindPopup(popupContent, { 
+    maxWidth: 220, minWidth: 180, className: 'custom-popup',
+    closeButton: false, autoPan: false, autoClose: true, closeOnClick: false,
+    autoOpen: false
+});
     
 marker.on('click', function(e) {
     if (marker.isPopupOpen()) { marker.closePopup(); return; }
@@ -4196,10 +4197,11 @@ if (displayName.length < s.name.length) displayName += '..';
       '<div style="color:#aaa;font-size:10px;margin-bottom:6px;">🎰 ' + (s.machines ? s.machines.length : 0) + ' 部機台</div>' +
       '<div style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;">👆 點擊查看詳情</div>';
     
-    marker.bindPopup(popupContent, { 
-      maxWidth: 220, minWidth: 180, className: 'custom-popup',
-      closeButton: false, autoPan: false, autoClose: true, closeOnClick: false
-    });
+marker.bindPopup(popupContent, { 
+    maxWidth: 220, minWidth: 180, className: 'custom-popup',
+    closeButton: false, autoPan: false, autoClose: true, closeOnClick: false,
+    autoOpen: false
+});
     
 marker.on('click', function(e) {
     console.log('🔍 地鋪 click 觸發:', s.name);
