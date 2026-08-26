@@ -4372,25 +4372,29 @@ var renderStoreItem = function(s, index) {
     var hasCheckedIn = hasCheckedInToday(s.id);
     var hasPosted = (STATE.livePosts || []).some(function(p) { return p.store_id === String(s.id) && p.author_device === STATE.user.device; });
     
-    var buttonsHtml = '';
-    
-    // 認證按鈕（只未認證顯示）
-    if (!isVerified) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">認證(' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2)🕵️</span>';
-    } else {
-        buttonsHtml += '<span style="color:#00FF00;font-size:10px;margin-left:4px;">已認證🕵️</span>';
-    }
-    
-    // 補充按鈕（未補充才顯示）
-    if (!hasSupplemented) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">補充📝</span>';
-    }
-    
-    // 打卡按鈕
-    buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">' + (hasCheckedIn ? '打卡📍✅' : '打卡📍') + '</span>';
-    
-    // 戰績按鈕
-    buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">' + (hasPosted ? '戰績📢✅' : '戰績📢') + '</span>';
+    var buttonsHtml = '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">';
+
+// 認證
+if (!isVerified) {
+    buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2</span>';
+} else {
+    buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
+}
+
+// 補充
+if (!hasSupplemented) {
+    buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
+} else {
+    buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">補充 ✅</span>';
+}
+
+// 打卡
+buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
+
+// 戰績
+buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasPosted ? '戰績 ✅' : '戰績 📢') + '</span>';
+
+buttonsHtml += '</div>';
     
     return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2 flex-wrap">\n                <span class="font-bold text-base truncate" style="color:' + nameColor + ';">' + s.name + '</span>\n                ' + buttonsHtml + '\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
 };
