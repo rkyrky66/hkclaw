@@ -870,10 +870,10 @@ var ACHIEVEMENT_DEFS = {
   hk_expert: { key: 'hk_expert', name: '香港通', category: 'submission', icon: '🏪', description: '提交 30 間店鋪', condition: { type: 'submit_store', count: 30 }, reward: { points: 100, title: '香港通' } },
   store_king: { key: 'store_king', name: '店鋪之王', category: 'submission', icon: '🏪', description: '提交 50 間店鋪', condition: { type: 'submit_store', count: 50 }, reward: { points: 200, title: '店王' } },
   legend_hunter: { key: 'legend_hunter', name: '傳奇店鋪獵人', category: 'submission', icon: '🏪', description: '提交 100 間店鋪', condition: { type: 'submit_store', count: 100 }, reward: { points: 500, title: '傳奇獵人' } },
-  trainee_verifier: { key: 'trainee_verifier', name: '見習驗證員', category: 'verification', icon: '🔍', description: '認證 1 間店鋪', condition: { type: 'verify_store', count: 1 }, reward: { points: 10, title: null } },
-  senior_verifier: { key: 'senior_verifier', name: '資深驗證員', category: 'verification', icon: '🔍', description: '認證 10 間店鋪', condition: { type: 'verify_store', count: 10 }, reward: { points: 30, title: '驗證員' } },
-  chief_verifier: { key: 'chief_verifier', name: '首席驗證官', category: 'verification', icon: '🔍', description: '認證 30 間店鋪', condition: { type: 'verify_store', count: 30 }, reward: { points: 80, title: '首席驗證官' } },
-  trusted: { key: 'trusted', name: '信譽保證', category: 'verification', icon: '🔍', description: '認證 50 間店鋪（且無錯誤記錄）', condition: { type: 'verify_store', count: 50 }, reward: { points: 150, title: '信譽保證' } },
+  trainee_verifier: { key: 'trainee_verifier', name: '見習驗證員', category: 'verification', icon: '🕵️', description: '認證 1 間店鋪', condition: { type: 'verify_store', count: 1 }, reward: { points: 10, title: null } },
+  senior_verifier: { key: 'senior_verifier', name: '資深驗證員', category: 'verification', icon: '🕵️', description: '認證 10 間店鋪', condition: { type: 'verify_store', count: 10 }, reward: { points: 30, title: '驗證員' } },
+  chief_verifier: { key: 'chief_verifier', name: '首席驗證官', category: 'verification', icon: '🕵️', description: '認證 30 間店鋪', condition: { type: 'verify_store', count: 30 }, reward: { points: 80, title: '首席驗證官' } },
+  trusted: { key: 'trusted', name: '信譽保證', category: 'verification', icon: '🕵️', description: '認證 50 間店鋪（且無錯誤記錄）', condition: { type: 'verify_store', count: 50 }, reward: { points: 150, title: '信譽保證' } },
   first_complete: { key: 'first_complete', name: '完成任務', category: 'complete', icon: '🏅', description: '有 1 間店鋪完成全部認證', condition: { type: 'store_complete', count: 1 }, reward: { points: 10, title: null } },
   reliable: { key: 'reliable', name: '可靠情報員', category: 'complete', icon: '🏅', description: '有 5 間店鋪完成全部認證', condition: { type: 'store_complete', count: 5 }, reward: { points: 30, title: '可靠情報員' } },
   gold_spy: { key: 'gold_spy', name: '金牌情報員', category: 'complete', icon: '🏅', description: '有 15 間店鋪完成全部認證', condition: { type: 'store_complete', count: 15 }, reward: { points: 80, title: '金牌情報員' } },
@@ -894,7 +894,7 @@ var ACHIEVEMENT_DEFS = {
   cold_region_explorer: { key: 'cold_region_explorer',name: '秘境探索者',    category: 'region',    icon: '🗺️',    description: '認證 3 間冷門區域的店鋪（該區少於 5 間店）',    condition: { type: 'cold_region_verify', count: 3 },    reward: { points: 40, title: '秘境探索者' }},
   whistleblower: { key: 'whistleblower', name: '吹哨者', category: 'report', icon: '🚨', description: '提交第 1 次檢舉', condition: { type: 'report_submitted', count: 1 }, reward: { points: 5, title: null } },
   watchdog: { key: 'watchdog', name: '正義守護者', category: 'report', icon: '🛡️', description: '提交 10 次檢舉', condition: { type: 'report_submitted', count: 10 }, reward: { points: 20, title: '守護者' } },
-  detective: { key: 'detective', name: '情報偵探', category: 'report', icon: '🔍', description: '提交 30 次檢舉', condition: { type: 'report_submitted', count: 30 }, reward: { points: 50, title: '偵探' } },
+  detective: { key: 'detective', name: '情報偵探', category: 'report', icon: '🕵️', description: '提交 30 次檢舉', condition: { type: 'report_submitted', count: 30 }, reward: { points: 50, title: '偵探' } },
   truth_seeker: { key: 'truth_seeker', name: '真相追尋者', category: 'report', icon: '⚖️', description: '檢舉被確認屬實 1 次', condition: { type: 'report_confirmed', count: 1 }, reward: { points: 20, title: null } },
   justice_warrior: { key: 'justice_warrior', name: '正義使者', category: 'report', icon: '⚔️', description: '檢舉被確認屬實 5 次', condition: { type: 'report_confirmed', count: 5 }, reward: { points: 50, title: '正義使者' } }
 };
@@ -985,7 +985,7 @@ var TASK_TYPES = {
     verify_store: {
         label: '認證店鋪',
         points: 15,
-        icon: '🔍',
+        icon: '🕵️',
         category: 'core',
         limit: 3,
         action: 'openVerifyTask',
@@ -1256,7 +1256,7 @@ var TITLE_DEFS = {
     inspector: {
         key: 'inspector',
         label: '考察師',
-        icon: '🔍',
+        icon: '🕵️',
         actions: ['verify_store'],
         levels: [
             { level: 1, threshold: 1, title: '旅人' },
@@ -4142,7 +4142,7 @@ popupContent.innerHTML =
     '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
     
 marker.on('click', function(e) {
-    console.log('🔍 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
+    console.log('🕵️ 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
     
     if (marker.isPopupOpen()) { 
         marker.closePopup(); 
@@ -4255,7 +4255,7 @@ popupContent.innerHTML =
     '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 店鋪詳情</div>';
     
 marker.on('click', function(e) {
-    console.log('🔍 click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
+    console.log('🕵️ click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
     
     if (marker.isPopupOpen()) { 
         marker.closePopup(); 
@@ -4357,12 +4357,10 @@ function renderMapStoreListWithData(inBounds) {
     return dist.toFixed(1) + "km";
   };
   
-  var renderStoreItem = function(s, index) {
+var renderStoreItem = function(s, index) {
     var isVerified = s.status === "verified" || s.verified === "verified";
     var nameColor = isVerified ? '#00CC66' : '#FFB800';
     var btnColor = isVerified ? '#00FF88' : '#FFD700';
-    var statusText = isVerified ? '已認證' : '認證(' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2)';
-    var statusColor = isVerified ? '#00FF00' : '#fff';
     
     var distText = '未開啟GPS定位';
     if (userLocation && s.lat && s.lng) {
@@ -4370,34 +4368,43 @@ function renderMapStoreListWithData(inBounds) {
         distText = '📍' + (dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km');
     }
     
-    // 檢查狀態
     var hasSupplemented = !!s.supplement_photo;
     var hasCheckedIn = hasCheckedInToday(s.id);
     var hasPosted = (STATE.livePosts || []).some(function(p) { return p.store_id === String(s.id) && p.author_device === STATE.user.device; });
     
-    // 按鈕 HTML
     var buttonsHtml = '';
-    if (!isVerified) {
-        buttonsHtml += '<span style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:1px 8px;font-size:9px;margin-left:4px;">' + statusText + '</span>';
-    }
-    if (!hasSupplemented) {
-        buttonsHtml += '<span style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:1px 8px;font-size:9px;margin-left:4px;">補充</span>';
-    }
-    buttonsHtml += '<span style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:1px 8px;font-size:9px;margin-left:4px;">' + (hasCheckedIn ? '打卡✅' : '打卡') + '</span>';
-    buttonsHtml += '<span style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:1px 8px;font-size:9px;margin-left:4px;">' + (hasPosted ? '戰績✅' : '戰績') + '</span>';
     
-    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-2.5 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2 flex-wrap">\n                <span class="font-bold text-sm truncate" style="color:' + nameColor + ';">' + s.name + '</span>\n                ' + buttonsHtml + '\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
+    // 認證按鈕（只未認證顯示）
+    if (!isVerified) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">認證(' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2)🕵️</span>';
+    } else {
+        buttonsHtml += '<span style="color:#00FF00;font-size:10px;margin-left:4px;">已認證🕵️</span>';
+    }
+    
+    // 補充按鈕（未補充才顯示）
+    if (!hasSupplemented) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">補充📝</span>';
+    }
+    
+    // 打卡按鈕
+    buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">' + (hasCheckedIn ? '打卡📍✅' : '打卡📍') + '</span>';
+    
+    // 戰績按鈕
+    buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="border:1px solid ' + btnColor + ';color:#fff;border-radius:12px;padding:2px 8px;font-size:10px;margin-left:4px;cursor:pointer;">' + (hasPosted ? '戰績📢✅' : '戰績📢') + '</span>';
+    
+    return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 min-w-0">\n              <div class="flex items-center gap-2 flex-wrap">\n                <span class="font-bold text-base truncate" style="color:' + nameColor + ';">' + s.name + '</span>\n                ' + buttonsHtml + '\n              </div>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
 };
-  
 var renderMallGroup = function(group) {
     var distText = '未開啟GPS定位';
     if (userLocation && group.stores[0].lat && group.stores[0].lng) {
         var dist = calculateDistance(userLocation.lat, userLocation.lng, group.stores[0].lat, group.stores[0].lng);
         distText = '📍' + (dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km');
     }
-    return '<button onclick="openMallFromMap(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border p-2.5 text-left transition-all active:scale-[0.98]" style="border-color:#3B82F6;background:rgba(59,130,246,0.08);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 text-center">\n              <span class="font-bold text-sm" style="color:#3B82F6;">' + group.mallName + ' <span style="color:#fff;">(' + group.totalStores + '間)</span></span>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
+    return '<button onclick="openMallFromMap(\'' + group.mallName.replace(/'/g, "\\'") + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:#3B82F6;background:rgba(59,130,246,0.08);">\n          <div class="flex items-center justify-between gap-2">\n            <div class="flex-1 text-center">\n              <span class="font-bold text-lg" style="color:#3B82F6;">' + group.mallName + ' <span style="color:#fff;">(' + group.totalStores + '間)</span></span>\n            </div>\n            <span class="text-xs text-white/60 whitespace-nowrap">' + distText + '</span>\n          </div>\n        </button>';
 };
-  var mallList = Object.keys(mallGroups).map(function(key) { return mallGroups[key]; });
+
+ 
+var mallList = Object.keys(mallGroups).map(function(key) { return mallGroups[key]; });
   mallList.sort(function(a, b) {
     var distA = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.stores[0].lat, a.stores[0].lng) : 9999;
     var distB = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, b.stores[0].lat, b.stores[0].lng) : 9999;
@@ -4904,11 +4911,11 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
     (totalVerifications >= 2 ? '✅已認證' : '認證中(' + totalVerifications + '/2)') + 
     (s.supplement_photo ? ' ✅已補充' : '') + 
 '</span>\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors flex-shrink-0">✕</button>\n    </div>\n    ' + photoHtml + '\n    \n    <!-- 第一 ROW：認證 + 補充 -->\n    <div class="mt-3 flex gap-2 flex-shrink-0">\n' +
-      (totalVerifications >= 2 ? '' : '<button onclick="openVerifyForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-neongreen/20 border border-neongreen/50 py-3 text-sm font-black text-neongreen glow-green whitespace-nowrap">🔍 認證此店 (+15分)</button>') + '\n' +
+      (totalVerifications >= 2 ? '' : '<button onclick="openVerifyForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-neongreen/20 border border-neongreen/50 py-3 text-sm font-black text-neongreen glow-green whitespace-nowrap">🕵️ 認證此店 (+15分)</button>') + '\n' +
       (!s.supplement_photo ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold glow-gold whitespace-nowrap">📝 補充資料 (+15分)</button>' : '') + '\n' +
     '</div>\n    \n    <!-- 第二 ROW：打卡 + 更新機台 + 戰報 -->\n    <div class="mt-2 flex gap-2 flex-shrink-0">\n' +
       '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡 (+5分)</button>\n' +
-      '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🔄 更新機台 (+5分)</button>\n' +
+      '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎮 更新機台 (+5分)</button>\n' +
       '<button onclick="quickAction(\'post\', \'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neonpink/30 py-2.5 text-xs font-black text-neonpink whitespace-nowrap">📢 戰報 (+5分)</button>\n' +
     '</div>\n    \n    <!-- 投票結果 -->\n    <div class="mt-3 flex flex-wrap gap-2 text-[11px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    \n    <!-- 回報按鈕靠右 -->\n    <div class="mt-2 flex justify-end flex-shrink-0">\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink whitespace-nowrap">🚨 回報</button>\n    </div>\n    \n    <!-- 現場機台流 -->\n    <div class="mt-4">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n    </div>\n  ';
 }
@@ -5166,7 +5173,7 @@ _finalGpsLocked = false;
   
   var photoHtml = s.photo ? '<img src="' + s.photo + '" class="w-full h-40 object-cover rounded-lg" alt="首發者照片" />' : '<div class="flex h-40 w-full items-center justify-center rounded-lg bg-zinc-800 text-4xl">🏪</div>';
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🔍 店鋪實證</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">📸 首發者拍攝的店鋪照片：</p>\n        <div class="mt-1">' + photoHtml + '</div>\n        <p class="text-xs text-white/30 mt-2">你的任務：到現場確認這間店鋪的資料是否正確</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">選擇實證結果 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="switchVerifyMode(\'confirm\')" id="vm-confirm-btn" class="flex-1 rounded-xl border border-neongreen/50 bg-neongreen/10 py-3 text-sm font-black text-neongreen transition-all">✅ 店鋪存在</button>\n          <button onclick="switchVerifyMode(\'report\')" id="vm-report-btn" class="flex-1 rounded-xl border border-white/20 py-3 text-sm font-black text-white/45 transition-all">❌ 店鋪有問題</button>\n        </div>\n      </div>\n      <div id="verify-confirm-section">\n        <div>\n          <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n          <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n            <span id="vf-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n          </div>\n        </div>\n        <div>\n          <label class="text-xs font-bold text-gold">📷 店鋪照片 <span class="text-neonpink">（必填）</span></label>\n          <p class="text-[11px] text-white/50 mt-1 mb-2">如果店鋪真實存在，請在現場拍下店鋪照片：</p>\n          <div id="vf-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n            <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n            <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n          </div>\n        </div>\n      </div>\n      <div id="verify-report-section" class="hidden">\n        <div>\n          <label class="text-xs font-bold text-gold">問題類型 <span class="text-neonpink">（必填）</span></label>\n          <select id="vr-category" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gold" onchange="onVerifyReportCategoryChange(this.value)">\n            <option value="">請選擇問題類型</option>\n            <option value="store_not_exist">🏪 店鋪不存在</option>\n            <option value="location_wrong">📍 位置錯誤</option>\n            <option value="photo_fake">📸 照片錯誤</option>\n            <option value="name_wrong">📝 店名錯誤</option>\n            <option value="other">💬 其他</option>\n          </select>\n        </div>\n        <div id="vr-report-detail" class="hidden mt-3"></div>\n        <div id="vr-warning" class="hidden mt-3 rounded-xl border border-neonpink/40 bg-neonpink/10 p-3">\n          <p class="text-xs text-neonpink font-bold">⚠️ 請注意</p>\n          <p class="text-[11px] text-white/60 mt-1">惡意檢舉會導致帳號封鎖，請確保你已到達現場並確認店鋪狀況後再提交。</p>\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🕵️ 店鋪實證</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-4">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40 mt-1">' + s.region + ' · ' + s.addr + '</p>\n        <p class="text-xs text-white/30 mt-2">📸 首發者拍攝的店鋪照片：</p>\n        <div class="mt-1">' + photoHtml + '</div>\n        <p class="text-xs text-white/30 mt-2">你的任務：到現場確認這間店鋪的資料是否正確</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">選擇實證結果 <span class="text-neonpink">（必填）</span></label>\n        <div class="mt-2 flex gap-2">\n          <button onclick="switchVerifyMode(\'confirm\')" id="vm-confirm-btn" class="flex-1 rounded-xl border border-neongreen/50 bg-neongreen/10 py-3 text-sm font-black text-neongreen transition-all">✅ 店鋪存在</button>\n          <button onclick="switchVerifyMode(\'report\')" id="vm-report-btn" class="flex-1 rounded-xl border border-white/20 py-3 text-sm font-black text-white/45 transition-all">❌ 店鋪有問題</button>\n        </div>\n      </div>\n      <div id="verify-confirm-section">\n        <div>\n          <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>\n          <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n            <span id="vf-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>\n          </div>\n        </div>\n        <div>\n          <label class="text-xs font-bold text-gold">📷 店鋪照片 <span class="text-neonpink">（必填）</span></label>\n          <p class="text-[11px] text-white/50 mt-1 mb-2">如果店鋪真實存在，請在現場拍下店鋪照片：</p>\n          <div id="vf-camera-container" class="mt-1 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n            <button id="vf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n            <img id="vf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n          </div>\n        </div>\n      </div>\n      <div id="verify-report-section" class="hidden">\n        <div>\n          <label class="text-xs font-bold text-gold">問題類型 <span class="text-neonpink">（必填）</span></label>\n          <select id="vr-category" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gold" onchange="onVerifyReportCategoryChange(this.value)">\n            <option value="">請選擇問題類型</option>\n            <option value="store_not_exist">🏪 店鋪不存在</option>\n            <option value="location_wrong">📍 位置錯誤</option>\n            <option value="photo_fake">📸 照片錯誤</option>\n            <option value="name_wrong">📝 店名錯誤</option>\n            <option value="other">💬 其他</option>\n          </select>\n        </div>\n        <div id="vr-report-detail" class="hidden mt-3"></div>\n        <div id="vr-warning" class="hidden mt-3 rounded-xl border border-neonpink/40 bg-neonpink/10 p-3">\n          <p class="text-xs text-neonpink font-bold">⚠️ 請注意</p>\n          <p class="text-[11px] text-white/60 mt-1">惡意檢舉會導致帳號封鎖，請確保你已到達現場並確認店鋪狀況後再提交。</p>\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button id="vf-submit-btn" onclick="submitVerification(\'' + storeId + '\')" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
   
   startVerifyGpsTracking();
   
@@ -6067,10 +6074,10 @@ async function submitVerification(storeId) {
     try {
         reviewResult = await upsertVerificationReview(storeId, verification);
         
-        // 🔍 除錯 log
-        console.log('🔍 reviewResult:', reviewResult);
-        console.log('🔍 storeId:', storeId);
-        console.log('🔍 verification.verifier_device:', verification.verifier_device);
+        // 🕵️ 除錯 log
+        console.log('🕵️ reviewResult:', reviewResult);
+        console.log('🕵️ storeId:', storeId);
+        console.log('🕵️ verification.verifier_device:', verification.verifier_device);
         
         if (reviewResult === 'already_complete') {
             toast('此店鋪已認證完畢', 'gold');
@@ -6129,9 +6136,9 @@ async function submitVerification(storeId) {
                             is_verified: true
                         };
                     }
-                    // 🔍 除錯 log
-console.log('🔍 updateData:', JSON.stringify(updateData));
-console.log('🔍 updateData keys:', Object.keys(updateData).length);
+                    // 🕵️ 除錯 log
+console.log('🕵️ updateData:', JSON.stringify(updateData));
+console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                     if (Object.keys(updateData).length > 0) {
                         var updateStoreResult = await supabaseClientInstance
                             .from('claw_stores')
@@ -8053,14 +8060,14 @@ function viewTask() {
     // 核心任務（3 段）
     var coreTasks = [
         { key: 'submit_store', label: '提交', icon: '🏪', points: 15 },
-        { key: 'verify_store', label: '認證', icon: '🔍', points: 15 },
+        { key: 'verify_store', label: '認證', icon: '🕵️', points: 15 },
         { key: 'supplement', label: '補充', icon: '📝', points: 15 }
     ];
     
     // 日常任務（5 段或 3 段）
     var dailyTasks = [
         { key: 'checkin', label: '打卡', icon: '📍', points: 5, limit: 5 },
-        { key: 'machine_checkin', label: '機台更新', icon: '🔄', points: 5, limit: 5 },
+        { key: 'machine_checkin', label: '機台更新', icon: '🎰', points: 5, limit: 5 },
         { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 }
     ];
     
@@ -8266,7 +8273,7 @@ function openVerifyTask() {
   showView('map');
   setTimeout(function() {
     setMapFilter('pending');
-    toast('🔍 顯示待認證店鋪，請在地圖上選擇並認證', 'gold');
+    toast('🕵️ 顯示待認證店鋪，請在地圖上選擇並認證', 'gold');
     showFilterGuide('請點擊地圖上黃色的圖釘來開始認證 🗺️');
   }, 400);
 }
@@ -8373,7 +8380,7 @@ function viewMe() {
   
   var categories = {
     submission: { label: '🏪 店鋪提交' },
-    verification: { label: '🔍 店鋪認證' },
+    verification: { label: '🕵️ 店鋪認證' },
     complete: { label: '🏅 完整貢獻' },
     region: { label: '🏙️ 地區探索' },
     supplement: { label: '📝 資料補充' },
@@ -8470,7 +8477,7 @@ async function renderRegionCollectionCards() {
                     html += '<div class="region-cell unlocked">';
 html += '<span class="region-cell-name">' + district + '<span class="region-icon ' + (actions['checkin'] ? 'done' : '') + '">📍</span></span>';
 html += '<div class="region-cell-icons">';
-html += '<span class="region-icon ' + (actions['verify_store'] ? 'done' : '') + '">🔍</span>';
+html += '<span class="region-icon ' + (actions['verify_store'] ? 'done' : '') + '">🕵️</span>';
 html += '<span class="region-icon ' + (actions['submit_store'] ? 'done' : '') + '">🏪</span>';
 html += '<span class="region-icon ' + (actions['supplement'] ? 'done' : '') + '">📝</span>';
 html += '<span class="region-icon ' + (actions['post'] ? 'done' : '') + '">📢</span>';
@@ -8480,7 +8487,7 @@ html += '</div>';
                     html += '<div class="region-cell locked">';
 html += '<span class="region-cell-name">' + district + '<span class="region-icon">📍</span></span>';
 html += '<div class="region-cell-icons">';
-html += '<span class="region-icon">🔍</span>';
+html += '<span class="region-icon">🕵️</span>';
 html += '<span class="region-icon">🏪</span>';
 html += '<span class="region-icon">📝</span>';
 html += '<span class="region-icon">📢</span>';
