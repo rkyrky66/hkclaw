@@ -1334,7 +1334,7 @@ function updateRegionProgress() {
         if (wrapper) {
             var newContainer = document.createElement('div');
             newContainer.id = 'region-progress-container';
-            newContainer.style.cssText = 'position:absolute;top:2px;left:2px;z-index:1000;padding:8px 10px;background:rgba(0,0,0,0.6);border-radius:10px;pointer-events:none;';
+            newContainer.style.cssText = 'position:absolute;top:2px;left:2px;z-index:1000;padding:0;background:transparent;pointer-events:none;';
             newContainer.innerHTML = renderRegionProgress();
             wrapper.appendChild(newContainer);
         }
