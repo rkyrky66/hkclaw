@@ -6416,9 +6416,34 @@ function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充地址</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">補充地址可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📍 詳細地址 <span class="text-neonpink">（必填）</span></label>\n        <input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr && s.addr !== '' && s.addr !== '（未填地址）' ? s.addr : '') + '" />\n        <p class="text-[10px] text-white/40 mt-1">💡 填寫完整地址，幫助其他用戶更容易找到店鋪</p>\n      </div>\n      <button onclick="this.classList.add(\'btn-press\'); submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green">✅ 提交地址（+15 積分）</button>\n    </div>\n  ')
+  openModal(`
+    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
+      <h2 class="font-black text-gold neon-gold">📝 補充地址</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+    </div>
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+        <p class="text-sm font-bold text-gold">${s.name}</p>
+        <p class="text-xs text-white/40">${s.region} · ${s.addr || '未填地址'}</p>
+        <p class="text-xs text-white/30 mt-1">補充地址可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gold">📍 詳細地址 <span class="text-neonpink">（必填）</span></label>
+        <input id="sa-address" placeholder="例如：西洋菜南街 2A 好望角大廈" 
+          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+          value="${s.addr && s.addr !== '' && s.addr !== '（未填地址）' ? s.addr : ''}" />
+        <p class="text-[10px] text-white/40 mt-1">💡 填寫完整地址，系統將自動驗證位置</p>
+      </div>
+      <div id="sa-verify-result" class="hidden"></div>
+    </div>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="verifySupplementAddress('${s.id}')" id="sa-verify-btn" 
+        class="w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green">
+        🔍 驗證地址
+      </button>
+    </div>
+  `);
 }
-
 function selectSizeUI(size) {
   window._sfSelections.size = size;
   document.querySelectorAll('.sf-size-btn').forEach(function(btn) {
@@ -6508,106 +6533,184 @@ function selectTokenUI(value) {
 // ============================================================
 // 補充資料 - 記錄補充者 (修復版 + 防重鎖)
 // ============================================================
-async function submitAllSupplement(storeId) {
-    if (!acquireSubmitLock('submitAllSupplement')) return;
+// 驗證補充地址（使用 Nominatim）
+async function verifySupplementAddress(storeId) {
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    
+    var address = document.getElementById('sa-address')?.value.trim();
+    if (!address) {
+        toast('請輸入地址', 'pink');
+        return;
+    }
+    
+    var verifyBtn = document.getElementById('sa-verify-btn');
+    if (verifyBtn) {
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = '⏳ 驗證中...';
+    }
+    
+    try {
+        var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=hk&q=' + encodeURIComponent(address);
+        var geocodeRes = await fetch(geocodeUrl, {
+            headers: { 'User-Agent': 'ClawInfoStation/1.0' }
+        });
+        var geocodeData = await geocodeRes.json();
+        
+        var resultHtml = '';
+        
+        if (geocodeData && geocodeData.length > 0) {
+            var geocodedLat = parseFloat(geocodeData[0].lat);
+            var geocodedLng = parseFloat(geocodeData[0].lon);
+            
+            var distanceMeters = null;
+            var isVerified = false;
+            
+            if (s.lat && s.lng) {
+                var distance = calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng);
+                distanceMeters = Math.round(distance * 1000);
+                isVerified = distanceMeters <= 100;
+            }
+            
+            if (isVerified) {
+                resultHtml = `
+                    <div class="rounded-xl border border-neongreen/40 bg-neongreen/10 p-3">
+                        <p class="text-sm font-bold text-neongreen">✅ 地址驗證通過！</p>
+                        <p class="text-xs text-white/60 mt-1">📍 距離店鋪 ${distanceMeters} 米</p>
+                    </div>
+                `;
+                
+                if (verifyBtn) {
+                    verifyBtn.textContent = '✅ 提交地址（+15 積分）';
+                    verifyBtn.disabled = false;
+                    verifyBtn.onclick = function() { submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng, distanceMeters); };
+                }
+            } else {
+                resultHtml = `
+                    <div class="rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-3">
+                        <p class="text-sm font-bold text-yellow-400">⚠️ 地址驗證失敗</p>
+                        <p class="text-xs text-white/60 mt-1">📍 距離店鋪 ${distanceMeters ? distanceMeters + ' 米' : '未知'}</p>
+                        <p class="text-xs text-white/40 mt-1">將提交管理員審核，通過後可獲得積分</p>
+                    </div>
+                `;
+                
+                if (verifyBtn) {
+                    verifyBtn.textContent = '📤 提交管理員審核';
+                    verifyBtn.disabled = false;
+                    verifyBtn.onclick = function() { submitAddressForReview(storeId, address, geocodedLat, geocodedLng, distanceMeters); };
+                }
+            }
+        } else {
+            resultHtml = `
+                <div class="rounded-xl border border-neonpink/40 bg-neonpink/10 p-3">
+                    <p class="text-sm font-bold text-neonpink">❌ 找不到此地址</p>
+                    <p class="text-xs text-white/60 mt-1">請確認地址是否正確，或嘗試更詳細的地址</p>
+                </div>
+            `;
+            
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = '🔍 重新驗證';
+                verifyBtn.onclick = function() { verifySupplementAddress(storeId); };
+            }
+        }
+        
+        var resultContainer = document.getElementById('sa-verify-result');
+        if (resultContainer) {
+            resultContainer.innerHTML = resultHtml;
+            resultContainer.classList.remove('hidden');
+        }
+        
+    } catch (e) {
+        console.warn('⚠️ 地理編碼失敗:', e.message);
+        toast('地址驗證失敗，請稍後重試', 'pink');
+        
+        if (verifyBtn) {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = '🔍 重新驗證';
+        }
+    }
+}
+
+// 提交驗證通過的地址
+async function submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng, distanceMeters) {
+    if (!acquireSubmitLock('submitVerifiedAddress')) return;
     if (!requireLogin('補充地址')) return;
     
-    var submitBtn = disableSubmitButton('sf-submit-btn', '⏳ 提交中...');
+    var submitBtn = document.getElementById('sa-verify-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ 提交中...';
+    }
     
     try {
         var s = STORES.find(function(x) { return x.id === storeId; });
-        if (!s) { 
-            toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交地址（+15 積分）');
-            return; 
+        if (!s) { toast('找不到該店鋪', 'pink'); return; }
+        
+        s.addr = address;
+        
+        if (CLOUD_ON) {
+            await supabaseClientInstance
+                .from('claw_stores')
+                .update({ addr: address })
+                .eq('id', parseInt(storeId));
         }
         
-        var address = document.getElementById('sf-address')?.value.trim();
-        if (!address) {
-            toast('請輸入地址', 'pink');
-            enableSubmitButton(submitBtn, '✅ 提交地址（+15 積分）');
-            return;
-        }
+        save();
+        await addPoints(15, '補充地址');
+        await recordRegionContribution('supplement', s.region, storeId);
+        await recordTaskCompletion('supplement');
         
-        // ✅ 使用 Nominatim 反向地理編碼
-        var geocodedLat = null;
-        var geocodedLng = null;
-        
-        try {
-            var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=hk&q=' + encodeURIComponent(address);
-            var geocodeRes = await fetch(geocodeUrl, {
-                headers: { 'User-Agent': 'ClawInfoStation/1.0' }
-            });
-            var geocodeData = await geocodeRes.json();
-            
-            if (geocodeData && geocodeData.length > 0) {
-                geocodedLat = parseFloat(geocodeData[0].lat);
-                geocodedLng = parseFloat(geocodeData[0].lon);
-            }
-        } catch (e) {
-            console.warn('⚠️ 地理編碼失敗:', e.message);
-        }
-        
-        // ✅ 與店鋪 GPS 對比
-        var distanceMeters = null;
-        var isVerified = false;
-        
-        if (geocodedLat && geocodedLng && s.lat && s.lng) {
-            var distance = calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng);
-            distanceMeters = Math.round(distance * 1000);
-            isVerified = distanceMeters <= 100;
-        }
-        
-        if (isVerified) {
-            // ✅ 驗證通過，直接寫入
-            s.addr = address;
-            
-            if (CLOUD_ON) {
-                await supabaseClientInstance
-                    .from('claw_stores')
-                    .update({ addr: address })
-                    .eq('id', parseInt(storeId));
-            }
-            
-            save();
-            await addPoints(15, '補充地址');
-            
-            // 記錄貢獻
-            await recordRegionContribution('supplement', s.region, storeId);
-            await recordTaskCompletion('supplement');
-            
-            toast('✅ 地址已補充！+15 分', 'green');
-            closeModal();
-            setTimeout(function() { openStore(storeId); }, 300);
-            
-        } else {
-            // ✅ 驗證失敗，寫入 address_submissions 等管理員審核
-            if (CLOUD_ON) {
-                await supabaseClientInstance
-                    .from('address_submissions')
-                    .insert({
-                        store_id: String(storeId),
-                        submitted_address: address,
-                        submitted_by: STATE.user.device,
-                        user_id: STATE.user.user_id || null,
-                        geocoded_lat: geocodedLat,
-                        geocoded_lng: geocodedLng,
-                        store_lat: s.lat || null,
-                        store_lng: s.lng || null,
-                        distance_meters: distanceMeters,
-                        status: 'pending',
-                        created_at: new Date().toISOString()
-                    });
-            }
-            
-            toast('⚠️ 找不到實際位置，已提交管理員審核', 'gold');
-            closeModal();
-        }
+        toast('✅ 地址已補充！+15 分', 'green');
+        closeModal();
+        setTimeout(function() { openStore(storeId); }, 300);
         
     } finally {
-        releaseSubmitLock('submitAllSupplement');
+        releaseSubmitLock('submitVerifiedAddress');
     }
 }
+
+// 提交地址給管理員審核
+async function submitAddressForReview(storeId, address, geocodedLat, geocodedLng, distanceMeters) {
+    if (!acquireSubmitLock('submitAddressForReview')) return;
+    if (!requireLogin('補充地址')) return;
+    
+    var submitBtn = document.getElementById('sa-verify-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ 提交中...';
+    }
+    
+    try {
+        var s = STORES.find(function(x) { return x.id === storeId; });
+        if (!s) { toast('找不到該店鋪', 'pink'); return; }
+        
+        if (CLOUD_ON) {
+            await supabaseClientInstance
+                .from('address_submissions')
+                .insert({
+                    store_id: String(storeId),
+                    submitted_address: address,
+                    submitted_by: STATE.user.device,
+                    user_id: STATE.user.user_id || null,
+                    geocoded_lat: geocodedLat,
+                    geocoded_lng: geocodedLng,
+                    store_lat: s.lat || null,
+                    store_lng: s.lng || null,
+                    distance_meters: distanceMeters,
+                    status: 'pending',
+                    created_at: new Date().toISOString()
+                });
+        }
+        
+        toast('📤 已提交管理員審核，通過後可獲得積分', 'gold');
+        closeModal();
+        
+    } finally {
+        releaseSubmitLock('submitAddressForReview');
+    }
+}
+
 
 function checkPerfectFile(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
@@ -7809,7 +7912,7 @@ function viewTask() {
     var percentage = Math.min(100, (totalScore / 50) * 100);
     var isReached = isDailyGoalReached(progress);
     var levelInfo = getUserLevel();
-    
+    var hunterTaskHtml = renderHunterTaskSection();
     // ✅ 初始化 _lastSeen
     if (!progress._lastSeen) {
         progress._lastSeen = {};
@@ -7895,6 +7998,7 @@ function viewTask() {
           '</div>';
       }
   }
+  
     return '\n    <!-- 今日進度總覽 -->\n' +
         '<div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">' +
             '<div class="flex items-center justify-between">' +
@@ -7919,7 +8023,7 @@ function viewTask() {
         rewardHtml + '\n' +
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常任務</h3>\n' +
         '<div class="task-grid">' + dailyHtml + '</div></div>\n' +
-        
+        '\n    ' + hunterTaskHtml + '\n' +
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 打卡</h3>\n' +
         '<div class="space-y-2">\n' +
             '<div class="flex items-center justify-between rounded-xl border border-gold/25 bg-zinc-950 p-3">\n' +
@@ -10168,14 +10272,14 @@ function openModal(html) {
   root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
   root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + html + '</div>';
 }
-
 function closeModal() {
   // 停止所有 GPS 追蹤
   stopIntelGpsTracking();
   stopVerifyGpsTracking();
   if (typeof stopVerifyReportGpsTracking === 'function') stopVerifyReportGpsTracking();
+  stopHunterGpsTracking();
   
-  // ✅ 停止所有相機串流
+  // 停止所有相機串流
   Object.keys(window._camStreams || {}).forEach(function(key) {
       var stream = window._camStreams[key];
       if (stream) {
@@ -10193,6 +10297,11 @@ function closeModal() {
   var root = document.getElementById("modal-root");
   root.className = "pointer-events-none fixed inset-0 z-50";
   root.innerHTML = "";
+  
+  // ✅ 檢查是否需要彈出搜證任務
+  setTimeout(function() {
+      checkPendingHunterTask();
+  }, 300);
 }
 
 function toast(msg, color) {
@@ -11098,7 +11207,675 @@ injectManifest();
         textarea.remove();
     }
 })();
+// ============================================================
+// 🎯 搜證任務系統 (Hunter Task)
+// ============================================================
 
+var HUNTER_TASK_TRIGGERS = [
+    'direct',           // 直接觸發（達到50分時）
+    'checkin',          // 打卡觸發
+    'submit',           // 提交觸發
+    'verify',           // 認證觸發
+    'post',             // 戰績觸發
+    'supplement',       // 補充觸發
+    'like',             // 點讚觸發
+    'reaction',         // 留感受觸發
+    'machine',          // 更新機台觸發
+    'favorite'          // 收藏觸發
+];
+
+var HUNTER_TASK_DURATION = 3600000; // 1 小時
+var HUNTER_TASK_REWARD = 40;
+var HUNTER_TASK_KEY = 'hunter_task_state';
+var _pendingHunterTask = null;
+
+// 獲取今日搜證任務狀態
+function getHunterTaskState() {
+    var today = todayKey();
+    var state = {};
+    
+    try {
+        state = JSON.parse(localStorage.getItem(HUNTER_TASK_KEY) || '{}');
+    } catch (e) {
+        state = {};
+    }
+    
+    if (state.date !== today) {
+        state = {
+            date: today,
+            triggered: false,
+            storeId: null,
+            storeName: null,
+            acceptedAt: null,
+            expiresAt: null,
+            status: 'none', // none / triggered / accepted / completed / expired / dismissed
+            answers: {},
+            completedAt: null
+        };
+        saveHunterTaskState(state);
+    }
+    
+    return state;
+}
+
+function saveHunterTaskState(state) {
+    localStorage.setItem(HUNTER_TASK_KEY, JSON.stringify(state));
+}
+
+// 檢查是否觸發搜證任務（在行為完成後呼叫）
+function checkHunterTaskTrigger(actionType) {
+    var state = getHunterTaskState();
+    
+    // 已觸發、已接受、已完成、已拒絕，不再觸發
+    if (state.status !== 'none') return;
+    
+    // 檢查是否已達 50 分
+    var progress = getTaskProgress();
+    var totalScore = calculateDailyScore(progress);
+    if (totalScore < 50) return;
+    
+    // 檢查行為是否在觸發列表
+    if (HUNTER_TASK_TRIGGERS.indexOf(actionType) === -1) return;
+    
+    // 10% 機率
+    if (Math.random() > 0.1) return;
+    
+    // 觸發
+    triggerHunterTask(actionType);
+}
+
+// 觸發搜證任務
+function triggerHunterTask(actionType) {
+    var state = getHunterTaskState();
+    
+    // 選擇目標店鋪
+    var targetStore = selectRandomStoreForHunterTask();
+    if (!targetStore) return;
+    
+    state.triggered = true;
+    state.storeId = targetStore.id;
+    state.storeName = targetStore.name;
+    state.status = 'triggered';
+    
+    saveHunterTaskState(state);
+    
+    // 設定待顯示的任務
+    _pendingHunterTask = {
+        storeId: targetStore.id,
+        storeName: targetStore.name
+    };
+    
+    // 延遲檢查表單是否關閉
+    setTimeout(function() {
+        checkPendingHunterTask();
+    }, 500);
+}
+
+// 檢查是否有待顯示的搜證任務
+function checkPendingHunterTask() {
+    if (!_pendingHunterTask) return;
+    
+    // 檢查 modal 是否已關閉
+    var modalRoot = document.getElementById('modal-root');
+    if (modalRoot && modalRoot.children.length > 0) {
+        return; // 表單還開著，等待關閉
+    }
+    
+    var pending = _pendingHunterTask;
+    _pendingHunterTask = null;
+    
+    showHunterTaskPrompt(pending.storeName);
+}
+
+// 隨機選擇目標店鋪
+function selectRandomStoreForHunterTask() {
+    var storesWithCoords = STORES.filter(function(s) { 
+        return s.lat && s.lng && !s.is_hidden; 
+    });
+    
+    if (storesWithCoords.length === 0) return null;
+    
+    // 優先選擇附近的店鋪
+    if (userLocation) {
+        var nearbyStores = storesWithCoords.filter(function(s) {
+            var dist = calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng);
+            return dist < 2;
+        });
+        
+        if (nearbyStores.length > 0) {
+            return nearbyStores[Math.floor(Math.random() * nearbyStores.length)];
+        }
+    }
+    
+    return storesWithCoords[Math.floor(Math.random() * storesWithCoords.length)];
+}
+
+// 顯示搜證任務彈窗
+function showHunterTaskPrompt(storeName) {
+    var state = getHunterTaskState();
+    
+    var distText = '';
+    if (userLocation && state.storeId) {
+        var store = STORES.find(function(s) { return s.id === state.storeId; });
+        if (store && store.lat && store.lng) {
+            var dist = calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng);
+            distText = dist < 1 ? Math.round(dist * 1000) + ' 米' : dist.toFixed(1) + ' 公里';
+        }
+    }
+    
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-6xl mb-3">🎯</div>
+            <h2 class="text-xl font-black text-gold neon-gold">突發搜證任務</h2>
+            <div class="mt-3 w-full rounded-xl border border-gold/40 bg-gold/5 p-4">
+                <p class="text-sm text-white/80">
+                    搜證店鋪：<span class="text-gold font-bold">${storeName}</span>${distText ? '（距離 ' + distText + '）' : ''}
+                </p>
+                <p class="text-xs text-white/50 mt-2">任務內容：前往任務店鋪，查找缺失的店舖資訊</p>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="text-xs text-white/50">⏰ 時限：1 小時</span>
+                    <span class="text-sm font-bold text-gold">獎勵：${HUNTER_TASK_REWARD} 積分</span>
+                </div>
+            </div>
+            <p class="mt-3 text-sm text-white/60">你要接受任務嗎？</p>
+            <div class="mt-4 w-full flex gap-3">
+                <button onclick="closeModal(); acceptHunterTask()" 
+                    class="flex-1 rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold">
+                    ✅ 接受
+                </button>
+                <button onclick="closeModal(); rejectHunterTask()" 
+                    class="flex-1 rounded-2xl border border-white/20 py-3.5 text-base font-black text-white/45">
+                    ❌ 不接受
+                </button>
+            </div>
+        </div>
+    `);
+}
+
+// 接受搜證任務
+function acceptHunterTask() {
+    var state = getHunterTaskState();
+    
+    state.status = 'accepted';
+    state.acceptedAt = Date.now();
+    state.expiresAt = Date.now() + HUNTER_TASK_DURATION;
+    
+    saveHunterTaskState(state);
+    
+    // 同步到雲端
+    syncHunterTaskToCloud(state);
+    
+    toast('✅ 已接受搜證任務！請前往任務頁面查看', 'gold');
+    
+    // 如果目前在任務頁面，刷新
+    if (CURRENT === 'task') {
+        showView('task');
+    }
+}
+
+// 拒絕搜證任務
+function rejectHunterTask() {
+    var state = getHunterTaskState();
+    state.status = 'dismissed';
+    saveHunterTaskState(state);
+    
+    syncHunterTaskToCloud(state);
+    
+    toast('已拒絕搜證任務', 'pink');
+}
+
+// 同步搜證任務到雲端
+async function syncHunterTaskToCloud(state) {
+    if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
+    
+    try {
+        var cloudData = {
+            store_id: String(state.storeId || ''),
+            accepted_at: state.acceptedAt ? new Date(state.acceptedAt).toISOString() : null,
+            expires_at: state.expiresAt ? new Date(state.expiresAt).toISOString() : null,
+            status: state.status
+        };
+        
+        await fetch(SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + STATE.user.user_id, {
+            method: 'PATCH',
+            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
+            body: JSON.stringify({
+                hunter_task: cloudData,
+                updated_at: new Date().toISOString()
+            })
+        });
+    } catch (e) {
+        console.warn('⚠️ 搜證任務雲端同步失敗:', e.message);
+    }
+}
+
+// 從雲端載入搜證任務
+async function loadHunterTaskFromCloud() {
+    if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
+    
+    try {
+        var response = await fetch(
+            SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + STATE.user.user_id + "&select=hunter_task",
+            { headers: getSupabaseHeaders() }
+        );
+        if (!response.ok) return;
+        
+        var data = await response.json();
+        if (data && data.length > 0 && data[0].hunter_task) {
+            var cloudTask = data[0].hunter_task;
+            var localState = getHunterTaskState();
+            
+            // 合併（雲端優先）
+            if (cloudTask.status === 'accepted' && localState.status !== 'completed') {
+                localState.storeId = cloudTask.store_id;
+                localState.status = cloudTask.status;
+                localState.acceptedAt = cloudTask.accepted_at ? new Date(cloudTask.accepted_at).getTime() : null;
+                localState.expiresAt = cloudTask.expires_at ? new Date(cloudTask.expires_at).getTime() : null;
+                saveHunterTaskState(localState);
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ 載入搜證任務失敗:', e.message);
+    }
+}
+
+// 渲染搜證任務區塊（任務頁面）
+function renderHunterTaskSection() {
+    var state = getHunterTaskState();
+    
+    if (state.status !== 'accepted') return '';
+    
+    // 檢查是否過期
+    if (state.expiresAt && Date.now() > state.expiresAt) {
+        state.status = 'expired';
+        saveHunterTaskState(state);
+        syncHunterTaskToCloud(state);
+        return '';
+    }
+    
+    // 計算剩餘時間
+    var remainingMs = state.expiresAt - Date.now();
+    var remainingMin = Math.floor(remainingMs / 60000);
+    var remainingSec = Math.floor((remainingMs % 60000) / 1000);
+    var timeDisplay = remainingMin + ':' + (remainingSec < 10 ? '0' : '') + remainingSec;
+    
+    var storeName = state.storeName || '未知店鋪';
+    
+    // 計算距離
+    var distText = '';
+    if (userLocation && state.storeId) {
+        var store = STORES.find(function(s) { return s.id === state.storeId; });
+        if (store && store.lat && store.lng) {
+            var dist = calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng);
+            distText = dist < 1 ? Math.round(dist * 1000) + ' 米' : dist.toFixed(1) + ' 公里';
+        }
+    }
+    
+    return '<div class="mt-5">' +
+        '<h3 class="mb-2 text-sm font-black text-gold neon-gold">🎯 情報獵人任務</h3>' +
+        '<div class="rounded-xl border border-gold/40 bg-gold/5 p-4">' +
+            '<p class="text-sm font-bold text-gold">🏪 ' + storeName + '</p>' +
+            (distText ? '<p class="text-xs text-white/50 mt-1">📍 距離：' + distText + '</p>' : '') +
+            '<div class="mt-2 flex items-center justify-between">' +
+                '<span class="text-xs text-white/50">⏰ 剩餘 ' + timeDisplay + '</span>' +
+                '<span class="text-xs text-gold">獎勵：' + HUNTER_TASK_REWARD + ' 積分</span>' +
+            '</div>' +
+            '<button onclick="startHunterTask()" class="mt-3 w-full rounded-xl bg-gold py-3 text-sm font-black text-black glow-gold">' +
+                '📍 我已到店，開始搜證' +
+            '</button>' +
+        '</div>' +
+    '</div>';
+}
+
+// 開始搜證任務（打開表單）
+function startHunterTask() {
+    var state = getHunterTaskState();
+    
+    if (state.status !== 'accepted') return;
+    
+    // 檢查是否過期
+    if (state.expiresAt && Date.now() > state.expiresAt) {
+        state.status = 'expired';
+        saveHunterTaskState(state);
+        syncHunterTaskToCloud(state);
+        toast('任務已過期', 'pink');
+        return;
+    }
+    
+    var store = STORES.find(function(s) { return s.id === state.storeId; });
+    if (!store) {
+        toast('找不到目標店鋪', 'pink');
+        return;
+    }
+    
+    openHunterTaskForm(store);
+}
+
+// 開啟搜證任務表單
+function openHunterTaskForm(store) {
+    var state = getHunterTaskState();
+    
+    // 清除殘留照片
+    window._cam = window._cam || {};
+    window._camPreview = window._camPreview || {};
+    window._cam['ht'] = null;
+    window._camPreview['ht'] = null;
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    // 獲取用戶之前的投票答案
+    var previousAnswers = {};
+    
+    // 從雲端讀取用戶在該店鋪的投票
+    if (CLOUD_ON) {
+        supabaseClientInstance
+            .from('store_field_votes')
+            .select('field_name, answer')
+            .eq('store_id', String(store.id))
+            .eq('voted_by', STATE.user.device)
+            .then(function(result) {
+                if (!result.error && result.data) {
+                    for (var i = 0; i < result.data.length; i++) {
+                        previousAnswers[result.data[i].field_name] = result.data[i].answer;
+                    }
+                }
+                renderHunterVotes(previousAnswers);
+            });
+    } else {
+        renderHunterVotes(previousAnswers);
+    }
+    
+    function renderHunterVotes(previousAnswers) {
+        state.answers = previousAnswers;
+        saveHunterTaskState(state);
+        
+        var voteHtml = '';
+        VOTABLE_FIELDS.forEach(function(field) {
+            var optionsHtml = field.options.map(function(opt) {
+                var isSelected = previousAnswers[field.key] === opt.value;
+                return '<button onclick="selectHunterVote(\'' + field.key + '\', \'' + opt.value + '\')" ' +
+                    'data-field="' + field.key + '" data-value="' + opt.value + '" ' +
+                    'class="hunter-vote-btn rounded-xl border py-2.5 text-sm font-bold transition-all ' + 
+                    (isSelected ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + 
+                    opt.label + '</button>';
+            }).join('');
+            
+            voteHtml += '<div class="mt-3">' +
+                '<label class="text-xs font-bold text-gold">' + field.question + '</label>' +
+                '<div class="mt-2 grid grid-cols-2 gap-2">' + optionsHtml + '</div>' +
+            '</div>';
+        });
+        
+        openModal(`
+            <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
+                <h2 class="font-black text-gold neon-gold">🎯 搜證任務</h2>
+                <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+                <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+                    <p class="text-sm font-bold text-gold">🏪 ${store.name}</p>
+                    <p class="text-xs text-white/50 mt-1">${store.region} · ${store.addr || '地鋪'}</p>
+                </div>
+                
+                <div>
+                    <label class="text-xs font-bold text-gold">📋 投票任務</label>
+                    ${voteHtml}
+                </div>
+                
+                <div>
+                    <label class="text-xs font-bold text-gold">📷 拍攝兌幣機照片 <span class="text-neonpink">（必填）</span></label>
+                    <p class="text-[10px] text-white/40 mt-1">有兌幣機請拍兌幣機；無兌幣機請拍店鋪全景證明</p>
+                    <div id="ht-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-gold/60 bg-zinc-900 p-3 text-center">
+                        <button onclick="openCamera('ht')" class="w-full rounded-lg bg-gold/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="text-xs font-bold text-gold">📍 GPS 定位</label>
+                    <div class="mt-1 rounded-xl border border-white/10 bg-zinc-900/50 p-3">
+                        <span id="ht-gps" class="text-yellow-400 text-xs">⏳ 定位中...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+                <button id="ht-submit-btn" onclick="submitHunterTask()" 
+                    class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
+                    請完成所有投票和拍照
+                </button>
+            </div>
+        `);
+        
+        startHunterGpsTracking();
+        
+        var checkInterval = setInterval(function() {
+            updateHunterSubmitButton();
+        }, 500);
+        setTimeout(function() { clearInterval(checkInterval); }, 3600000);
+    }
+}
+
+// 選擇搜證投票
+function selectHunterVote(fieldKey, value) {
+    var state = getHunterTaskState();
+    state.answers[fieldKey] = value;
+    saveHunterTaskState(state);
+    
+    document.querySelectorAll('.hunter-vote-btn[data-field="' + fieldKey + '"]').forEach(function(btn) {
+        if (btn.dataset.value === value) {
+            btn.className = 'hunter-vote-btn rounded-xl border border-gold bg-gold/20 text-gold glow-gold py-2.5 text-sm font-bold transition-all';
+        } else {
+            btn.className = 'hunter-vote-btn rounded-xl border border-white/20 text-white/45 py-2.5 text-sm font-bold transition-all';
+        }
+    });
+    
+    updateHunterSubmitButton();
+}
+
+// 搜證任務 GPS 追蹤
+var _hunterGpsTimer = null;
+
+function startHunterGpsTracking() {
+    stopHunterGpsTracking();
+    _finalGpsLat = null;
+    _finalGpsLng = null;
+    _finalGpsLocked = false;
+    
+    function tick() {
+        var el = document.getElementById('ht-gps');
+        if (!el) { stopHunterGpsTracking(); return; }
+        
+        if (_finalGpsLocked) return;
+        
+        if (!navigator.geolocation) {
+            el.textContent = '⚠️ 此裝置不支援 GPS 定位';
+            el.className = 'text-neonpink text-xs';
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                gpsLat = pos.coords.latitude;
+                gpsLng = pos.coords.longitude;
+                
+                if (el && !_finalGpsLocked) {
+                    el.textContent = '實時更新中：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+                    el.className = 'text-neongreen text-xs';
+                }
+                updateHunterSubmitButton();
+            },
+            function(err) {
+                if (!_finalGpsLocked) {
+                    el.textContent = '⚠️ 定位失敗，請確保開啟 GPS';
+                    el.className = 'text-yellow-400 text-xs';
+                }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    }
+    
+    tick();
+    _hunterGpsTimer = setInterval(tick, 2000);
+}
+
+function stopHunterGpsTracking() {
+    if (_hunterGpsTimer) {
+        clearInterval(_hunterGpsTimer);
+        _hunterGpsTimer = null;
+    }
+}
+
+// 更新搜證任務提交按鈕
+function updateHunterSubmitButton() {
+    var btn = document.getElementById('ht-submit-btn');
+    if (!btn) return;
+    
+    var state = getHunterTaskState();
+    var answersCount = Object.keys(state.answers || {}).length;
+    var photoReady = !!(window._camPreview && window._camPreview.ht);
+    
+    if (answersCount >= 5 && photoReady) {
+        btn.className = 'w-full rounded-2xl bg-gold py-3.5 text-base font-black text-black glow-gold transition-all hover:scale-[1.02] active:scale-[0.98]';
+        btn.disabled = false;
+        btn.innerHTML = '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）';
+    } else {
+        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+        btn.disabled = true;
+        
+        if (answersCount < 5) {
+            btn.innerHTML = '📋 投票進度：' + answersCount + '/5';
+        } else if (!photoReady) {
+            btn.innerHTML = '📷 請拍攝兌幣機照片';
+        }
+    }
+}
+
+// 提交搜證任務
+async function submitHunterTask() {
+    if (!acquireSubmitLock('submitHunterTask')) return;
+    if (!requireLogin('搜證任務')) return;
+    
+    var submitBtn = disableSubmitButton('ht-submit-btn', '⏳ 提交中...');
+    
+    try {
+        var state = getHunterTaskState();
+        
+        // 驗證投票
+        if (Object.keys(state.answers || {}).length < 5) {
+            toast('請完成所有 5 項投票', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+            return;
+        }
+        
+        // 驗證照片
+        var photoBlob = window._cam?.ht;
+        if (!photoBlob) {
+            toast('請拍攝兌幣機照片', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+            return;
+        }
+        
+        // 驗證 GPS
+        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) {
+            toast('📍 請先拍照以鎖定 GPS 位置', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+            return;
+        }
+        
+        var store = STORES.find(function(s) { return s.id === state.storeId; });
+        if (!store) {
+            toast('找不到目標店鋪', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+            return;
+        }
+        
+        // 驗證距離
+        var isMallStore = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
+        var limitDistance = isMallStore ? 0.5 : 0.3;
+        
+        if (store.lat && store.lng) {
+            var distance = calculateDistance(store.lat, store.lng, _finalGpsLat, _finalGpsLng);
+            var distanceMeters = Math.round(distance * 1000);
+            var limitMeters = Math.round(limitDistance * 1000);
+            
+            if (distance > limitDistance) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內完成', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+                return;
+            }
+        }
+        
+        // 上傳照片
+        var photoUrl = window._camPreview?.ht || '';
+        if (CLOUD_ON) {
+            try {
+                var file = new File([photoBlob], "hunter_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+                photoUrl = await uploadImage(file, 'supplements');
+            } catch (e) {
+                toast('圖片上傳失敗', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交任務（+' + HUNTER_TASK_REWARD + ' 積分）');
+                return;
+            }
+        }
+        
+        // 寫入投票（覆蓋式）
+        var votePromises = [];
+        for (var fieldKey in state.answers) {
+            votePromises.push(castFieldVote(state.storeId, fieldKey, state.answers[fieldKey]));
+        }
+        await Promise.all(votePromises);
+        
+        // 更新店鋪補充照片
+        if (CLOUD_ON) {
+            try {
+                await supabaseClientInstance
+                    .from('claw_stores')
+                    .update({
+                        supplement_photo: photoUrl,
+                        supplemented_by: STATE.user.device,
+                        supplement_count: (store.supplement_count || 0) + 1
+                    })
+                    .eq('id', parseInt(state.storeId));
+            } catch (e) {
+                console.warn('⚠️ 補充照片更新失敗:', e.message);
+            }
+        }
+        
+        // 更新本地
+        store.supplement_photo = photoUrl;
+        store.supplemented_by = STATE.user.device;
+        store.supplement_count = (store.supplement_count || 0) + 1;
+        
+        // 標記完成
+        state.status = 'completed';
+        state.completedAt = Date.now();
+        saveHunterTaskState(state);
+        
+        // 同步雲端
+        syncHunterTaskToCloud(state);
+        
+        // 發放獎勵
+        await addPoints(HUNTER_TASK_REWARD, '搜證任務完成');
+        await recordTaskCompletion('supplement');
+        await recordRegionContribution('supplement', store.region, state.storeId);
+        
+        toast('🎉 搜證任務完成！+' + HUNTER_TASK_REWARD + ' 積分', 'gold');
+        
+        // 清除照片
+        window._cam['ht'] = null;
+        window._camPreview['ht'] = null;
+        
+        closeModal();
+        
+        // 如果目前在任務頁面，刷新
+        if (CURRENT === 'task') {
+            showView('task');
+        }
+        
+    } finally {
+        releaseSubmitLock('submitHunterTask');
+    }
+}
 </script>
 </script>
 </body>
