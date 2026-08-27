@@ -1326,34 +1326,66 @@ function calculateRegionProgress(regionKey) {
 
 // 渲染區域探索進度 HTML
 function renderRegionProgress() {
-    var html = '<div id="region-progress-container">' +
-        '<div class="title">🌍 區域探索進度</div>';
-    
+    // 計算三區稱號
+    var regionTitles = {};
     for (var key in REGION_KEYS) {
         var region = REGION_KEYS[key];
-        var progress = calculateRegionProgress(key);
-        var isComplete = progress.isComplete && progress.total > 0;
-        var fillClass = isComplete ? 'done' : (progress.percentage > 0 ? 'partial' : '');
-        var countClass = isComplete ? 'done' : '';
-        
-        html += '<div class="region-item">' +
-            '<div class="region-row">' +
-                '<span class="label">' + region.icon + ' ' + region.label + '</span>' +
-                '<span class="count ' + countClass + '">' + progress.verified + '/' + progress.total + '</span>' +
-            '</div>' +
-            '<div class="region-bar">' +
-                '<div class="fill ' + fillClass + '" style="width:' + progress.percentage + '%;"></div>' +
-            '</div>' +
-        '</div>';
+        var contributions = [];
+        // 從 user_region_contributions 取得該區貢獻
+        if (window._allRegionContributions) {
+            contributions = window._allRegionContributions.filter(function(c) { return c.region_group === key; });
+        }
+        var title = calculateRegionTitle(key, contributions);
+        regionTitles[key] = title.title;
     }
     
-    html += '<div class="hint">💡 協助認證店鋪，推進區域進度！</div>';
+    // 計算全港稱號
+    var allContributions = window._allRegionContributions || [];
+    var globalTitle = calculateGlobalTitle(allContributions);
+    var hasGlobalTitle = globalTitle.level >= 2;
+    
+    // 探索中地區
+    var exploreRegion = '';
+    var exploreCount = '';
+    if (userLocation) {
+        var nearestRegion = getNearestStoreRegion(userLocation.lat, userLocation.lng);
+        if (nearestRegion) {
+            exploreRegion = nearestRegion;
+            var regionStores = STORES.filter(function(s) { return s.region === nearestRegion; });
+            var userContributions = allContributions.filter(function(c) { return c.region_name === nearestRegion; });
+            var contributedStores = {};
+            userContributions.forEach(function(c) {
+                if (c.store_id) contributedStores[c.store_id] = true;
+            });
+            exploreCount = Object.keys(contributedStores).length + '/' + regionStores.length;
+        }
+    }
+    
+    var html = '<div id="region-progress-container">';
+    
+    // 全港稱號（如有）
+    if (hasGlobalTitle) {
+        html += '<div style="font-size:13px;font-weight:900;color:#D4AF37;margin-bottom:4px;">👑 ' + globalTitle.title + '</div>';
+    }
+    
+    // 三區稱號（橫向）
+    html += '<div style="font-size:10px;color:rgba(255,255,255,0.6);margin-bottom:6px;">' +
+        '🏝️ ' + (regionTitles['hk'] || '旅人') + ' 🏙️ ' + (regionTitles['kl'] || '旅人') + ' 🌳 ' + (regionTitles['nt'] || '旅人') +
+    '</div>';
+    
+    // 探索中
+    html += '<div style="font-size:10px;color:rgba(255,255,255,0.5);">📍 探索中：</div>';
+    if (exploreRegion) {
+        html += '<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px;">' + exploreRegion + ' <span style="color:rgba(255,255,255,0.5);font-weight:400;">' + exploreCount + '</span></div>';
+    } else {
+        html += '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">開啟 GPS 探索中...</div>';
+    }
+    
     html += '</div>';
     
     return html;
 }
 
-// 更新區域探索進度 (在地圖上)
 function updateRegionProgress() {
     var container = document.getElementById('region-progress-container');
     if (!container) {
@@ -1361,6 +1393,7 @@ function updateRegionProgress() {
         if (wrapper) {
             var newContainer = document.createElement('div');
             newContainer.id = 'region-progress-container';
+            newContainer.style.cssText = 'position:absolute;top:2px;left:2px;z-index:1000;padding:8px 10px;background:rgba(0,0,0,0.6);border-radius:10px;pointer-events:none;';
             newContainer.innerHTML = renderRegionProgress();
             wrapper.appendChild(newContainer);
         }
@@ -3411,6 +3444,20 @@ try {
 } catch (e) {
     console.warn('⚠️ 載入認證者照片失敗:', e.message);
 }
+// 讀取地區貢獻
+try {
+    if (STATE.user.is_bound && STATE.user.user_id) {
+        var regionResponse = await fetch(
+            SUPABASE_URL + "/rest/v1/user_region_contributions?user_id=eq." + STATE.user.user_id,
+            { headers: getSupabaseHeaders() }
+        );
+        if (regionResponse.ok) {
+            window._allRegionContributions = await regionResponse.json();
+        }
+    }
+} catch (e) {
+    window._allRegionContributions = [];
+}
     console.log("✅ 已更新 STORES 陣列，共 " + STORES.length + " 家店鋪");
   } catch (e) {
     console.error("[v0] 讀取失敗:", e.message);
@@ -4005,7 +4052,8 @@ map.on('movestart', function() {
       disableClusteringAtZoom: 17,  // ✅ zoom 17+ 無聚合
       showCoverageOnHover: false,
       zoomToBoundsOnClick: false,  // ✅ 點擊聚合點不自動 zoom
-      spiderfyOnMaxZoom: true
+      spiderfyOnMaxZoom: true,
+      spiderfyDistanceMultiplier: 0.5,
     });
 
 
@@ -4918,7 +4966,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
       (!s.supplement_photo ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold glow-gold whitespace-nowrap">📝 補充資料 (+15分)</button>' : '') + '\n' +
     '</div>\n    \n    <!-- 第二 ROW：打卡 + 更新機台 + 戰報 -->\n    <div class="mt-2 flex gap-2 flex-shrink-0">\n' +
       '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡 (+5分)</button>\n' +
-      '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎮 更新機台 (+5分)</button>\n' +
+      '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎰 更新機台 (+5分)</button>\n' +
       '<button onclick="quickAction(\'post\', \'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neonpink/30 py-2.5 text-xs font-black text-neonpink whitespace-nowrap">📢 戰報 (+5分)</button>\n' +
     '</div>\n    \n    <!-- 投票結果 -->\n    <div class="mt-3 flex flex-wrap gap-2 text-[11px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    \n    <!-- 回報按鈕靠右 -->\n    <div class="mt-2 flex justify-end flex-shrink-0">\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink whitespace-nowrap">🚨 回報</button>\n    </div>\n    \n    <!-- 現場機台流 -->\n    <div class="mt-4">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n    </div>\n  ';
 }
@@ -5930,52 +5978,36 @@ function calculateRegionTitle(regionGroup, contributions) {
 // 計算全港總稱號
 // ============================================================
 function calculateGlobalTitle(allContributions) {
-    var totalValue = 0;
-    var actionTotals = {};
-    
-    allContributions.forEach(function(c) {
-        totalValue += c.contribution_value || 0;
-        if (!actionTotals[c.action_type]) actionTotals[c.action_type] = 0;
-        actionTotals[c.action_type] += c.contribution_value || 0;
-    });
-    
-    var bestRoute = null;
-    var bestValue = 0;
-    
-    Object.keys(TITLE_DEFS).forEach(function(routeKey) {
-        var route = TITLE_DEFS[routeKey];
-        var routeValue = 0;
-        route.actions.forEach(function(action) {
-            routeValue += actionTotals[action] || 0;
-        });
-        if (routeValue > bestValue) {
-            bestValue = routeValue;
-            bestRoute = route;
-        }
-    });
-    
-    if (!bestRoute || totalValue === 0) {
-        return { title: '旅人', route: null, level: 0, totalValue: 0 };
+    // 計算三區各自的等級
+    var regionLevels = {};
+    for (var key in REGION_KEYS) {
+        var regionContributions = allContributions.filter(function(c) { return c.region_group === key; });
+        var title = calculateRegionTitle(key, regionContributions);
+        regionLevels[key] = title.level;
     }
     
-    var globalThresholds = [0, 20, 80, 200, 400, 800];
-    var level = 1;
-    for (var i = globalThresholds.length - 1; i >= 0; i--) {
-        if (totalValue >= globalThresholds[i]) {
-            level = i + 1;
-            break;
-        }
-    }
+    // 三區中最低等級
+    var minLevel = Math.min(regionLevels['hk'] || 0, regionLevels['kl'] || 0, regionLevels['nt'] || 0);
     
-    var levelInfo = bestRoute.levels.find(function(l) { return l.level === level; });
+    // 全港稱號表
+    var GLOBAL_TITLES = [
+        { level: 0, title: null },
+        { level: 1, title: null },
+        { level: 2, title: '全港探索者' },
+        { level: 3, title: '全港制霸' },
+        { level: 4, title: '香港傳說' },
+        { level: 5, title: '爪皇降臨' }
+    ];
+    
+    var globalTitle = GLOBAL_TITLES[minLevel] || GLOBAL_TITLES[0];
     
     return {
-        title: levelInfo ? levelInfo.title : '旅人',
-        route: bestRoute,
-        level: level,
-        totalValue: totalValue
+        title: globalTitle.title || '',
+        level: minLevel,
+        totalValue: allContributions.reduce(function(sum, c) { return sum + (c.contribution_value || 0); }, 0)
     };
 }
+
 // ============================================================
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
