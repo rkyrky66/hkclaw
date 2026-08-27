@@ -314,7 +314,8 @@ input, select, textarea { font-size: 16px; }
     left: 2px;
     z-index: 1000;
     pointer-events: none;
-    text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+    white-space: nowrap;
+    width: auto;
 }
 
 /* ============================================================
@@ -1306,18 +1307,18 @@ function renderRegionProgress() {
         html += '<div style="font-size:13px;font-weight:900;color:#D4AF37;margin-bottom:4px;">👑 ' + globalTitle.title + '</div>';
     }
     
-    // 三區稱號（橫向）
-    html += '<div style="font-size:10px;color:rgba(255,255,255,0.6);margin-bottom:6px;">' +
-        '🏝️ ' + (regionTitles['hk'] || '旅人') + ' 🏙️ ' + (regionTitles['kl'] || '旅人') + ' 🌳 ' + (regionTitles['nt'] || '旅人') +
-    '</div>';
-    
-    // 探索中
-    html += '<div style="font-size:10px;color:rgba(255,255,255,0.5);">📍 探索中：</div>';
-    if (exploreRegion) {
-        html += '<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px;">' + exploreRegion + ' <span style="color:rgba(255,255,255,0.5);font-weight:400;">' + exploreCount + '</span></div>';
-    } else {
-        html += '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">開啟 GPS 探索中...</div>';
-    }
+   // 三區稱號
+html += '<div style="font-size:10px;color:#1a1a1a;font-weight:600;margin-bottom:6px;">' +
+    '🏝️ ' + (regionTitles['hk'] || '旅人') + ' 🏙️ ' + (regionTitles['kl'] || '旅人') + ' 🌳 ' + (regionTitles['nt'] || '旅人') +
+'</div>';
+
+// 探索中
+html += '<div style="font-size:10px;color:#1a1a1a;font-weight:600;">📍 探索中：</div>';
+if (exploreRegion) {
+    html += '<div style="font-size:12px;font-weight:700;color:#000;margin-top:2px;">' + exploreRegion + ' <span style="color:#333;font-weight:400;">' + exploreCount + '</span></div>';
+} else {
+    html += '<div style="font-size:11px;color:#333;margin-top:2px;">開啟 GPS 探索中...</div>';
+}
     
     html += '</div>';
     
