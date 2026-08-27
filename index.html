@@ -318,6 +318,12 @@ input, select, textarea { font-size: 16px; }
     width: auto;
     background: transparent;
     padding: 0;
+    text-shadow: 
+        -1px -1px 0 #fff,
+        1px -1px 0 #fff,
+        -1px 1px 0 #fff,
+        1px 1px 0 #fff,
+        0 0 4px rgba(255,255,255,0.8);
 }
 
 /* ============================================================
@@ -1334,7 +1340,7 @@ function updateRegionProgress() {
         if (wrapper) {
             var newContainer = document.createElement('div');
             newContainer.id = 'region-progress-container';
-            newContainer.style.cssText = 'position:absolute;top:2px;left:2px;z-index:1000;padding:0;background:transparent;pointer-events:none;';
+            newContainer.style.cssText = 'position:absolute;top:2px;left:2px;z-index:1000;padding:0;background:transparent;pointer-events:none;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 4px rgba(255,255,255,0.8);';
             newContainer.innerHTML = renderRegionProgress();
             wrapper.appendChild(newContainer);
         }
