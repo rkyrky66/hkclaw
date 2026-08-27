@@ -744,6 +744,7 @@ var POST_DAILY_LIMIT = 5;
 var POST_FREE_COUNT = 2;
 var POST_COST = 10;
 var currentZoomIndex = 0;
+var hasInitializedRegion = false;
 // ============================================================
 // 常數定義
 // ============================================================
@@ -2908,30 +2909,31 @@ function setRegion(r) {
 }
 
 function setRegionPreserveSearch(r) {
-  findState.region = r;
-  if (r !== "全部" && r !== "") {
-    STATE.recentRegions = STATE.recentRegions.filter(function(x) { return x !== r; });
-    STATE.recentRegions.unshift(r);
-    if (STATE.recentRegions.length > 6) STATE.recentRegions = STATE.recentRegions.slice(0, 6);
-    save();
-    
-    if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-      syncRecentRegions();
+    findState.region = r;
+    if (r !== "全部" && r !== "") {
+        STATE.recentRegions = STATE.recentRegions.filter(function(x) { return x !== r; });
+        STATE.recentRegions.unshift(r);
+        if (STATE.recentRegions.length > 6) STATE.recentRegions = STATE.recentRegions.slice(0, 6);
+        save();
+        
+        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
+            syncRecentRegions();
+        }
     }
-  }
-  
-  // ✅ 保留搜索文字，只更新列表
-  var listContainer = document.getElementById('store-list');
-  if (listContainer) {
-      listContainer.innerHTML = renderStoreList();
-  }
-  
-  var currentRegionEl = document.getElementById('find-current-region');
-  if (currentRegionEl) {
-      currentRegionEl.textContent = findState.region;
-  }
-  
-  regionGroupOpen = { hk: false, kl: false, nt: false };
+    
+    // ✅ 保留搜索文字，只更新列表
+    var listContainer = document.getElementById('store-list');
+    if (listContainer) {
+        listContainer.innerHTML = renderStoreList();
+    }
+    
+    // 更新目前選擇顯示
+    var currentRegionEl = document.getElementById('find-current-region');
+    if (currentRegionEl) {
+        currentRegionEl.textContent = findState.region;
+    }
+    
+    // ✅ 不收起任何地區，保持展開狀態
 }
 
 async function syncRecentRegions() {
@@ -7777,7 +7779,7 @@ function viewFind() {
     if (!isOpen) return '';
     var items = allRegions.slice();
     if (data.more.length > 0) items.push(isMoreOpen ? '📍 收起' : '📍 更多');
-    return '<div class="mb-3 animate-pop"><div class="grid grid-cols-4 gap-2">' + items.map(function(item) {
+    return '<div class="mb-3"><div class="grid grid-cols-4 gap-2">' + items.map(function(item) {
       if (item === '📍 更多' || item === '📍 收起') {
         return '<button onclick="toggleMoreRegions(\'' + groupKey + '\')" class="rounded-full border py-1.5 text-center text-xs transition-all ' + (isMoreOpen ? 'chip-active-gold border-gold/60' : 'border-gold/40 text-gold') + '">' + item + '</button>';
       }
@@ -7793,7 +7795,13 @@ function viewFind() {
       }
   }, 100);
   
-  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStoresDebounced(this)" value="' + findSearchQuery + '" />\n    </div>\n    ' + recentHtml + '\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (regionGroupOpen[key] ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; }).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n        <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
+  return '\n    <div class="mb-3">\n      <input id="find-search" placeholder="搜尋店鋪名稱..." class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" oninput="searchStoresDebounced(this)" value="' + findSearchQuery + '" />\n    </div>\n    ' + recentHtml + '\n    <div class="mb-3 flex items-center justify-between">\n      <div class="flex items-center gap-1.5 text-sm text-neongreen neon-green"><span class="flicker">📍</span> <span id="find-current-region">' + (findState.region !== '全部' ? findState.region : '全部地區') + '</span></div>\n      <button onclick="resetFindFilters()" class="rounded-full border border-white/20 px-3 py-1 text-xs text-white/40">重選</button>\n    </div>\n    <div class="mb-3 flex gap-2">\n      ' + Object.keys(REGIONS).map(function(key) { 
+    var isActive = regionGroupOpen[key] || (function() {
+        var allRegions = REGIONS[key].hot.concat(REGIONS[key].more);
+        return allRegions.indexOf(findState.region) !== -1;
+    })();
+    return '<button onclick="toggleRegionGroup(\'' + key + '\')" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (isActive ? 'border-gold bg-gold/20 text-gold glow-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>'; 
+}).join('') + '\n    </div>\n    ' + renderRegionGroupFn('hk') + renderRegionGroupFn('kl') + renderRegionGroupFn('nt') + '\n        <div class="mb-3">\n      <p class="mb-1.5 text-[10px] font-bold text-white/40">排序</p>\n      <select id="find-sort" onchange="applySort()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold">\n        <option value="name">按名字</option>\n        <option value="hot">按熱度</option>\n        <option value="distance">按距離</option>\n      </select>\n    </div>\n    <div id="store-list" class="space-y-3">' + renderStoreList() + '</div>\n  ';
 }
 
 // FILTER 狀態
@@ -8001,12 +8009,10 @@ function loadMoreStores() {
 }
 
 function toggleRegionGroup(group) { 
-    var isOpen = regionGroupOpen[group];
-    regionGroupOpen = { hk: false, kl: false, nt: false };
-    regionGroupOpen[group] = !isOpen;
+    // 只切換目前點擊的大區，不重置其他大區
+    regionGroupOpen[group] = !regionGroupOpen[group];
     showView("find"); 
 }
-
 function toggleMoreRegions(group) { 
     moreRegionsOpenMap[group] = !moreRegionsOpenMap[group];
     showView("find"); 
@@ -11142,6 +11148,13 @@ const UserFocus = {
           userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           gpsLat = userLocation.lat;
           gpsLng = userLocation.lng;
+          if (!hasInitializedRegion) {
+    hasInitializedRegion = true;
+    var nearestRegion = getNearestStoreRegion(userLocation.lat, userLocation.lng);
+    if (nearestRegion) {
+        findState.region = nearestRegion;
+    }
+}
           console.log('✅ 自動定位成功:', userLocation);
           if (map && mapInitialized) {
             map.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
