@@ -310,73 +310,15 @@ input, select, textarea { font-size: 16px; }
    ============================================================ */
 #region-progress-container {
     position: absolute;
-    top: 12px;
-    left: 12px;
+    top: 2px;
+    left: 2px;
     z-index: 1000;
-    padding: 8px 12px;
-    min-width: 140px;
-    max-width: 200px;
+    padding: 8px 10px;
+    min-width: 120px;
+    max-width: 220px;
     pointer-events: none;
-    transition: all 0.3s ease;
-    text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.8);
-}
-#region-progress-container .title {
-    font-size: 9px;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-#region-progress-container .region-item {
-    margin-bottom: 4px;
-}
-#region-progress-container .region-item:last-child {
-    margin-bottom: 0;
-}
-#region-progress-container .region-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.7);
-}
-#region-progress-container .region-row .label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-#region-progress-container .region-row .count {
-    font-weight: 600;
-}
-#region-progress-container .region-row .count.done {
-    color: #00FF00;
-}
-#region-progress-container .region-bar {
-    height: 3px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 2px;
-}
-#region-progress-container .region-bar .fill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.6s ease;
-}
-#region-progress-container .region-bar .fill.done {
-    background: linear-gradient(90deg, #00FF00, #00CC88);
-}
-#region-progress-container .region-bar .fill.partial {
-    background: linear-gradient(90deg, #D4AF37, #FFD700);
-}
-#region-progress-container .hint {
-    font-size: 7px;
-    color: rgba(255, 255, 255, 0.2);
-    text-align: center;
-    margin-top: 4px;
-    letter-spacing: 0.5px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 10px;
 }
 
 /* ============================================================
