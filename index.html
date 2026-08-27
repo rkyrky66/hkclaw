@@ -4912,7 +4912,7 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
     (s.supplement_photo ? ' ✅已補充' : '') + 
 '</span>\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors flex-shrink-0">✕</button>\n    </div>\n    ' + photoHtml + '\n    \n    <!-- 第一 ROW：認證 + 補充 -->\n    <div class="mt-3 flex gap-2 flex-shrink-0">\n' +
       (totalVerifications >= 2 ? '' : '<button onclick="openVerifyForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-neongreen/20 border border-neongreen/50 py-3 text-sm font-black text-neongreen glow-green whitespace-nowrap">🕵️ 認證此店 (+15分)</button>') + '\n' +
-      (!s.supplement_photo ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold glow-gold whitespace-nowrap">📝 補充資料 (+15分)</button>' : '') + '\n' +
+      (!s.supplement_photo ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold glow-gold whitespace-nowrap">📝 補充地址 (+15分)</button>' : '') + '\n' +
     '</div>\n    \n    <!-- 第二 ROW：打卡 + 更新機台 + 戰報 -->\n    <div class="mt-2 flex gap-2 flex-shrink-0">\n' +
       '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡 (+5分)</button>\n' +
       '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎰 更新機台 (+5分)</button>\n' +
@@ -6415,70 +6415,8 @@ async function upsertVerificationReview(storeId, verification) {
 function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  var isStreetStore = !s.mall || s.mall === '';
-  var existing = { address: s.addr && s.addr !== '' && s.addr !== '（未填地址）', size: s.size && s.size !== null, staff: s.has_staff !== undefined && s.has_staff !== null, coin: s.has_e_coin !== undefined && s.has_e_coin !== null };
-  var completedCount = [existing.address, existing.size, existing.staff, existing.coin].filter(Boolean).length;
-  var allCompleted = completedCount === 4;
-  var isMallStore = !!s.mall && s.mall !== '';
-  var addressRequired = isStreetStore && (!s.addr || s.addr === '' || s.addr === '（未填地址）');
-  var addressCompleted = isMallStore ? true : existing.address;
-  // ✅ 清除殘留照片
-  window._cam = window._cam || {};
-  window._camPreview = window._camPreview || {};
-  window._cam['sf'] = null;
-  window._camPreview['sf'] = null;
-  _finalGpsLat = null;
-  _finalGpsLng = null;
-  _finalGpsLocked = false;
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充店鋪資料</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">全部完成可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      ' + (addressRequired ? '<div><label class="text-xs font-bold text-gold flex items-center gap-2">📍 詳細地址 <span class="text-neonpink">（必填）</span>' + (addressCompleted ? '<span class="text-[9px] text-neongreen">✅ 已補充</span>' : '') + '</label><input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr || '') + '" ' + (addressCompleted ? 'disabled style="opacity:0.5;"' : '') + ' /></div>' : '<div class="rounded-lg bg-white/5 p-3 text-xs text-white/40">🏬 商場鋪自動使用商場地址，無需補充</div>') + '\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">📏 機台數量 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectSizeUI(\'small\')" class="sf-size-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">小型<br><span class="text-[9px]">10台以下</span></button><button onclick="selectSizeUI(\'medium\')" class="sf-size-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">中型<br><span class="text-[9px]">10-30台</span></button><button onclick="selectSizeUI(\'large\')" class="sf-size-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">大型<br><span class="text-[9px]">30台以上</span></button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">👤 場務 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectStaffUI(true)" class="sf-staff-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">👤 有場務</button><button onclick="selectStaffUI(false)" class="sf-staff-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">👤 無場務</button><button onclick="selectStaffUI(null)" class="sf-staff-btn rounded-lg border border-gold/40 py-2 px-3 text-sm text-gold transition-all">🤷 不明</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">💳 電子兌幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectCoinUI(true)" class="sf-coin-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">💳 有電子兌幣</button><button onclick="selectCoinUI(false)" class="sf-coin-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">💳 無電子兌幣</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🕐 24小時營業 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectHour24UI(true)" class="sf-hour24-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">🕐 是</button><button onclick="selectHour24UI(false)" class="sf-hour24-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">🕐 否</button><button onclick="selectHour24UI(null)" class="sf-hour24-btn rounded-lg border border-gold/40 py-2 px-3 text-sm text-gold transition-all">🤷 不明</button></div></div>\n      <div><label class="text-xs font-bold text-gold flex items-center gap-2">🎟️ 遊戲幣 <span class="text-neonpink">（必填）</span></label><div class="mt-1 flex gap-2"><button onclick="selectTokenUI(\'5dollar\')" class="sf-token-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">🎟️ 5元</button><button onclick="selectTokenUI(\'token\')" class="sf-token-btn flex-1 rounded-lg border border-gold/40 py-2 text-sm text-gold transition-all">🎟️ 代幣</button></div></div>\n      <div id="sf-coin-photo-section" class="hidden">\n        <label class="text-xs font-bold text-gold">📷 <span id="sf-coin-photo-label">兌幣機照片</span> <span class="text-neonpink">（必填）</span></label>\n        <div id="sf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">\n          <button id="sf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>\n          <img id="sf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">\n          <span id="sf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>\n        </div>\n      </div>\n      <button onclick="this.classList.add(\'btn-press\'); submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請完成所有必填欄位</button>\n    </div>\n  ');
-
-  window._sfSelections = { size: null, staff: null, coin: null, hour24: null, token: null };
-  
-  setTimeout(function() {
-    var camBtn = document.getElementById('sf-camera-btn');
-    if (camBtn) {
-      camBtn.disabled = false;
-      camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
-      camBtn.innerHTML = '📸 開啟相機拍照';
-      camBtn.onclick = function() { openCamera('sf'); };
-    }
-  }, 300);
-  
-  var checkInterval = setInterval(function() {
-    var isStreet = !s.mall || s.mall === '';
-    var addrInput = document.getElementById('sf-address');
-    var hasAddress = isStreet ? (addrInput && addrInput.value.trim() !== '') : true;
-    var hasSize = window._sfSelections.size !== null;
-    var hasStaff = window._sfSelections.staff !== null && window._sfSelections.staff !== undefined;
-    var hasCoin = window._sfSelections.coin !== null;
-    var hasHour24 = window._sfSelections.hour24 !== null && window._sfSelections.hour24 !== undefined;
-    var hasToken = window._sfSelections.token !== null;
-    var hasPhoto = !!(window._camPreview && window._camPreview.sf);
-    
-    var addressDone = isStreet ? (s.addr && s.addr !== '') || hasAddress : true;
-    var sizeDone = hasSize;
-    var staffDone = hasStaff;
-    var coinDone = hasCoin;
-    var hour24Done = hasHour24;
-    var tokenDone = hasToken;
-    var photoDone = hasPhoto;
-    var allDone = addressDone && sizeDone && staffDone && coinDone && hour24Done && tokenDone && photoDone;
-    
-    var btn = document.getElementById('sf-submit-btn');
-    if (btn) {
-      if (allDone) {
-        btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
-        btn.disabled = false;
-        btn.innerHTML = '✅ 提交全部資料（+15 積分）';
-      } else {
-        btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-        btn.disabled = true;
-        btn.innerHTML = '請完成所有必填欄位 (' + [addressDone, sizeDone, staffDone, coinDone, hour24Done, tokenDone, photoDone].filter(Boolean).length + '/7)';
-      }
-    }
-  }, 300);
-  setTimeout(function() { return clearInterval(checkInterval); }, 60000);
+  openModal('\n    <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-gold neon-gold">📝 補充地址</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <p class="text-sm font-bold text-gold">' + s.name + '</p>\n        <p class="text-xs text-white/40">' + s.region + ' · ' + (s.addr || '未填地址') + '</p>\n        <p class="text-xs text-white/30 mt-1">補充地址可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📍 詳細地址 <span class="text-neonpink">（必填）</span></label>\n        <input id="sf-address" placeholder="例如：西洋菜南街 2A" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" value="' + (s.addr && s.addr !== '' && s.addr !== '（未填地址）' ? s.addr : '') + '" />\n        <p class="text-[10px] text-white/40 mt-1">💡 填寫完整地址，幫助其他用戶更容易找到店鋪</p>\n      </div>\n      <button onclick="this.classList.add(\'btn-press\'); submitAllSupplement(\'' + s.id + '\')" id="sf-submit-btn" class="w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green">✅ 提交地址（+15 積分）</button>\n    </div>\n  ')
 }
 
 function selectSizeUI(size) {
@@ -6572,8 +6510,7 @@ function selectTokenUI(value) {
 // ============================================================
 async function submitAllSupplement(storeId) {
     if (!acquireSubmitLock('submitAllSupplement')) return;
-    
-    if (!requireLogin('補充資料')) return;
+    if (!requireLogin('補充地址')) return;
     
     var submitBtn = disableSubmitButton('sf-submit-btn', '⏳ 提交中...');
     
@@ -6581,247 +6518,92 @@ async function submitAllSupplement(storeId) {
         var s = STORES.find(function(x) { return x.id === storeId; });
         if (!s) { 
             toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+            enableSubmitButton(submitBtn, '✅ 提交地址（+15 積分）');
             return; 
         }
         
-        var isStreet = s.type !== 'mall' && s.mall === '';
-        var address = '';
-        if (isStreet) {
-            var addrInput = document.getElementById('sf-address');
-            if (addrInput) address = addrInput.value.trim();
-        }
-        var size = window._sfSelections.size;      // ← 確認此行存在
-        var staff = window._sfSelections.staff;    // ← 確認此行存在
-        var coin = window._sfSelections.coin;      // ← 確認此行存在
-        var hour24 = window._sfSelections.hour24;  // ← 確認此行存在
-        var token = window._sfSelections.token; 
-        
-        if (isStreet && !address) { 
-            toast('請輸入詳細地址', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return; 
-        }
-        if (!size) { 
-            toast('請選擇規模', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return; 
-        }
-        if (staff === null || staff === undefined) { 
-            toast('請選擇是否有場務', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return; 
-        }
-        if (coin === null || coin === undefined) { 
-            toast('請選擇是否有電子兌幣', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return; 
-        }
-        
-        // ✅ 驗證照片
-        var photoBlob = window._cam?.sf;
-        if (!photoBlob) {
-            toast(coin ? '請拍攝兌幣機照片' : '請拍攝店鋪全景照', 'pink');
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
+        var address = document.getElementById('sf-address')?.value.trim();
+        if (!address) {
+            toast('請輸入地址', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交地址（+15 積分）');
             return;
         }
         
-        // ✅ 驗證 GPS
-        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) {
-            toast('請先拍照以鎖定 GPS 位置', 'pink');
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return;
-        }
+        // ✅ 使用 Nominatim 反向地理編碼
+        var geocodedLat = null;
+        var geocodedLng = null;
         
-        // ✅ GPS 距離驗證（300 米內）
-        if (s.lat && s.lng) {
-            var distance = calculateDistance(s.lat, s.lng, _finalGpsLat, _finalGpsLng);
-            var distanceMeters = Math.round(distance * 1000);
-            if (distance > 0.3) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 300 米內補充資料', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-                return;
+        try {
+            var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=hk&q=' + encodeURIComponent(address);
+            var geocodeRes = await fetch(geocodeUrl, {
+                headers: { 'User-Agent': 'ClawInfoStation/1.0' }
+            });
+            var geocodeData = await geocodeRes.json();
+            
+            if (geocodeData && geocodeData.length > 0) {
+                geocodedLat = parseFloat(geocodeData[0].lat);
+                geocodedLng = parseFloat(geocodeData[0].lon);
             }
-            toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
+        } catch (e) {
+            console.warn('⚠️ 地理編碼失敗:', e.message);
         }
         
-        // 上傳照片
-        var photoUrl = window._camPreview?.sf || '';
-        if (CLOUD_ON) {
-            try {
-                var file = new File([photoBlob], "supplement_" + Date.now() + ".jpg", { type: 'image/jpeg' });
-                photoUrl = await uploadImage(file, 'supplements');
-            } catch (e) {
-                toast('圖片上傳失敗', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-                return;
-            }
+        // ✅ 與店鋪 GPS 對比
+        var distanceMeters = null;
+        var isVerified = false;
+        
+        if (geocodedLat && geocodedLng && s.lat && s.lng) {
+            var distance = calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng);
+            distanceMeters = Math.round(distance * 1000);
+            isVerified = distanceMeters <= 100;
         }
         
-        var hasAddress = s.addr && s.addr !== '';
-        var hasSize = s.size && s.size !== null;
-        var hasStaff = s.has_staff !== undefined && s.has_staff !== null;
-        var hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
-        
-        if ((!isStreet || hasAddress) && hasSize && hasStaff && hasCoin) {
-            toast('此店鋪資料已完整，無需重複補充', 'gold');
-            enableSubmitButton(submitBtn, '✅ 提交全部資料（+15 積分）');
-            return;
-        }
-        
-if (isStreet && address) s.addr = address;
-// ❌ 不再更新本地 size/has_staff/has_e_coin/hour24/token
-s.supplement_count = (s.supplement_count || 0) + 1;
-        s.supplemented_by = STATE.user.device;
-        s._userSupplemented = true;
-        
-        var supplementFields = [];
-        if (isStreet && address) supplementFields.push('addr');
-        supplementFields.push('size');
-        supplementFields.push('has_staff');
-        supplementFields.push('has_e_coin');
-        
-        // 寫入 field_status
-        if (CLOUD_ON && supabaseClientInstance && typeof supabaseClientInstance.from === 'function') {
-            try {
-                var numericStoreIdForSupplement = parseInt(storeId);
-                for (var i = 0; i < supplementFields.length; i++) {
-                    var fieldName = supplementFields[i];
-                    var fieldValue = s[fieldName];
-                    if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-                        await supabaseClientInstance
-                            .from('field_status')
-                            .upsert({
-                                table_name: 'claw_stores',
-                                record_id: String(numericStoreIdForSupplement),
-                                field_name: fieldName,
-                                status: 'pending',
-                                submitted_by: STATE.user.device,
-                                submitted_type: 'supplement',
-                                updated_at: new Date().toISOString()
-                            }, { onConflict: 'table_name, record_id, field_name' });
-                    }
-                }
-                console.log('✅ field_status 同步成功');
-            } catch (e) {
-                console.warn('⚠️ field_status 同步失敗（不影響主流程）:', e.message);
-            }
-        }
-        
-        if (CLOUD_ON) {
-            try {
-                var numericStoreIdForUpdate = parseInt(storeId);
-                var updates = {};
-if (isStreet && address) updates.addr = address;
-updates.supplemented_by = STATE.user.device;
-updates.supplement_photo = photoUrl;
-// ❌ 不再寫入 size/has_staff/has_e_coin/hour24/token 到 claw_stores
-                
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
-                    {
-                        method: 'PATCH',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify(updates)
-                    }
-                );
-                console.log('✅ 店鋪補充資料已同步到雲端');
-                
-                // RPC 增加 supplement_count
-                try {
-                    var supplementRpcResult = await supabaseClientInstance.rpc('increment_supplement_count', {
-                        store_id_param: numericStoreIdForUpdate
-                    });
-                    if (supplementRpcResult.error) throw supplementRpcResult.error;
-                    console.log('✅ supplement_count 已原子增加');
-                } catch (e) {
-                    console.warn('⚠️ supplement_count 更新失敗:', e.message);
-                }
-                
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/claw_stores?id=eq." + numericStoreIdForUpdate,
-                    {
-                        method: 'PATCH',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify({ admin_overall_status: 'pending' })
-                    }
-                );
-                console.log('✅ 店鋪已重新設為待審核');
-                
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/store_supplements",
-                    {
-                        method: 'POST',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([{
-                            store_id: numericStoreIdForUpdate,
-                            user_id: STATE.user.device,
-                            user_name: STATE.user.name,
-                            supplement_type: 'bulk_update',
-                            new_value: JSON.stringify({
-                                address: address,
-                                size: size,
-                                has_staff: staff,
-                                has_e_coin: coin
-                            }),
-                            photo_url: photoUrl,
-                            gps_lat: _finalGpsLat,
-                            gps_lng: _finalGpsLng,
-                            created_at: new Date().toISOString()
-                        }])
-                    }
-                );
-                console.log('✅ 補充記錄已同步到雲端');
-            } catch (e) {
-                console.warn('⚠️ 補充資料雲端同步失敗:', e.message);
-            }
-        }
-        // ✅ 補充資料寫入投票（5 個欄位，不確定不寫入）
-        if (CLOUD_ON) {
-            try {
-                var votePromises = [];
-                if (size) votePromises.push(castFieldVote(storeId, 'size', size));
-                if (staff === true || staff === false) votePromises.push(castFieldVote(storeId, 'has_staff', String(staff)));
-                if (coin === true || coin === false) votePromises.push(castFieldVote(storeId, 'has_e_coin', String(coin)));
-                if (hour24 === true || hour24 === false) votePromises.push(castFieldVote(storeId, 'hour24', String(hour24)));
-                if (token === '5dollar' || token === 'token') votePromises.push(castFieldVote(storeId, 'token', token));
-                await Promise.all(votePromises);
-                console.log('✅ 補充資料已寫入投票');
-            } catch (e) {
-                console.warn('⚠️ 投票寫入失敗:', e.message);
-            }
-        }
-        
-        await recordTaskCompletion('supplement');
-        
-        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-            try {
+        if (isVerified) {
+            // ✅ 驗證通過，直接寫入
+            s.addr = address;
+            
+            if (CLOUD_ON) {
                 await supabaseClientInstance
-                    .from('user_contributions')
-                    .insert({
-                        user_id: STATE.user.user_id,
-                        device_id: STATE.user.device,
-                        store_id: parseInt(storeId),
-                        contribution_type: 'supplement',
-                        contribution_value: 1,
-                        created_at: new Date().toISOString()
-                    }, { count: 'exact' });
-                console.log('✅ 貢獻記錄已同步');
-            } catch (e) {
-                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+                    .from('claw_stores')
+                    .update({ addr: address })
+                    .eq('id', parseInt(storeId));
             }
+            
+            save();
+            await addPoints(15, '補充地址');
+            
+            // 記錄貢獻
+            await recordRegionContribution('supplement', s.region, storeId);
+            await recordTaskCompletion('supplement');
+            
+            toast('✅ 地址已補充！+15 分', 'green');
+            closeModal();
+            setTimeout(function() { openStore(storeId); }, 300);
+            
+        } else {
+            // ✅ 驗證失敗，寫入 address_submissions 等管理員審核
+            if (CLOUD_ON) {
+                await supabaseClientInstance
+                    .from('address_submissions')
+                    .insert({
+                        store_id: String(storeId),
+                        submitted_address: address,
+                        submitted_by: STATE.user.device,
+                        user_id: STATE.user.user_id || null,
+                        geocoded_lat: geocodedLat,
+                        geocoded_lng: geocodedLng,
+                        store_lat: s.lat || null,
+                        store_lng: s.lng || null,
+                        distance_meters: distanceMeters,
+                        status: 'pending',
+                        created_at: new Date().toISOString()
+                    });
+            }
+            
+            toast('⚠️ 找不到實際位置，已提交管理員審核', 'gold');
+            closeModal();
         }
         
-        await addPoints(15, '補充資料完成');
-        updateAchievementStat('supplement');
-        checkPerfectFile(storeId);
-        updateStreak();
-        
-        await recordRegionContribution('supplement', s.region, storeId);
-        
-        toast('✅ 全部資料補充完成！獲得 15 積分', 'green');
-        closeModal();
-        setTimeout(function() { return openStore(storeId); }, 500);
     } finally {
         releaseSubmitLock('submitAllSupplement');
     }
