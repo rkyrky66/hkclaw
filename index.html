@@ -6777,12 +6777,12 @@ async function submitSupplementAddress(storeId) {
     
     // 情況 A：距離 < 100 米
     if (distanceMeters !== null && distanceMeters < 100) {
-      s.addr = fullAddress;
+      s.addr = district + ' ' + fullAddress;
       
       if (CLOUD_ON) {
         await supabaseClientInstance
           .from('claw_stores')
-          .update({ addr: fullAddress })
+          .update({ addr: district + ' ' + fullAddress })
           .eq('id', parseInt(storeId));
       }
       
@@ -6798,12 +6798,12 @@ async function submitSupplementAddress(storeId) {
     }
     
     // 情況 B 和 C：都即時寫入 + 提交審核
-    s.addr = fullAddress;
+    s.addr = district + ' ' + fullAddress;
     
     if (CLOUD_ON) {
       await supabaseClientInstance
         .from('claw_stores')
-        .update({ addr: fullAddress })
+        .update({ addr: district + ' ' + fullAddress })
         .eq('id', parseInt(storeId));
     }
     
