@@ -680,6 +680,9 @@
 <li class="nav-item" data-tab="address-submissions" onclick="switchTab('address-submissions')">
     <i class="fas fa-map-marker-alt"></i><span>地址審核</span>
 </li>
+<li class="nav-item" data-tab="custom-floors" onclick="switchTab('custom-floors')">
+    <i class="fas fa-layer-group"></i><span>自訂樓層</span>
+</li>
                 <li class="nav-item" data-tab="verifications" onclick="switchTab('verifications')">
                     <i class="fas fa-check-double"></i><span>認證審核</span>
                     <span class="badge badge-warning" id="badge-verifications">0</span>
@@ -1178,7 +1181,8 @@ dashboard: '儀表板',
     'admin-actions': '操作記錄',
     'bounty-reviews': '🏆 懸賞審核',
     'reports': '🚨 檢舉清單',
-    'address-submissions': '📍 地址審核'
+    'address-submissions': '📍 地址審核',
+     'custom-floors': '🏢 自訂樓層'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
@@ -1195,7 +1199,8 @@ dashboard: '儀表板',
     'admin-actions': loadAdminActions,
     'bounty-reviews': loadBountyReviews,
     'reports': loadReports,
-    'address-submissions': loadAddressSubmissions
+    'address-submissions': loadAddressSubmissions,
+    'custom-floors': loadCustomFloors
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -3925,6 +3930,148 @@ async function rejectAddress(submissionId, address, submittedBy, storeName) {
         toast('✅ 已拒絕並清空地址');
         loadAddressSubmissions();
         
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// ============================================================
+// 自訂樓層審核
+// ============================================================
+function loadCustomFloors() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('custom_floors')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var floors = result.data || [];
+            
+            if (floors.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的自訂樓層</p></div>';
+                return;
+            }
+            
+            var storeIds = [];
+            for (var i = 0; i < floors.length; i++) {
+                var sid = parseInt(floors[i].store_id);
+                if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
+                    storeIds.push(sid);
+                }
+            }
+            
+            return sb.from('claw_stores')
+                .select('id, name, region')
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    var stores = {};
+                    var storeData = storeResult.data || [];
+                    for (var i = 0; i < storeData.length; i++) {
+                        stores[String(storeData[i].id)] = storeData[i];
+                    }
+                    
+                    var html = '<div style="margin-bottom:12px;"><span style="font-size:13px;color:var(--text-muted);">📋 共 ' + floors.length + ' 筆待審核</span></div>';
+                    
+                    for (var i = 0; i < floors.length; i++) {
+                        var f = floors[i];
+                        var store = stores[String(f.store_id)] || { name: '未知店鋪', region: '' };
+                        
+                        html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+                                '<strong style="font-size:16px;">🏪 ' + store.name + '</strong>' +
+                                '<span class="status-badge pending">⏳ 待審核</span>' +
+                            '</div>' +
+                            '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
+                                '<div>🏢 自訂樓層：' + f.floor_value + '</div>' +
+                                '<div>👤 提交者：' + (f.submitted_by || '未知') + '</div>' +
+                            '</div>' +
+                            '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+                                '<button class="btn-sm success" onclick="confirmCustomFloor(\'' + f.id + '\')">✅ 確認正常</button>' +
+                                '<button class="btn-sm warning" onclick="showCorrectFloorModal(\'' + f.id + '\', \'' + f.store_id + '\', \'' + f.floor_value.replace(/'/g, "\\'") + '\')">⚠️ 修正為標準樓層</button>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    
+                    container.innerHTML = html;
+                });
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+// 確認自訂樓層正常
+async function confirmCustomFloor(floorId) {
+    if (!confirm('確定此樓層正常嗎？')) return;
+    
+    try {
+        await sb.from('custom_floors')
+            .update({
+                status: 'reviewed',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser ? currentUser.display_name : 'admin'
+            })
+            .eq('id', floorId);
+        
+        toast('✅ 已確認');
+        loadCustomFloors();
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 顯示修正樓層彈窗
+function showCorrectFloorModal(floorId, storeId, currentFloor) {
+    var floorOptions = ['G', 'LG', 'UG', 'B2', 'B1', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+    
+    var optionsHtml = floorOptions.map(function(fl) {
+        return '<option value="' + fl + '">' + fl + ' 樓</option>';
+    }).join('');
+    
+    openModal('⚠️ 修正樓層',
+        '<div style="margin-bottom:12px;">' +
+            '<p style="font-size:13px;color:var(--text-secondary);">原自訂樓層：<strong>' + currentFloor + '</strong></p>' +
+            '<p style="font-size:13px;color:var(--text-muted);margin-top:4px;">請選擇正確樓層：</p>' +
+            '<select id="correct-floor-select" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:8px;">' +
+                '<option value="">請選擇</option>' +
+                optionsHtml +
+            '</select>' +
+        '</div>',
+        '✅ 確認修正');
+    
+    modalCallback = function() {
+        correctCustomFloor(floorId, storeId);
+    };
+}
+
+// 修正自訂樓層
+async function correctCustomFloor(floorId, storeId) {
+    var correctFloor = document.getElementById('correct-floor-select')?.value;
+    if (!correctFloor) {
+        toast('請選擇正確樓層', 'warning');
+        return;
+    }
+    
+    try {
+        await sb.from('custom_floors')
+            .update({
+                status: 'corrected',
+                corrected_floor: correctFloor,
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser ? currentUser.display_name : 'admin'
+            })
+            .eq('id', floorId);
+        
+        await sb.from('claw_stores')
+            .update({ floor: correctFloor })
+            .eq('id', parseInt(storeId));
+        
+        toast('✅ 已修正為 ' + correctFloor + ' 樓');
+        closeModal();
+        loadCustomFloors();
     } catch (e) {
         toast('操作失敗: ' + e.message, 'error');
     }
