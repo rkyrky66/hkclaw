@@ -4739,9 +4739,6 @@ function renderMallModalStructure(mallName, activeFloor, highlightStoreId) {
   var group = _currentMallData;
   if (!group) return;
   var total = group.totalStores;
-  var allVerified = group.stores.every(function(s) { return s.verified === "verified"; });
-  var statusIcon = allVerified ? '🟢' : '🟡';
-  var statusText = allVerified ? '全部已認證' : '部分審核中';
   var floors = getFloorsInMall(mallName);
   var tabsHtml = floors.map(function(floor) {
     var count = getStoresByFloor(mallName, floor).length;
@@ -4749,7 +4746,7 @@ function renderMallModalStructure(mallName, activeFloor, highlightStoreId) {
     return "<button class=\"mall-tab " + (isActive ? 'active' : '') + "\" onclick=\"switchMallFloor('" + mallName.replace(/'/g, "\\'") + "', '" + floor + "')\">" + floor + "F <span class=\"tab-count\">" + count + "</span></button>";
   }).join('');
   var storesHtml = generateStoreListHtml(mallName, activeFloor, highlightStoreId);
-  var modalHtml = '\n    <div class="mall-modal-wrapper">\n      <div class="mall-modal-header">\n        <div style="display:flex;justify-content:space-between;align-items:flex-start;">\n          <div>\n            <div class="mall-name">🏬 ' + mallName + '</div>\n            <div class="mall-addr">' + (group.stores[0]?.region || '') + ' · ' + total + ' 間店鋪</div>\n            <div class="mall-count">' + statusIcon + ' ' + statusText + '</div>\n          </div>\n          <button onclick="closeModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>\n        </div>\n      </div>\n      <div class="mall-tabs">' + tabsHtml + '</div>\n      <div class="mall-store-list-scroll" id="mall-store-list-scroll">' + storesHtml + '</div>\n      <button class="mall-footer-btn" onclick="onSubmitMissingStore(\'' + mallName.replace(/'/g, "\\'") + '\')">\n        📝 沒有你要的店？按此提交（10 積分）！\n        <span class="sub-text">認證後再追加 40 積分</span>\n      </button>\n    </div>\n  ';
+  var modalHtml = '\n    <div class="mall-modal-wrapper">\n      <div class="mall-modal-header">\n        <div style="display:flex;justify-content:space-between;align-items:flex-start;">\n          <div>\n            <div class="mall-name">🏬 ' + mallName + '</div>\n            <div class="mall-addr">' + (group.stores[0]?.region || '') + ' · ' + total + ' 間店鋪</div>\n                     </div>\n          <button onclick="closeModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>\n        </div>\n      </div>\n      <div class="mall-tabs">' + tabsHtml + '</div>\n      <div class="mall-store-list-scroll" id="mall-store-list-scroll">' + storesHtml + '</div>\n      <button class="mall-footer-btn" onclick="onSubmitMissingStore(\'' + mallName.replace(/'/g, "\\'") + '\')">\n        📝 沒有你要的店？按此提交（10 積分）！\n        <span class="sub-text">認證後再追加 40 積分</span>\n      </button>\n    </div>\n  ';
   openModal(modalHtml);
 }
 
