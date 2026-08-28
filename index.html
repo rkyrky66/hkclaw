@@ -343,6 +343,9 @@ input, select, textarea { font-size: 16px; }
 .marker-level-3 {
     animation: markerFloat 3s ease-in-out infinite;
 }
+.marker-level-4 {
+    animation: markerPulse 1.5s ease-in-out infinite;
+}
 
 /* ============================================================
    貢獻徽章 CSS (店鋪詳情)
@@ -1406,6 +1409,60 @@ function getMarkerLevelInfo(storeId) {
         contribution: contribution,
         nextLevel: levels[currentLevel.level + 1] || null
     };
+}
+
+// ============================================================
+// 用戶貢獻可視化系統
+// ============================================================
+
+// 計算用戶對某店鋪的貢獻
+function getUserContributionForStore(store) {
+    var device = STATE.user.device;
+    var score = 0;
+    var effects = [];
+    
+    // 提交店鋪（權重 +5）
+    if (store.submitted_by_device === device) {
+        score += 5;
+        effects.push('submit');
+    }
+    
+    // 認證店鋪（權重 +3）
+    if (store._userVerified) {
+        score += 3;
+        effects.push('verify');
+    }
+    
+    // 補充地址（權重 +2）
+    if (store._userSupplemented || store.supplemented_by === device) {
+        score += 2;
+        effects.push('supplement');
+    }
+    
+    // 打卡（權重 +1）
+    if (hasCheckedInToday(store.id)) {
+        score += 1;
+        effects.push('checkin');
+    }
+    
+    // 發布戰績（權重 +1）
+    if (STATE.livePosts && STATE.livePosts.some(function(p) { 
+        return p.store_id === String(store.id) && p.author_device === device; 
+    })) {
+        score += 1;
+        effects.push('post');
+    }
+    
+    return { score: score, effects: effects };
+}
+
+// 獲取貢獻等級
+function getContributionLevel(score) {
+    if (score >= 60) return { level: 4, label: '傳說', icon: '🏆', color: '#FFD700' };
+    if (score >= 30) return { level: 3, label: '皇冠', icon: '👑', color: '#FFD700' };
+    if (score >= 10) return { level: 2, label: '光暈', icon: '✨', color: '#D4AF37' };
+    if (score >= 1) return { level: 1, label: '星星', icon: '⭐', color: '#D4AF37' };
+    return { level: 0, label: '普通', icon: '', color: '' };
 }
 
 // 創建個人化店鋪標記
@@ -3316,8 +3373,32 @@ async function loadCloud() {
     var stores = await response.json();
     console.log("✅ 成功載入 " + stores.length + " 筆資料");
     
+    // ✅ 查詢用戶的認證記錄
+    var userVerifiedStoreIds = {};
+    try {
+      var verificationResult = await supabaseClientInstance
+        .from('verification_reviews')
+        .select('store_id, verifier_1_device, verifier_2_device')
+        .or('verifier_1_device.eq.' + STATE.user.device + ',verifier_2_device.eq.' + STATE.user.device);
+      
+      if (!verificationResult.error && verificationResult.data) {
+        for (var vi = 0; vi < verificationResult.data.length; vi++) {
+          userVerifiedStoreIds[String(verificationResult.data[vi].store_id)] = true;
+        }
+      }
+      console.log('✅ 用戶已認證的店鋪:', Object.keys(userVerifiedStoreIds).length, '間');
+    } catch (e) {
+      console.warn('⚠️ 載入用戶認證記錄失敗:', e.message);
+    }
+    
     STORES = stores.map(function(s) {
       var isVerified = s.status === "verified" || s.verified === "verified";
+      
+      // ✅ 判斷用戶是否已認證此店鋪
+      var userVerified = !!userVerifiedStoreIds[String(s.id)];
+      
+      // ✅ 判斷用戶是否已補充此店鋪
+      var userSupplemented = !!(s.supplemented_by && s.supplemented_by === STATE.user.device);
       
       return {
         id: String(s.id),
@@ -3340,6 +3421,7 @@ hour24: s.hour24 !== undefined && s.hour24 !== null ? s.hour24 : null,
         mall: s.mall || null,
         floor: s.floor || null,
         submitted_by: s.submitted_by || null,
+        submitted_by_device: s.submitted_by_device || null,
         verification_count: s.verification_count || 0,
         verification_count_2: s.verification_count_2 || 0,
         show_first_photo: s.show_first_photo !== false,
@@ -3354,8 +3436,8 @@ supplement_photo: s.supplement_photo || '',
         supplemented_by: s.supplemented_by || null,
         is_hidden: s.is_hidden || false,
         type: s.mall && s.mall.trim() !== '' ? 'mall' : 'street',
-        _userVerified: false,
-        _userSupplemented: false
+        _userVerified: userVerified,           // ✅ 正確設定
+        _userSupplemented: userSupplemented     // ✅ 正確設定
       };
     });
     // 讀取投票資料
@@ -4314,10 +4396,40 @@ for (var i = 0; i < s.name.length; i++) {
 }
 if (displayName.length < s.name.length) displayName += '..';
     
+    // ✅ 計算用戶貢獻
+    var contribution = getUserContributionForStore(s);
+    var contributionLevel = getContributionLevel(contribution.score);
+    
+    // 特效樣式
+    var glowStyle = '';
+    var badgeHtml = '';
+    
+    if (contributionLevel.level >= 1) {
+        // 星星特效
+        glowStyle = 'box-shadow:0 0 12px rgba(212,175,55,0.5);';
+        badgeHtml = '<span style="position:absolute;top:-8px;right:-8px;font-size:14px;z-index:10;">' + contributionLevel.icon + '</span>';
+    }
+    if (contributionLevel.level >= 2) {
+        // 光暈特效
+        glowStyle = 'box-shadow:0 0 20px rgba(212,175,55,0.7),0 0 40px rgba(212,175,55,0.3);';
+        badgeHtml = '<span style="position:absolute;top:-10px;right:-10px;font-size:16px;z-index:10;animation:markerPulse 2s ease-in-out infinite;">' + contributionLevel.icon + '</span>';
+    }
+    if (contributionLevel.level >= 3) {
+        // 皇冠特效
+        glowStyle = 'box-shadow:0 0 30px rgba(255,215,0,0.5),0 0 60px rgba(255,215,0,0.25);';
+        badgeHtml = '<span style="position:absolute;top:-12px;right:-12px;font-size:18px;z-index:10;animation:markerFloat 3s ease-in-out infinite;">' + contributionLevel.icon + '</span>';
+    }
+    if (contributionLevel.level >= 4) {
+        // 傳說特效
+        glowStyle = 'box-shadow:0 0 40px rgba(255,215,0,0.6),0 0 80px rgba(255,215,0,0.3),0 0 120px rgba(255,215,0,0.15);';
+        badgeHtml = '<span style="position:absolute;top:-14px;right:-14px;font-size:20px;z-index:10;animation:markerPulse 1.5s ease-in-out infinite;">' + contributionLevel.icon + '</span>';
+    }
+    
     var marker = L.marker([s.lat, s.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="position:relative;min-width:40px;height:30px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 6px;">' +
+        html: '<div style="position:relative;min-width:40px;height:30px;background:' + bgColor + ';border:2px solid ' + borderColor + ';border-radius:10px;' + glowStyle + 'display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 6px;">' +
+              badgeHtml +
               '<span style="color:#fff;font-weight:900;font-size:9px;text-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1;z-index:2;white-space:nowrap;">' + displayName + '</span>' +
               '</div>',
         iconSize: [60, 30],
@@ -4892,13 +5004,22 @@ var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已
     var warningBadge = hasWarning ? '<span class="text-[10px] text-yellow-400 ml-1">⚠️ 有爭議</span>' : '';
     // 獲取貢獻標記資訊
     var markerInfo = getMarkerLevelInfo(s.id);
-    var contributionBadge = '';
-    if (markerInfo.level > 0) {
+var userContribution = getUserContributionForStore(s);
+var contributionLevel = getContributionLevel(userContribution.score);
+ var contributionBadge = '';
+    if (userContribution.score > 0) {  // ✅ 改為使用 userContribution.score
         var levelClass = 'level-' + markerInfo.level;
-        contributionBadge = '<div class="mt-2 contribution-badge ' + levelClass + '">' +
-            markerInfo.icon + ' 我的貢獻：' + markerInfo.label +
-            '<span class="progress-text">（貢獻值 ' + markerInfo.contribution + '）</span>' +
-            (markerInfo.nextLevel ? '<span class="progress-text">→ 下一級需 ' + markerInfo.nextLevel.requirement + '</span>' : '') +
+        contributionBadge = '<div class="mt-2">' +
+            '<span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold" style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);color:#D4AF37;">' +
+                contributionLevel.icon + ' 我的參與度：' + userContribution.score + ' 分（' + contributionLevel.label + '）' +
+            '</span>' +
+            (userContribution.effects.length > 0 ? 
+                '<span class="text-[10px] text-white/40 ml-2">' + 
+                    userContribution.effects.map(function(eff) {
+                        var labels = { submit: '🏪提交', verify: '🕵️認證', supplement: '📝補充', checkin: '📍打卡', post: '📢戰績' };
+                        return labels[eff] || eff;
+                    }).join(' + ') + 
+                '</span>' : '') +
         '</div>';
     }
     
