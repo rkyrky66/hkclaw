@@ -4300,7 +4300,7 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
     html += '<div style="padding:10px;border:1px solid rgba(59,130,246,0.3);border-radius:8px;margin-bottom:12px;background:rgba(59,130,246,0.05);">';
     html += '<div style="font-size:12px;font-weight:600;color:#3B82F6;margin-bottom:6px;">📎 地址抓取</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
-        '<input type="text" id="quick-addr-' + store.id + '" placeholder="貼上地址" style="flex:1;min-width:180px;padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
+        '<input type="text" id="quick-addr-' + store.id + '" placeholder="貼上地址" oninput="onQuickAddrInput(' + store.id + ')" style="flex:1;min-width:180px;padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
         '<button class="btn-sm warning" onclick="queryGpsByManualAddress(' + store.id + ')">🔍 用地址查 GPS</button>' +
         '<button class="btn-sm danger" onclick="clearQuickAddr(' + store.id + ')">✕</button>' +
     '</div>';
@@ -4462,6 +4462,10 @@ async function parseGoogleMapLink(storeId) {
     if (scrapedLat) scrapedLat.value = lat.toFixed(6);
     if (scrapedLng) scrapedLng.value = lng.toFixed(6);
     
+    // ✅ 自動選中「連結GPS」radio
+    var scrapedRadio = document.querySelector('input[name="gps-choice-' + storeId + '"][value="scraped"]');
+    if (scrapedRadio) scrapedRadio.checked = true;
+    
     // 顯示 Google Map 連結
     var mapSpan = document.getElementById('scraped-gps-map-' + storeId);
     if (mapSpan) {
@@ -4497,11 +4501,11 @@ async function parseGoogleMapLink(storeId) {
     }
 }
 
-// 用手動輸入的地址查詢 GPS
+// 用地址抓取的地址查詢 GPS
 async function queryGpsByManualAddress(storeId) {
     var quickAddr = document.getElementById('quick-addr-' + storeId)?.value.trim();
     if (!quickAddr) {
-        toast('請先貼上地址', 'warning');
+        toast('請先在地址抓取區貼上地址', 'warning');
         return;
     }
     
@@ -4516,15 +4520,23 @@ async function queryGpsByManualAddress(storeId) {
             var lat = parseFloat(geo.Latitude);
             var lng = parseFloat(geo.Longitude);
             
-            // 填入「地址」
+            // ✅ 填入「地址」欄
             var alsAddr = document.getElementById('als-addr-' + storeId);
             if (alsAddr) alsAddr.value = quickAddr;
             
-            // 填入「對應GPS」
+            // ✅ 自動選中「地址」radio
+            var alsAddrRadio = document.querySelector('input[name="addr-choice-' + storeId + '"][value="als"]');
+            if (alsAddrRadio) alsAddrRadio.checked = true;
+            
+            // ✅ 填入「對應GPS」
             var alsLat = document.getElementById('als-lat-' + storeId);
             var alsLng = document.getElementById('als-lng-' + storeId);
             if (alsLat) alsLat.value = lat.toFixed(6);
             if (alsLng) alsLng.value = lng.toFixed(6);
+            
+            // ✅ 自動選中「對應GPS」radio
+            var alsGpsRadio = document.querySelector('input[name="gps-choice-' + storeId + '"][value="als"]');
+            if (alsGpsRadio) alsGpsRadio.checked = true;
             
             // 顯示 Google Map 連結
             var mapSpan = document.getElementById('als-gps-map-' + storeId);
@@ -4554,6 +4566,19 @@ function clearQuickAddr(storeId) {
     var addrInput = document.getElementById('quick-addr-' + storeId);
     if (addrInput) addrInput.value = '';
 }
+// 地址抓取輸入時自動填入
+function onQuickAddrInput(storeId) {
+    var quickAddr = document.getElementById('quick-addr-' + storeId)?.value.trim();
+    
+    // 自動填入「地址」欄
+    var alsAddr = document.getElementById('als-addr-' + storeId);
+    if (alsAddr) alsAddr.value = quickAddr;
+    
+    // 自動選中「地址」radio
+    var alsAddrRadio = document.querySelector('input[name="addr-choice-' + storeId + '"][value="als"]');
+    if (alsAddrRadio && quickAddr) alsAddrRadio.checked = true;
+}
+
 
 // 用手動輸入的地址查詢 GPS
 async function queryGpsByManualAddress(storeId) {
