@@ -3841,7 +3841,7 @@ async function approveAddress(submissionId, storeId, address, submittedBy, store
         // 發放積分
         if (submittedBy) {
             var { data: userProfile } = await sb.from('user_profiles')
-                .select('total_points, user_id')
+                .select('total_points, id')
                 .eq('device_id', submittedBy)
                 .maybeSingle();
             
@@ -3853,10 +3853,10 @@ async function approveAddress(submissionId, storeId, address, submittedBy, store
                     .eq('device_id', submittedBy);
                 
                 // 通知用戶
-                if (userProfile.user_id) {
-                    await sb.from('user_notifications')
-                        .insert({
-                            user_id: userProfile.user_id,
+          if (userProfile.id) {  // ✅
+    await sb.from('user_notifications')
+        .insert({
+            user_id: userProfile.id,
                             type: 'address_approved',
                             message: '✅ 你為「' + storeName + '」提交的地址「' + address + '」已通過審核！獲得 15 積分',
                             is_read: false,
@@ -3906,7 +3906,7 @@ async function rejectAddress(submissionId, address, submittedBy, storeName) {
         // 通知用戶
         if (submittedBy) {
             var { data: userProfile } = await sb.from('user_profiles')
-                .select('user_id')
+                .select('id')
                 .eq('device_id', submittedBy)
                 .maybeSingle();
             

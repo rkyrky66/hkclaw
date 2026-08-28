@@ -695,6 +695,7 @@ var CLOUD_ON = SUPABASE_URL.startsWith("http") && SUPABASE_KEY && SUPABASE_KEY !
 var map = null;
 var markerCluster = null;
 var userMarker = null;
+var gpsWatchId = null;
 var mapInitialized = false;
 var lastMapRegion = localStorage.getItem('claw_last_map_region') || '';
 var _currentMallModal = null;
@@ -4043,7 +4044,32 @@ for (var i = 0; i < ZOOM_LEVELS.length; i++) {
 }
     map.addLayer(markerCluster);
     
-    if (userLocation) addUserMarker(userLocation.lat, userLocation.lng);
+        if (userLocation) {
+      addUserMarker(userLocation.lat, userLocation.lng);
+      // ✅ 自動開始 GPS 追蹤
+      startGpsWatch();
+    } else if (navigator.geolocation) {
+      // 嘗試取得初始位置
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          gpsLat = userLocation.lat;
+          gpsLng = userLocation.lng;
+          isGpsReady = true;
+          addUserMarker(userLocation.lat, userLocation.lng);
+          startGpsWatch();
+          if (map && mapInitialized) {
+            map.setView([userLocation.lat, userLocation.lng], 15);
+            updateMapList();
+            updateRegionProgress();
+          }
+        },
+        function(err) {
+          console.warn('⚠️ 初始定位失敗:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
     updateMapMarkers();
     updateMapList();
     updateRegionProgress();
@@ -4069,13 +4095,72 @@ for (var i = 0; i < ZOOM_LEVELS.length; i++) {
 
 function addUserMarker(lat, lng) {
   if (!map) return;
-  if (userMarker) { map.removeLayer(userMarker);
-    userMarker = null; }
+  if (userMarker) { 
+    map.removeLayer(userMarker);
+    userMarker = null; 
+  }
   userMarker = L.marker([lat, lng], {
     icon: L.divIcon({ className: 'custom-marker-user', iconSize: [18, 18], iconAnchor: [9, 9] }),
     zIndexOffset: 1000,
     interactive: false
   }).addTo(map);
+  
+  // ✅ 如果沒有在追蹤，開始追蹤
+  if (gpsWatchId === null && navigator.geolocation) {
+    startGpsWatch();
+  }
+}
+
+// 開始 GPS 自動追蹤
+function startGpsWatch() {
+    // 如果已經在追蹤，先停止
+    stopGpsWatch();
+    
+    if (!navigator.geolocation) {
+        console.warn('⚠️ 此裝置不支援 GPS 定位');
+        return;
+    }
+    
+    console.log('📍 開始 GPS 自動追蹤');
+    
+    gpsWatchId = navigator.geolocation.watchPosition(
+        function(pos) {
+            var newLat = pos.coords.latitude;
+            var newLng = pos.coords.longitude;
+            
+            // 更新全域變數
+            userLocation = { lat: newLat, lng: newLng };
+            gpsLat = newLat;
+            gpsLng = newLng;
+            isGpsReady = true;
+            
+            // 更新地圖上的用戶標記
+            if (map && mapInitialized) {
+                addUserMarker(newLat, newLng);
+                updateMapList();
+                updateRegionProgress();
+            }
+            
+            console.log('📍 GPS 更新:', newLat.toFixed(6), newLng.toFixed(6));
+        },
+        function(err) {
+            console.warn('⚠️ GPS 追蹤失敗:', err.message);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 5000  // 允許使用 5 秒內的快取
+        }
+    );
+}
+
+// 停止 GPS 自動追蹤
+function stopGpsWatch() {
+    if (gpsWatchId !== null) {
+        navigator.geolocation.clearWatch(gpsWatchId);
+        gpsWatchId = null;
+        console.log('📍 已停止 GPS 自動追蹤');
+    }
 }
 
 function updateMapMarkers() {
@@ -10594,11 +10679,18 @@ function viewMap() {
     setTimeout(function() { return initMap(); }, 300);
   } else {
     setTimeout(function() {
-      if (map) {
+      if (map && mapInitialized) {
         map.invalidateSize(true);
         updateMapMarkers();
         updateMapList();
+        updateFilterCount();
         updateRegionProgress();
+        // ✅ 切換到地圖頁面時重新開始追蹤
+        if (gpsWatchId === null) {
+          startGpsWatch();
+        }
+      } else if (!mapInitialized) {
+        initMap();
       }
     }, 200);
   }
@@ -11277,6 +11369,7 @@ async function refreshMapData() {
                     if (map && mapInitialized) {
                         map.flyTo([userLocation.lat, userLocation.lng], map.getZoom() || 15, { duration: 1 });
                         addUserMarker(userLocation.lat, userLocation.lng);
+                        startGpsWatch();
                     }
                     
                     updateMapMarkers();
