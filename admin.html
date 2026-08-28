@@ -4255,7 +4255,7 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
         gpsOptionsHtml += 
             '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
                 '<input type="radio" name="gps-choice-' + store.id + '" value="api" data-lat="' + apiGps.lat + '" data-lng="' + apiGps.lng + '" style="accent-color:var(--primary);" />' +
-                'API 查詢：' + apiGps.lat.toFixed(6) + ', ' + apiGps.lng.toFixed(6) +
+                'API 查詢（用原本地址）：' + apiGps.lat.toFixed(6) + ', ' + apiGps.lng.toFixed(6) +
                 ' <a href="https://www.google.com/maps?q=' + apiGps.lat + ',' + apiGps.lng + '" target="_blank" style="color:#3B82F6;font-size:11px;">🗺️</a>' +
             '</label>';
     }
@@ -4265,6 +4265,7 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
             '<input type="radio" name="gps-choice-' + store.id + '" value="manual" style="accent-color:var(--primary);" />' +
             '手動輸入：Lat <input type="number" id="manual-lat-' + store.id + '" step="0.000001" placeholder="22.3193" style="width:100px;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" /> ' +
             'Lng <input type="number" id="manual-lng-' + store.id + '" step="0.000001" placeholder="114.1694" style="width:100px;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
+            ' <span id="manual-gps-map-' + store.id + '" style="display:none;"></span>' +
         '</label>';
     
     // 地址選項
@@ -4282,7 +4283,7 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
         addressOptionsHtml += 
             '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
                 '<input type="radio" name="addr-choice-' + store.id + '" value="api" data-addr="' + apiAddress.replace(/'/g, "&apos;").replace(/"/g, '&quot;') + '" style="accent-color:var(--primary);" />' +
-                'API 查詢：' + apiAddress +
+                'API 查詢（用 GPS 查到）：' + apiAddress +
             '</label>';
     }
     
@@ -4290,7 +4291,11 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
         '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
             '<input type="radio" name="addr-choice-' + store.id + '" value="manual" style="accent-color:var(--primary);" />' +
             '手動輸入：<input type="text" id="manual-addr-' + store.id + '" placeholder="輸入地址" style="flex:1;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
-        '</label>';
+        '</label>' +
+        '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">' +
+            '<button class="btn-sm warning" onclick="queryGpsByManualAddress(' + store.id + ')">🔍 用地址查 GPS</button>' +
+            '<span id="manual-addr-gps-result-' + store.id + '" style="font-size:12px;color:var(--text-muted);"></span>' +
+        '</div>';
     
     // 判斷提示
     var judgmentHtml = '';
@@ -4310,6 +4315,83 @@ function renderGpsQueryResult(store, apiGps, apiAddress) {
                 '<button class="btn-sm primary" onclick="confirmGpsCorrection(' + store.id + ')">✅ 確認修改</button>' +
             '</div>' +
         '</div>';
+}
+
+// 用手動輸入的地址查詢 GPS
+async function queryGpsByManualAddress(storeId) {
+    var manualAddr = document.getElementById('manual-addr-' + storeId)?.value.trim();
+    if (!manualAddr) {
+        toast('請先在手動輸入地址框中輸入地址', 'warning');
+        return;
+    }
+    
+    var resultSpan = document.getElementById('manual-addr-gps-result-' + storeId);
+    if (resultSpan) {
+        resultSpan.textContent = '⏳ 查詢中...';
+        resultSpan.style.color = 'var(--text-muted)';
+    }
+    
+    try {
+        // 使用 ALS API 查詢
+        var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + manualAddr);
+        var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+        var alsData = await alsRes.json();
+        
+        if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+            var firstResult = alsData.SuggestedAddress[0];
+            var geo = firstResult.Address.PremisesAddress.GeospatialInformation;
+            var lat = parseFloat(geo.Latitude);
+            var lng = parseFloat(geo.Longitude);
+            
+            // 自動填入「手動輸入」的 Lat 和 Lng
+            var latInput = document.getElementById('manual-lat-' + storeId);
+            var lngInput = document.getElementById('manual-lng-' + storeId);
+            
+            if (latInput) latInput.value = lat.toFixed(6);
+            if (lngInput) lngInput.value = lng.toFixed(6);
+            
+            // 自動選中「手動輸入」radio
+            var manualRadio = document.querySelector('input[name="gps-choice-' + storeId + '"][value="manual"]');
+            if (manualRadio) manualRadio.checked = true;
+            
+            // 顯示 Google Map 連結
+            var mapSpan = document.getElementById('manual-gps-map-' + storeId);
+            if (mapSpan) {
+                mapSpan.style.display = 'inline';
+                mapSpan.innerHTML = '<a href="https://www.google.com/maps?q=' + lat + ',' + lng + '" target="_blank" style="color:#3B82F6;font-size:11px;">🗺️</a>';
+            }
+            
+            // 顯示成功訊息
+            if (resultSpan) {
+                var buildingName = '';
+                if (firstResult.Address.PremisesAddress.ChiPremisesAddress && 
+                    firstResult.Address.PremisesAddress.ChiPremisesAddress.BuildingName) {
+                    buildingName = firstResult.Address.PremisesAddress.ChiPremisesAddress.BuildingName;
+                }
+                resultSpan.textContent = '✅ 已填入：' + lat.toFixed(6) + ', ' + lng.toFixed(6) + (buildingName ? '（' + buildingName + '）' : '');
+                resultSpan.style.color = 'var(--success)';
+            }
+            
+            // 自動選中「手動輸入」地址 radio
+            var manualAddrRadio = document.querySelector('input[name="addr-choice-' + storeId + '"][value="manual"]');
+            if (manualAddrRadio) manualAddrRadio.checked = true;
+            
+        } else {
+            if (resultSpan) {
+                resultSpan.textContent = '❌ ALS 找不到此地址';
+                resultSpan.style.color = 'var(--danger)';
+            }
+            toast('ALS 找不到此地址，請確認地址格式', 'error');
+        }
+        
+    } catch (e) {
+        console.warn('ALS 查詢失敗:', e.message);
+        if (resultSpan) {
+            resultSpan.textContent = '❌ 查詢失敗: ' + e.message;
+            resultSpan.style.color = 'var(--danger)';
+        }
+        toast('查詢失敗: ' + e.message, 'error');
+    }
 }
 
 // 比較地址
