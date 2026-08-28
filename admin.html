@@ -4362,16 +4362,42 @@ async function parseGoogleMapLink(storeId) {
         return;
     }
     
-    // 解析 GPS（格式：@22.3321524,114.16114）
-    var match = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    var lat = null;
+    var lng = null;
+    var source = '';
     
-    if (!match) {
+    // 1. 優先抓取 !3d 和 !4d（店鋪圖釘實際位置）
+    var match1 = link.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (match1) {
+        lat = parseFloat(match1[1]);
+        lng = parseFloat(match1[2]);
+        source = '店鋪圖釘位置';
+    }
+    
+    // 2. 如果沒有 !3d!4d，抓取 embed iframe 的 !2d!3d 格式
+    if (!lat || !lng) {
+        var match2 = link.match(/!2d(-?\d+\.\d+)!3d(-?\d+\.\d+)/);
+        if (match2) {
+            lng = parseFloat(match2[1]);
+            lat = parseFloat(match2[2]);
+            source = 'embed 圖釘位置';
+        }
+    }
+    
+    // 3. 如果還是沒有，退回抓取 @ 後面的座標（地圖視角中心）
+    if (!lat || !lng) {
+        var match3 = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (match3) {
+            lat = parseFloat(match3[1]);
+            lng = parseFloat(match3[2]);
+            source = '地圖視角中心';
+        }
+    }
+    
+    if (!lat || !lng) {
         toast('無法從連結中解析 GPS，請確認連結格式', 'error');
         return;
     }
-    
-    var lat = parseFloat(match[1]);
-    var lng = parseFloat(match[2]);
     
     // 填入「抓取結果」GPS
     var scrapedLat = document.getElementById('scraped-lat-' + storeId);
@@ -4405,13 +4431,13 @@ async function parseGoogleMapLink(storeId) {
             var scrapedAddr = document.getElementById('scraped-addr-' + storeId);
             if (scrapedAddr) scrapedAddr.value = apiAddress;
             
-            toast('✅ 已解析 GPS 和地址');
+            toast('✅ 已解析 GPS（' + source + '）和地址');
         } else {
-            toast('✅ 已解析 GPS（地址查詢失敗）', 'warning');
+            toast('✅ 已解析 GPS（' + source + '），地址查詢失敗', 'warning');
         }
     } catch (e) {
         console.warn('Nominatim 查詢失敗:', e.message);
-        toast('✅ 已解析 GPS（地址查詢失敗）', 'warning');
+        toast('✅ 已解析 GPS（' + source + '），地址查詢失敗', 'warning');
     }
 }
 
