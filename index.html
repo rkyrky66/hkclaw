@@ -4121,6 +4121,8 @@ function handleMapPopupClick(e) {
         e.preventDefault();
         e.stopPropagation();
         var mallName = mallDetailLink.getAttribute('data-mall-detail');
+        // ✅ 將 &apos; 還原為 '，將 &quot; 還原為 "
+        mallName = mallName.replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
         if (map) map.closePopup();
         openMallModal(mallName);
         return;
@@ -5223,7 +5225,7 @@ function openMallFromMap(mallName) {
                         (stores[0].lat && stores[0].lng ? '<a href="https://www.google.com/maps?q=' + stores[0].lat + ',' + stores[0].lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
                     '</div>' +
                     '<div style="margin-top:4px;color:#aaa;font-size:11px;">' + stores.length + ' 間店鋪</div>' +
-                    '<a href="javascript:void(0)" data-mall-detail="' + mallName.replace(/'/g, "&apos;") + '" style="display:block;margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;cursor:pointer;text-decoration:none;">👆 商場列表</a>'
+                    '<a href="javascript:void(0)" data-mall-detail="' + mallName.replace(/'/g, "&apos;") + '" style="display:block;margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;cursor:pointer;text-decoration:none;">👆 商場列表</a>';
                 
                 var popup = L.popup({
                     maxWidth: 220, minWidth: 180, className: 'custom-popup',
