@@ -3737,6 +3737,8 @@ function refreshAll() {
     var loaders = {
         dashboard: function() { refreshCoreData().then(function() { loadDashboard(); }); },
         stores: refreshCoreData,
+        'store-management': function() { refreshCoreData().then(function() { loadStoreManagement(); }); },
+        'gps-correction': function() { refreshCoreData().then(function() { loadGpsCorrection(); }); },
         verifications: loadVerifications,
         flagged: refreshCoreData,
         users: loadUsers,
@@ -4079,7 +4081,6 @@ async function queryGpsAddress(storeId) {
     }
 }
 
-// 渲染查詢結果
 // 渲染查詢結果
 function renderGpsQueryResult(store, apiGps, apiAddress) {
     var container = document.getElementById('gps-query-result-' + store.id);
