@@ -6534,6 +6534,7 @@ function selectTokenUI(value) {
 // 補充資料 - 記錄補充者 (修復版 + 防重鎖)
 // ============================================================
 // 驗證補充地址（使用 Nominatim）
+// 驗證補充地址（使用香港政府 ALS API）
 async function verifySupplementAddress(storeId) {
     var s = STORES.find(function(x) { return x.id === storeId; });
     if (!s) { toast('找不到該店鋪', 'pink'); return; }
@@ -6551,32 +6552,55 @@ async function verifySupplementAddress(storeId) {
     }
     
     try {
-        var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=hk&q=' + encodeURIComponent(address);
+        // ✅ 使用香港政府 ALS API（不需 API Key，精確到門牌）
+        var geocodeUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + address);
+        
         var geocodeRes = await fetch(geocodeUrl, {
-            headers: { 'User-Agent': 'ClawInfoStation/1.0' }
+            headers: { 'Accept': 'application/json' }
         });
+        
+        if (!geocodeRes.ok) {
+            throw new Error('HTTP ' + geocodeRes.status);
+        }
+        
         var geocodeData = await geocodeRes.json();
         
         var resultHtml = '';
         
-        if (geocodeData && geocodeData.length > 0) {
-            var geocodedLat = parseFloat(geocodeData[0].lat);
-            var geocodedLng = parseFloat(geocodeData[0].lon);
+        if (geocodeData.SuggestedAddress && geocodeData.SuggestedAddress.length > 0) {
+            var firstResult = geocodeData.SuggestedAddress[0];
+            var premises = firstResult.Address.PremisesAddress;
+            var geo = premises.GeospatialInformation;
+            var geocodedLat = parseFloat(geo.Latitude);
+            var geocodedLng = parseFloat(geo.Longitude);
             
+            // 取得匹配分數
+            var score = firstResult.ValidationInformation ? firstResult.ValidationInformation.Score : 0;
+            
+            // 取得建築物名稱（如有）
+            var buildingName = '';
+            if (premises.ChiPremisesAddress && premises.ChiPremisesAddress.BuildingName) {
+                buildingName = premises.ChiPremisesAddress.BuildingName;
+            }
+            
+            // 與店鋪 GPS 對比
             var distanceMeters = null;
             var isVerified = false;
             
             if (s.lat && s.lng) {
                 var distance = calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng);
                 distanceMeters = Math.round(distance * 1000);
-                isVerified = distanceMeters <= 100;
+                isVerified = distanceMeters <= 100 && score >= 60;
             }
             
             if (isVerified) {
+                // 驗證通過
                 resultHtml = `
                     <div class="rounded-xl border border-neongreen/40 bg-neongreen/10 p-3">
                         <p class="text-sm font-bold text-neongreen">✅ 地址驗證通過！</p>
                         <p class="text-xs text-white/60 mt-1">📍 距離店鋪 ${distanceMeters} 米</p>
+                        ${buildingName ? '<p class="text-xs text-white/40 mt-1">🏢 ' + buildingName + '</p>' : ''}
+                        ${score ? '<p class="text-xs text-white/40 mt-1">🎯 匹配度：' + score.toFixed(0) + '%</p>' : ''}
                     </div>
                 `;
                 
@@ -6586,10 +6610,20 @@ async function verifySupplementAddress(storeId) {
                     verifyBtn.onclick = function() { submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng, distanceMeters); };
                 }
             } else {
+                // 驗證失敗
+                var failReason = '';
+                if (distanceMeters !== null && distanceMeters > 100) {
+                    failReason = '📍 距離店鋪 ' + distanceMeters + ' 米（需在 100 米內）';
+                } else if (score < 60) {
+                    failReason = '🎯 匹配度過低：' + score.toFixed(0) + '%';
+                } else {
+                    failReason = '📍 距離店鋪未知';
+                }
+                
                 resultHtml = `
                     <div class="rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-3">
                         <p class="text-sm font-bold text-yellow-400">⚠️ 地址驗證失敗</p>
-                        <p class="text-xs text-white/60 mt-1">📍 距離店鋪 ${distanceMeters ? distanceMeters + ' 米' : '未知'}</p>
+                        <p class="text-xs text-white/60 mt-1">${failReason}</p>
                         <p class="text-xs text-white/40 mt-1">將提交管理員審核，通過後可獲得積分</p>
                     </div>
                 `;
@@ -6601,10 +6635,12 @@ async function verifySupplementAddress(storeId) {
                 }
             }
         } else {
+            // 找不到地址
             resultHtml = `
                 <div class="rounded-xl border border-neonpink/40 bg-neonpink/10 p-3">
                     <p class="text-sm font-bold text-neonpink">❌ 找不到此地址</p>
                     <p class="text-xs text-white/60 mt-1">請確認地址是否正確，或嘗試更詳細的地址</p>
+                    <p class="text-xs text-white/40 mt-1">格式範例：西洋菜南街 2A</p>
                 </div>
             `;
             
@@ -6622,12 +6658,13 @@ async function verifySupplementAddress(storeId) {
         }
         
     } catch (e) {
-        console.warn('⚠️ 地理編碼失敗:', e.message);
+        console.warn('⚠️ 地址查詢失敗:', e.message);
         toast('地址驗證失敗，請稍後重試', 'pink');
         
         if (verifyBtn) {
             verifyBtn.disabled = false;
             verifyBtn.textContent = '🔍 重新驗證';
+            verifyBtn.onclick = function() { verifySupplementAddress(storeId); };
         }
     }
 }

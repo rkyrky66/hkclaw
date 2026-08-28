@@ -674,6 +674,9 @@
                 <li class="nav-item" data-tab="store-management" onclick="switchTab('store-management')">
     <i class="fas fa-edit"></i><span>店鋪管理</span>
 </li>
+<li class="nav-item" data-tab="gps-correction" onclick="switchTab('gps-correction')">
+    <i class="fas fa-map-marker-alt"></i><span>GPS 校正</span>
+</li>
                 <li class="nav-item" data-tab="verifications" onclick="switchTab('verifications')">
                     <i class="fas fa-check-double"></i><span>認證審核</span>
                     <span class="badge badge-warning" id="badge-verifications">0</span>
@@ -1161,31 +1164,35 @@ function switchTab(tab) {
         }
     }
     var titles = {
-        dashboard: '儀表板',
-        stores: '新店審核',
-        'store-management': '📋 店鋪管理',
-        verifications: '認證審核',
-        flagged: '⚠️ 存疑清單',
-        users: '用戶管理',
-        audit: '審計日誌',
-        'admin-actions': '操作記錄',
-        'bounty-reviews': '🏆 懸賞審核',
-        'reports': '🚨 檢舉清單'
+dashboard: '儀表板',
+    stores: '新店審核',
+    'store-management': '📋 店鋪管理',
+    'gps-correction': '📍 GPS 校正',
+    verifications: '認證審核',
+    flagged: '⚠️ 存疑清單',
+    users: '用戶管理',
+    audit: '審計日誌',
+    'admin-actions': '操作記錄',
+    'bounty-reviews': '🏆 懸賞審核',
+    'reports': '🚨 檢舉清單',
+    'address-submissions': '📍 地址審核'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
     
     var loaders = {
-        dashboard: loadDashboard,
-        stores: loadStores,
-        'store-management': loadStoreManagement,
-        verifications: loadVerifications,
-        flagged: loadFlagged,
-        users: loadUsers,
-        audit: loadAudit,
-        'admin-actions': loadAdminActions,
-        'bounty-reviews': loadBountyReviews,
-        'reports': loadReports
+    dashboard: loadDashboard,
+    stores: loadStores,
+    'store-management': loadStoreManagement,
+    'gps-correction': loadGpsCorrection,
+    verifications: loadVerifications,
+    flagged: loadFlagged,
+    users: loadUsers,
+    audit: loadAudit,
+    'admin-actions': loadAdminActions,
+    'bounty-reviews': loadBountyReviews,
+    'reports': loadReports,
+    'address-submissions': loadAddressSubmissions
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -3863,6 +3870,461 @@ document.addEventListener('DOMContentLoaded', function() {
         textarea.remove();
     }
 })();
+
+// ============================================================
+// 📍 GPS 校正功能
+// ============================================================
+
+var gpsCorrectionPage = 0;
+var gpsCorrectionPageSize = 10;
+var gpsCorrectionFilter = 'all';
+
+// 載入 GPS 校正頁面
+function loadGpsCorrection() {
+    gpsCorrectionPage = 0;
+    renderGpsCorrectionList();
+}
+
+// 渲染 GPS 校正列表
+function renderGpsCorrectionList() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    // 從 local 快取取得店鋪
+    var allStores = localStoreCache.stores.slice();
+    
+    // 排序：未修正的排前面，已修正的排後面
+    allStores.sort(function(a, b) {
+        var aCorrected = a.gps_corrected === true;
+        var bCorrected = b.gps_corrected === true;
+        if (aCorrected !== bCorrected) return aCorrected ? 1 : -1;
+        return b.id - a.id;
+    });
+    
+    // 篩選
+    var filteredStores = allStores;
+    if (gpsCorrectionFilter === 'has-addr') {
+        filteredStores = allStores.filter(function(s) { return s.addr && s.addr !== ''; });
+    } else if (gpsCorrectionFilter === 'no-addr') {
+        filteredStores = allStores.filter(function(s) { return !s.addr || s.addr === ''; });
+    } else if (gpsCorrectionFilter === 'has-gps') {
+        filteredStores = allStores.filter(function(s) { return s.lat && s.lng; });
+    } else if (gpsCorrectionFilter === 'no-gps') {
+        filteredStores = allStores.filter(function(s) { return !s.lat || !s.lng; });
+    } else if (gpsCorrectionFilter === 'pending') {
+        filteredStores = allStores.filter(function(s) { return s.gps_corrected !== true; });
+    } else if (gpsCorrectionFilter === 'corrected') {
+        filteredStores = allStores.filter(function(s) { return s.gps_corrected === true; });
+    }
+    
+    var totalStores = filteredStores.length;
+    var totalPages = Math.ceil(totalStores / gpsCorrectionPageSize);
+    if (gpsCorrectionPage >= totalPages) gpsCorrectionPage = Math.max(0, totalPages - 1);
+    
+    var start = gpsCorrectionPage * gpsCorrectionPageSize;
+    var end = Math.min(start + gpsCorrectionPageSize, totalStores);
+    var pageStores = filteredStores.slice(start, end);
+    
+    var pendingCount = allStores.filter(function(s) { return s.gps_corrected !== true; }).length;
+    var correctedCount = allStores.filter(function(s) { return s.gps_corrected === true; }).length;
+    
+    var html = 
+        '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+            '<span style="font-size:13px;color:var(--text-muted);">📍 待校正 ' + pendingCount + ' 間 | 已修正 ' + correctedCount + ' 間</span>' +
+            '<button class="btn-sm" onclick="loadGpsCorrection()" style="margin-left:auto;">🔄 重新整理</button>' +
+        '</div>' +
+        '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            buildFilterBtn('all', '全部') +
+            buildFilterBtn('pending', '待校正') +
+            buildFilterBtn('corrected', '已修正') +
+            buildFilterBtn('has-addr', '有地址') +
+            buildFilterBtn('no-addr', '無地址') +
+            buildFilterBtn('has-gps', '有GPS') +
+            buildFilterBtn('no-gps', '無GPS') +
+        '</div>';
+    
+    if (pageStores.length === 0) {
+        html += '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有符合條件的店鋪</p></div>';
+    } else {
+        for (var i = 0; i < pageStores.length; i++) {
+            html += renderGpsCorrectionCard(pageStores[i]);
+        }
+    }
+    
+    // 分頁
+    if (totalPages > 1) {
+        html += '<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;">';
+        for (var p = 0; p < totalPages; p++) {
+            html += '<button class="btn-sm ' + (p === gpsCorrectionPage ? 'primary' : '') + '" onclick="gpsCorrectionPage=' + p + ';renderGpsCorrectionList()">' + (p + 1) + '</button>';
+        }
+        html += '</div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function buildFilterBtn(filter, label) {
+    var isActive = gpsCorrectionFilter === filter;
+    return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="gpsCorrectionFilter=\'' + filter + '\';gpsCorrectionPage=0;renderGpsCorrectionList()">' + label + '</button>';
+}
+
+// 渲染單一店鋪的 GPS 校正卡片
+function renderGpsCorrectionCard(store) {
+    var hasAddr = store.addr && store.addr !== '';
+    var hasGps = store.lat && store.lng;
+    var isCorrected = store.gps_corrected === true;
+    
+    var gpsDisplay = hasGps ? store.lat.toFixed(6) + ', ' + store.lng.toFixed(6) : '未填';
+    var addrDisplay = hasAddr ? store.addr : '未填';
+    
+    var statusBadge = isCorrected ? 
+        '<span class="status-badge confirmed">✅ 已修正</span>' : 
+        '<span class="status-badge pending">⏳ 待校正</span>';
+    
+    var googleMapLink = hasGps ? 
+        '<a href="https://www.google.com/maps?q=' + store.lat + ',' + store.lng + '" target="_blank" style="font-size:11px;color:#3B82F6;text-decoration:none;margin-left:8px;">🗺️ Google Map</a>' : '';
+    
+    return '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--bg-card);" id="gps-card-' + store.id + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+            '<div><strong style="font-size:16px;">#' + store.id + ' ' + (store.name || '未知店鋪') + '</strong>' +
+            '<span style="font-size:12px;color:var(--text-muted);margin-left:8px;">' + (store.region || '') + '</span></div>' +
+            statusBadge +
+        '</div>' +
+        '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">' +
+            '<div>📍 GPS：' + gpsDisplay + googleMapLink + '</div>' +
+            '<div>🏠 地址：' + addrDisplay + '</div>' +
+        '</div>' +
+        '<div id="gps-query-result-' + store.id + '"></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn-sm warning" onclick="queryGpsAddress(' + store.id + ')">🔍 查詢</button>' +
+        '</div>' +
+    '</div>';
+}
+
+// 查詢 GPS 和地址
+async function queryGpsAddress(storeId) {
+    var store = null;
+    var numericId = parseInt(storeId);
+    for (var i = 0; i < localStoreCache.stores.length; i++) {
+        if (localStoreCache.stores[i].id === numericId) {
+            store = localStoreCache.stores[i];
+            break;
+        }
+    }
+    
+    if (!store) {
+        toast('找不到店鋪', 'error');
+        return;
+    }
+    
+    var resultContainer = document.getElementById('gps-query-result-' + storeId);
+    if (resultContainer) {
+        resultContainer.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-muted);">⏳ 查詢中...</div>';
+    }
+    
+    var apiGps = null;
+    var apiAddress = '';
+    
+    try {
+        // 1. 如果有地址，用 ALS 查詢 GPS
+        if (store.addr && store.addr !== '') {
+            try {
+                var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + store.addr);
+                var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+                var alsData = await alsRes.json();
+                
+                if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+                    var geo = alsData.SuggestedAddress[0].Address.PremisesAddress.GeospatialInformation;
+                    apiGps = {
+                        lat: parseFloat(geo.Latitude),
+                        lng: parseFloat(geo.Longitude)
+                    };
+                }
+            } catch (e) {
+                console.warn('ALS 查詢失敗:', e.message);
+            }
+            
+            // 避免 ALS API 限制
+            await new Promise(function(resolve) { setTimeout(resolve, 1100); });
+        }
+        
+        // 2. 如果有 GPS，用 Nominatim 反向查詢地址
+        if (store.lat && store.lng) {
+            try {
+                var nomUrl = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + store.lat + '&lon=' + store.lng;
+                var nomRes = await fetch(nomUrl, {
+                    headers: { 'User-Agent': 'ClawInfoStation-Admin/1.0' }
+                });
+                var nomData = await nomRes.json();
+                
+                if (nomData && nomData.address) {
+                    var parts = [];
+                    if (nomData.address.house_number) parts.push(nomData.address.house_number);
+                    if (nomData.address.road) parts.push(nomData.address.road);
+                    if (nomData.address.suburb) parts.push(nomData.address.suburb);
+                    apiAddress = parts.join(' ');
+                }
+            } catch (e) {
+                console.warn('Nominatim 查詢失敗:', e.message);
+            }
+        }
+        
+        // 渲染查詢結果
+        renderGpsQueryResult(store, apiGps, apiAddress);
+        
+    } catch (e) {
+        if (resultContainer) {
+            resultContainer.innerHTML = '<div style="padding:12px;text-align:center;color:var(--danger);">❌ 查詢失敗: ' + e.message + '</div>';
+        }
+    }
+}
+
+// 渲染查詢結果
+// 渲染查詢結果
+function renderGpsQueryResult(store, apiGps, apiAddress) {
+    var container = document.getElementById('gps-query-result-' + store.id);
+    if (!container) return;
+    
+    var hasAddr = store.addr && store.addr !== '';
+    var hasGps = store.lat && store.lng;
+    
+    // GPS 對比
+    var gpsDeviation = null;
+    var gpsJudgment = '';
+    if (hasGps && apiGps) {
+        gpsDeviation = Math.round(calculateDistance(store.lat, store.lng, apiGps.lat, apiGps.lng) * 1000);
+        if (gpsDeviation < 50) {
+            gpsJudgment = '✅ GPS 一致（偏差 ' + gpsDeviation + ' 米）';
+        } else if (gpsDeviation < 200) {
+            gpsJudgment = '⚠️ GPS 有偏差（' + gpsDeviation + ' 米），建議使用 API 查詢結果';
+        } else {
+            gpsJudgment = '❌ GPS 嚴重偏差（' + gpsDeviation + ' 米），強烈建議改用 API 查詢結果';
+        }
+    }
+    
+    // 地址對比
+    var addressJudgment = '';
+    if (hasAddr && apiAddress) {
+        var addrMatch = compareAddresses(store.addr, apiAddress);
+        if (addrMatch === 'exact') {
+            addressJudgment = '✅ 地址相符';
+        } else if (addrMatch === 'partial') {
+            addressJudgment = '⚠️ 地址有偏差';
+        } else {
+            addressJudgment = '❌ 地址不一致';
+        }
+    }
+    
+    // GPS 選項
+    var gpsOptionsHtml = '<div style="margin-bottom:8px;"><label style="font-size:12px;font-weight:600;color:var(--text-muted);">📍 GPS 定位（3 選 1）</label></div>';
+    
+    if (hasGps) {
+        gpsOptionsHtml += 
+            '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+                '<input type="radio" name="gps-choice-' + store.id + '" value="existing" checked style="accent-color:var(--primary);" />' +
+                '已輸入：' + store.lat.toFixed(6) + ', ' + store.lng.toFixed(6) +
+                ' <a href="https://www.google.com/maps?q=' + store.lat + ',' + store.lng + '" target="_blank" style="color:#3B82F6;font-size:11px;">🗺️</a>' +
+            '</label>';
+    }
+    
+    if (apiGps) {
+        gpsOptionsHtml += 
+            '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+                '<input type="radio" name="gps-choice-' + store.id + '" value="api" data-lat="' + apiGps.lat + '" data-lng="' + apiGps.lng + '" style="accent-color:var(--primary);" />' +
+                'API 查詢：' + apiGps.lat.toFixed(6) + ', ' + apiGps.lng.toFixed(6) +
+                ' <a href="https://www.google.com/maps?q=' + apiGps.lat + ',' + apiGps.lng + '" target="_blank" style="color:#3B82F6;font-size:11px;">🗺️</a>' +
+            '</label>';
+    }
+    
+    gpsOptionsHtml += 
+        '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+            '<input type="radio" name="gps-choice-' + store.id + '" value="manual" style="accent-color:var(--primary);" />' +
+            '手動輸入：Lat <input type="number" id="manual-lat-' + store.id + '" step="0.000001" placeholder="22.3193" style="width:100px;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" /> ' +
+            'Lng <input type="number" id="manual-lng-' + store.id + '" step="0.000001" placeholder="114.1694" style="width:100px;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
+        '</label>';
+    
+    // 地址選項
+    var addressOptionsHtml = '<div style="margin:12px 0 8px 0;"><label style="font-size:12px;font-weight:600;color:var(--text-muted);">🏠 地址（3 選 1）</label></div>';
+    
+    if (hasAddr) {
+        addressOptionsHtml += 
+            '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+                '<input type="radio" name="addr-choice-' + store.id + '" value="existing" checked style="accent-color:var(--primary);" />' +
+                '已輸入：' + store.addr +
+            '</label>';
+    }
+    
+    if (apiAddress) {
+        addressOptionsHtml += 
+            '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+                '<input type="radio" name="addr-choice-' + store.id + '" value="api" data-addr="' + apiAddress.replace(/'/g, "&apos;").replace(/"/g, '&quot;') + '" style="accent-color:var(--primary);" />' +
+                'API 查詢：' + apiAddress +
+            '</label>';
+    }
+    
+    addressOptionsHtml += 
+        '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">' +
+            '<input type="radio" name="addr-choice-' + store.id + '" value="manual" style="accent-color:var(--primary);" />' +
+            '手動輸入：<input type="text" id="manual-addr-' + store.id + '" placeholder="輸入地址" style="flex:1;padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);color:var(--text-primary);font-size:12px;" />' +
+        '</label>';
+    
+    // 判斷提示
+    var judgmentHtml = '';
+    if (gpsJudgment || addressJudgment) {
+        judgmentHtml = '<div style="margin:12px 0;padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);">' +
+            (gpsJudgment ? '<div style="font-size:12px;margin-bottom:4px;">' + gpsJudgment + '</div>' : '') +
+            (addressJudgment ? '<div style="font-size:12px;">' + addressJudgment + '</div>' : '') +
+        '</div>';
+    }
+    
+    container.innerHTML = 
+        '<div style="margin-top:12px;padding:12px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);">' +
+            gpsOptionsHtml +
+            addressOptionsHtml +
+            judgmentHtml +
+            '<div style="margin-top:12px;display:flex;justify-content:flex-end;">' +
+                '<button class="btn-sm primary" onclick="confirmGpsCorrection(' + store.id + ')">✅ 確認修改</button>' +
+            '</div>' +
+        '</div>';
+}
+
+// 比較地址
+function compareAddresses(addr1, addr2) {
+    var normalize = function(s) {
+        return s.replace(/[號号]/g, '').replace(/\s+/g, '').toLowerCase();
+    };
+    
+    var a1 = normalize(addr1);
+    var a2 = normalize(addr2);
+    
+    if (a1 === a2) return 'exact';
+    
+    // 提取街道名和門牌
+    var extractStreet = function(s) {
+        var match = s.match(/[\u4e00-\u9fff]+/);
+        return match ? match[0] : s;
+    };
+    
+    var street1 = extractStreet(a1);
+    var street2 = extractStreet(a2);
+    
+    if (street1 === street2) return 'partial';
+    if (street1.indexOf(street2) !== -1 || street2.indexOf(street1) !== -1) return 'partial';
+    
+    return 'different';
+}
+
+// 確認 GPS 校正（更新版）
+async function confirmGpsCorrection(storeId) {
+    var store = null;
+    var numericId = parseInt(storeId);
+    for (var i = 0; i < localStoreCache.stores.length; i++) {
+        if (localStoreCache.stores[i].id === numericId) {
+            store = localStoreCache.stores[i];
+            break;
+        }
+    }
+    
+    if (!store) {
+        toast('找不到店鋪', 'error');
+        return;
+    }
+    
+    // 取得選擇的 GPS
+    var gpsChoice = document.querySelector('input[name="gps-choice-' + storeId + '"]:checked');
+    var finalLat = null;
+    var finalLng = null;
+    
+    if (gpsChoice) {
+        if (gpsChoice.value === 'existing' && store.lat && store.lng) {
+            finalLat = store.lat;
+            finalLng = store.lng;
+        } else if (gpsChoice.value === 'api') {
+            finalLat = parseFloat(gpsChoice.dataset.lat);
+            finalLng = parseFloat(gpsChoice.dataset.lng);
+        } else if (gpsChoice.value === 'manual') {
+            finalLat = parseFloat(document.getElementById('manual-lat-' + storeId)?.value);
+            finalLng = parseFloat(document.getElementById('manual-lng-' + storeId)?.value);
+        }
+    }
+    
+    // 取得選擇的地址
+    var addrChoice = document.querySelector('input[name="addr-choice-' + storeId + '"]:checked');
+    var finalAddr = '';
+    
+    if (addrChoice) {
+        if (addrChoice.value === 'existing' && store.addr) {
+            finalAddr = store.addr;
+        } else if (addrChoice.value === 'api') {
+            finalAddr = addrChoice.dataset.addr || '';
+        } else if (addrChoice.value === 'manual') {
+            finalAddr = document.getElementById('manual-addr-' + storeId)?.value.trim() || '';
+        }
+    }
+    
+    // 驗證
+    if (!finalLat || !finalLng) {
+        toast('請選擇或輸入 GPS', 'error');
+        return;
+    }
+    if (!finalAddr) {
+        toast('請選擇或輸入地址', 'error');
+        return;
+    }
+    
+    if (!confirm('確定要修改此店鋪的 GPS 和地址嗎？\n\nGPS: ' + finalLat + ', ' + finalLng + '\n地址: ' + finalAddr)) return;
+    
+    try {
+        await sb.from('claw_stores')
+            .update({
+                lat: finalLat,
+                lng: finalLng,
+                addr: finalAddr,
+                gps_corrected: true,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', numericId);
+        
+        await sb.from('admin_actions')
+            .insert({
+                store_id: numericId,
+                action_type: 'gps_correction',
+                target_type: 'store',
+                target_id: String(storeId),
+                reason: 'GPS 和地址校正',
+                performed_by: currentUser ? currentUser.display_name : 'admin',
+                metadata: {
+                    old_gps: { lat: store.lat, lng: store.lng },
+                    new_gps: { lat: finalLat, lng: finalLng },
+                    old_addr: store.addr || '',
+                    new_addr: finalAddr
+                }
+            });
+        
+        // 更新 local 快取
+        store.lat = finalLat;
+        store.lng = finalLng;
+        store.addr = finalAddr;
+        store.gps_corrected = true;
+        
+        toast('✅ GPS 和地址已修正');
+        renderGpsCorrectionList();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 計算距離（與前台相同）
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
 
 </script>
 
