@@ -4349,7 +4349,7 @@ popupContent.innerHTML =
         (group.lat && group.lng ? '<a href="https://www.google.com/maps?q=' + group.lat + ',' + group.lng + '" target="_blank" style="color:#00FF00;font-size:11px;text-decoration:none;">🗺️</a>' : '') +
     '</div>' +
     '<div style="margin-top:4px;color:#aaa;font-size:11px;">' + group.totalStores + ' 間店鋪</div>' +
-    '<div style="margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;">👆 商場列表</div>';
+    '<a href="javascript:void(0)" onclick="event.stopPropagation(); event.preventDefault(); if(map) map.closePopup(); openMallModal(\'' + key.replace(/'/g, "\\'") + '\');" style="display:block;margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;cursor:pointer;text-decoration:none;">👆 商場列表</a>';
     
 marker.on('click', function(e) {
     console.log('🕵️ 商場 click 觸發:', key, 'popup 狀態:', marker.isPopupOpen());
