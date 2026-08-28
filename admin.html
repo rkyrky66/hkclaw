@@ -677,6 +677,9 @@
 <li class="nav-item" data-tab="gps-correction" onclick="switchTab('gps-correction')">
     <i class="fas fa-map-marker-alt"></i><span>GPS 校正</span>
 </li>
+<li class="nav-item" data-tab="address-submissions" onclick="switchTab('address-submissions')">
+    <i class="fas fa-map-marker-alt"></i><span>地址審核</span>
+</li>
                 <li class="nav-item" data-tab="verifications" onclick="switchTab('verifications')">
                     <i class="fas fa-check-double"></i><span>認證審核</span>
                     <span class="badge badge-warning" id="badge-verifications">0</span>
@@ -3769,33 +3772,49 @@ function loadAddressSubmissions() {
                 return;
             }
             
-            var html = 
-                '<div style="margin-bottom:12px;">' +
-                    '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + submissions.length + ' 筆地址待審核</span>' +
-                '</div>';
-            
+            var storeIds = [];
             for (var i = 0; i < submissions.length; i++) {
-                var sub = submissions[i];
-                html += 
-                    '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
-                        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
-                            '<div><strong style="font-size:16px;">🏪 店鋪 #' + sub.store_id + '</strong></div>' +
-                            '<span class="status-badge pending">⏳ 待審核</span>' +
-                        '</div>' +
-                        '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
-                            '<div>📍 提交地址：' + sub.submitted_address + '</div>' +
-                            '<div>📏 距離店鋪：' + (sub.distance_meters ? Math.round(sub.distance_meters) + ' 米' : '未知') + '</div>' +
-                            '<div>👤 提交者：' + (sub.submitted_by || '未知') + '</div>' +
-                            '<div>🕐 時間：' + new Date(sub.created_at).toLocaleString() + '</div>' +
-                        '</div>' +
-                        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-color);padding-top:12px;">' +
-                            '<button class="btn-sm success" onclick="approveAddress(\'' + sub.id + '\', \'' + sub.store_id + '\', \'' + sub.submitted_address.replace(/'/g, "\\'") + '\', \'' + (sub.submitted_by || '') + '\')">✅ 批准地址</button>' +
-                            '<button class="btn-sm danger" onclick="rejectAddress(\'' + sub.id + '\')">❌ 拒絕地址</button>' +
-                        '</div>' +
-                    '</div>';
+                var sid = parseInt(submissions[i].store_id);
+                if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
+                    storeIds.push(sid);
+                }
             }
             
-            container.innerHTML = html;
+            return sb.from('claw_stores')
+                .select('id, name, region')
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    var stores = {};
+                    var storeData = storeResult.data || [];
+                    for (var i = 0; i < storeData.length; i++) {
+                        stores[String(storeData[i].id)] = storeData[i];
+                    }
+                    
+                    var html = '<div style="margin-bottom:12px;"><span style="font-size:13px;color:var(--text-muted);">📋 共 ' + submissions.length + ' 筆待審核</span></div>';
+                    
+                    for (var i = 0; i < submissions.length; i++) {
+                        var sub = submissions[i];
+                        var store = stores[String(sub.store_id)] || { name: '未知店鋪', region: '' };
+                        
+                        html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+                                '<strong style="font-size:16px;">🏪 ' + store.name + '</strong>' +
+                                '<span class="status-badge pending">⏳ 待審核</span>' +
+                            '</div>' +
+                            '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
+                                '<div>📍 提交地址：' + sub.submitted_address + '</div>' +
+                                '<div>📏 距離店鋪：' + (sub.distance_meters ? Math.round(sub.distance_meters) + ' 米' : '未知') + '</div>' +
+                                '<div>👤 提交者：' + (sub.submitted_by || '未知') + '</div>' +
+                            '</div>' +
+                            '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+                                '<button class="btn-sm success" onclick="approveAddress(\'' + sub.id + '\', \'' + sub.store_id + '\', \'' + sub.submitted_address.replace(/'/g, "\\'") + '\', \'' + (sub.submitted_by || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')">✅ 批准</button>' +
+                                '<button class="btn-sm danger" onclick="rejectAddress(\'' + sub.id + '\', \'' + sub.submitted_address.replace(/'/g, "\\'") + '\', \'' + (sub.submitted_by || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')">❌ 拒絕</button>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    
+                    container.innerHTML = html;
+                });
         })
         .catch(function(error) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
@@ -3803,8 +3822,8 @@ function loadAddressSubmissions() {
 }
 
 // 批准地址
-async function approveAddress(submissionId, storeId, address, submittedBy) {
-    if (!confirm('確定批准此地址嗎？\n\n店鋪地址將更新為：' + address)) return;
+async function approveAddress(submissionId, storeId, address, submittedBy, storeName) {
+    if (!confirm('確定批准此地址嗎？\n\n' + storeName + ' 的地址將更新為：' + address)) return;
     
     try {
         await sb.from('address_submissions')
@@ -3819,9 +3838,10 @@ async function approveAddress(submissionId, storeId, address, submittedBy) {
             .update({ addr: address })
             .eq('id', parseInt(storeId));
         
+        // 發放積分
         if (submittedBy) {
             var { data: userProfile } = await sb.from('user_profiles')
-                .select('total_points')
+                .select('total_points, user_id')
                 .eq('device_id', submittedBy)
                 .maybeSingle();
             
@@ -3831,21 +3851,22 @@ async function approveAddress(submissionId, storeId, address, submittedBy) {
                         total_points: (userProfile.total_points || 0) + 15
                     })
                     .eq('device_id', submittedBy);
+                
+                // 通知用戶
+                if (userProfile.user_id) {
+                    await sb.from('user_notifications')
+                        .insert({
+                            user_id: userProfile.user_id,
+                            type: 'address_approved',
+                            message: '✅ 你為「' + storeName + '」提交的地址「' + address + '」已通過審核！獲得 15 積分',
+                            is_read: false,
+                            created_at: new Date().toISOString()
+                        });
+                }
             }
         }
         
-        await sb.from('admin_actions')
-            .insert({
-                store_id: parseInt(storeId),
-                action_type: 'approve_address',
-                target_type: 'address_submission',
-                target_id: submissionId,
-                reason: '批准地址補充',
-                performed_by: currentUser ? currentUser.display_name : 'admin',
-                metadata: { address: address, reward: 15 }
-            });
-        
-        toast('✅ 已批准地址，+15 積分已發放');
+        toast('✅ 已批准，+15 積分已發放');
         loadAddressSubmissions();
         
     } catch (e) {
@@ -3854,8 +3875,8 @@ async function approveAddress(submissionId, storeId, address, submittedBy) {
 }
 
 // 拒絕地址
-async function rejectAddress(submissionId) {
-    if (!confirm('確定拒絕此地址嗎？')) return;
+async function rejectAddress(submissionId, address, submittedBy, storeName) {
+    if (!confirm('確定拒絕此地址嗎？\n\n' + storeName + ' 的地址：' + address)) return;
     
     try {
         await sb.from('address_submissions')
@@ -3866,13 +3887,33 @@ async function rejectAddress(submissionId) {
             })
             .eq('id', submissionId);
         
-        toast('✅ 已拒絕地址');
+        // 通知用戶
+        if (submittedBy) {
+            var { data: userProfile } = await sb.from('user_profiles')
+                .select('user_id')
+                .eq('device_id', submittedBy)
+                .maybeSingle();
+            
+            if (userProfile && userProfile.user_id) {
+                await sb.from('user_notifications')
+                    .insert({
+                        user_id: userProfile.user_id,
+                        type: 'address_rejected',
+                        message: '⚠️ 你為「' + storeName + '」提交的地址「' + address + '」驗證沒通過，請確認後重新提交',
+                        is_read: false,
+                        created_at: new Date().toISOString()
+                    });
+            }
+        }
+        
+        toast('✅ 已拒絕');
         loadAddressSubmissions();
         
     } catch (e) {
         toast('操作失敗: ' + e.message, 'error');
     }
 }
+
 // ============================================================
 // 初始化
 // ============================================================
@@ -4524,19 +4565,12 @@ async function queryGpsByManualAddress(storeId) {
             var alsAddr = document.getElementById('als-addr-' + storeId);
             if (alsAddr) alsAddr.value = quickAddr;
             
-            // ✅ 自動選中「地址」radio
-            var alsAddrRadio = document.querySelector('input[name="addr-choice-' + storeId + '"][value="als"]');
-            if (alsAddrRadio) alsAddrRadio.checked = true;
             
             // ✅ 填入「對應GPS」
             var alsLat = document.getElementById('als-lat-' + storeId);
             var alsLng = document.getElementById('als-lng-' + storeId);
             if (alsLat) alsLat.value = lat.toFixed(6);
             if (alsLng) alsLng.value = lng.toFixed(6);
-            
-            // ✅ 自動選中「對應GPS」radio
-            var alsGpsRadio = document.querySelector('input[name="gps-choice-' + storeId + '"][value="als"]');
-            if (alsGpsRadio) alsGpsRadio.checked = true;
             
             // 顯示 Google Map 連結
             var mapSpan = document.getElementById('als-gps-map-' + storeId);
@@ -4686,7 +4720,7 @@ async function confirmGpsCorrection(storeId) {
         
         await sb.from('admin_actions')
             .insert({
-                store_id: numericId,
+                store_id: String(numericId),  // ✅ 轉為字串
                 action_type: 'gps_correction',
                 target_type: 'store',
                 target_id: String(storeId),

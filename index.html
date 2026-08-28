@@ -6416,6 +6416,12 @@ function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
   
+  // 重置地區選擇
+  window._supplementDistrict = '';
+  window._supplementStreet = '';
+  window._supplementBuildingNo = '';
+  window._supplementCurrentTab = 'kl';
+  
   openModal(`
     <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
       <h2 class="font-black text-gold neon-gold">📝 補充地址</h2>
@@ -6427,23 +6433,316 @@ function openSupplementForm(storeId) {
         <p class="text-xs text-white/40">${s.region} · ${s.addr || '未填地址'}</p>
         <p class="text-xs text-white/30 mt-1">補充地址可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>
       </div>
+      
       <div>
-        <label class="text-xs font-bold text-gold">📍 詳細地址 <span class="text-neonpink">（必填）</span></label>
-        <input id="sa-address" placeholder="例如：西洋菜南街 2A 好望角大廈" 
-          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
-          value="${s.addr && s.addr !== '' && s.addr !== '（未填地址）' ? s.addr : ''}" />
-        <p class="text-[10px] text-white/40 mt-1">💡 填寫完整地址，系統將自動驗證位置</p>
+        <label class="text-xs font-bold text-gold">📍 地區 <span class="text-neonpink">（必填）</span></label>
+        <div class="mt-2 flex gap-2">
+          ${Object.keys(REGIONS).map(function(key) {
+            return '<button onclick="selectSupplementDistrictTab(\'' + key + '\')" id="sup-tab-' + key + '" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (key === 'kl' ? 'border-gold bg-gold/20 text-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>';
+          }).join('')}
+        </div>
+        <div id="supplement-district-buttons" class="mt-2 flex flex-wrap gap-1.5"></div>
+        <div id="supplement-district-selected" class="hidden mt-2 text-sm text-gold">✅ 已選：<span id="supplement-district-display"></span></div>
       </div>
-      <div id="sa-verify-result" class="hidden"></div>
+      
+      <div>
+        <label class="text-xs font-bold text-gold">📍 街道 <span class="text-neonpink">（必填，輸入時自動搜尋）</span></label>
+        <input id="supplement-street" placeholder="例如：西洋菜南街" autocomplete="off" 
+          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+          oninput="onSupplementStreetInput(this.value)" />
+        <div id="supplement-street-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
+      </div>
+      
+      <div>
+        <label class="text-xs font-bold text-gold">📍 街號 <span class="text-neonpink">（必填）</span></label>
+        <input id="supplement-building-no" placeholder="例如：2A、33、41-45" 
+          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" />
+      </div>
+      
+      <div id="supplement-result" class="hidden"></div>
     </div>
     <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-      <button onclick="verifySupplementAddress('${s.id}')" id="sa-verify-btn" 
+      <button onclick="submitSupplementAddress('${s.id}')" id="supplement-submit-btn" 
         class="w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green">
-        🔍 驗證地址
+        🔍 提交驗證地址
       </button>
     </div>
   `);
+  
+  // 初始化地區按鈕
+  renderSupplementDistrictButtons();
 }
+
+// 選擇地區 Tab
+function selectSupplementDistrictTab(tabKey) {
+  window._supplementCurrentTab = tabKey;
+  window._supplementDistrict = '';
+  
+  // 更新 Tab 樣式
+  Object.keys(REGIONS).forEach(function(key) {
+    var btn = document.getElementById('sup-tab-' + key);
+    if (btn) {
+      if (key === tabKey) {
+        btn.className = 'flex-1 rounded-xl border border-gold bg-gold/20 text-gold py-2 text-sm font-black transition-all';
+      } else {
+        btn.className = 'flex-1 rounded-xl border border-white/20 text-white/45 py-2 text-sm font-black transition-all';
+      }
+    }
+  });
+  
+  // 隱藏已選顯示
+  var selectedDiv = document.getElementById('supplement-district-selected');
+  if (selectedDiv) selectedDiv.classList.add('hidden');
+  
+  renderSupplementDistrictButtons();
+}
+
+// 渲染地區按鈕
+function renderSupplementDistrictButtons() {
+  var container = document.getElementById('supplement-district-buttons');
+  if (!container) return;
+  
+  var group = REGIONS[window._supplementCurrentTab];
+  if (!group) return;
+  
+  var allRegions = group.hot.concat(group.more);
+  
+  container.innerHTML = allRegions.map(function(r) {
+    var isSelected = window._supplementDistrict === r;
+    return '<button onclick="selectSupplementDistrict(\'' + r + '\')" class="rounded-full border px-3 py-1 text-xs transition-all ' + (isSelected ? 'border-gold bg-gold/20 text-gold' : 'border-gold/40 text-gold') + '">' + r + '</button>';
+  }).join('');
+}
+
+// 選擇地區
+function selectSupplementDistrict(district) {
+  window._supplementDistrict = district;
+  
+  // 更新按鈕樣式
+  var buttons = document.querySelectorAll('#supplement-district-buttons button');
+  buttons.forEach(function(btn) {
+    if (btn.textContent === district) {
+      btn.className = 'rounded-full border border-gold bg-gold/20 text-gold px-3 py-1 text-xs transition-all';
+    } else {
+      btn.className = 'rounded-full border border-gold/40 text-gold px-3 py-1 text-xs transition-all';
+    }
+  });
+  
+  // 顯示已選
+  var selectedDiv = document.getElementById('supplement-district-selected');
+  var display = document.getElementById('supplement-district-display');
+  if (selectedDiv) selectedDiv.classList.remove('hidden');
+  if (display) display.textContent = district;
+}
+
+// 街道 AutoComplete
+var _supplementStreetTimer = null;
+
+function onSupplementStreetInput(value) {
+  window._supplementStreet = value.trim();
+  
+  clearTimeout(_supplementStreetTimer);
+  _supplementStreetTimer = setTimeout(function() {
+    autocompleteSupplementStreet(window._supplementStreet);
+  }, 500);
+}
+
+async function autocompleteSupplementStreet(query) {
+  var container = document.getElementById('supplement-street-suggestions');
+  if (!container) return;
+  
+  if (!query || query.length < 1) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  try {
+    var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + (window._supplementDistrict ? window._supplementDistrict + ' ' : '') + query);
+    var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+    var alsData = await alsRes.json();
+    
+    var streets = [];
+    if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+      for (var i = 0; i < alsData.SuggestedAddress.length; i++) {
+        var chiStreet = alsData.SuggestedAddress[i].Address.PremisesAddress.ChiPremisesAddress;
+        if (chiStreet && chiStreet.ChiStreet && chiStreet.ChiStreet.StreetName) {
+          var streetName = chiStreet.ChiStreet.StreetName;
+          if (streets.indexOf(streetName) === -1) {
+            streets.push(streetName);
+          }
+        }
+      }
+    }
+    
+    if (streets.length > 0) {
+      container.innerHTML = streets.map(function(st) {
+        return '<button onclick="selectSupplementStreet(\'' + st.replace(/'/g, "\\'") + '\')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0">' + st + '</button>';
+      }).join('');
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+    }
+  } catch (e) {
+    container.classList.add('hidden');
+  }
+}
+
+// 選擇街道
+function selectSupplementStreet(street) {
+  window._supplementStreet = street;
+  var input = document.getElementById('supplement-street');
+  var container = document.getElementById('supplement-street-suggestions');
+  if (input) input.value = street;
+  if (container) container.classList.add('hidden');
+}
+
+// 提交補充地址驗證
+async function submitSupplementAddress(storeId) {
+  if (!acquireSubmitLock('submitSupplementAddress')) return;
+  if (!requireLogin('補充地址')) return;
+  
+  var submitBtn = disableSubmitButton('supplement-submit-btn', '⏳ 驗證中...');
+  
+  try {
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) { toast('找不到該店鋪', 'pink'); return; }
+    
+    var district = window._supplementDistrict;
+    var street = window._supplementStreet;
+    var buildingNo = document.getElementById('supplement-building-no')?.value.trim();
+    
+    if (!district) {
+      toast('請選擇地區', 'pink');
+      enableSubmitButton(submitBtn, '🔍 提交驗證地址');
+      return;
+    }
+    if (!street) {
+      toast('請輸入街道', 'pink');
+      enableSubmitButton(submitBtn, '🔍 提交驗證地址');
+      return;
+    }
+    if (!buildingNo) {
+      toast('請輸入街號', 'pink');
+      enableSubmitButton(submitBtn, '🔍 提交驗證地址');
+      return;
+    }
+    
+    // 組合查詢
+    var fullAddress = street + ' ' + buildingNo;
+    var query = '香港 ' + district + ' ' + fullAddress;
+    
+    // 呼叫 ALS
+    var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent(query);
+    var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+    var alsData = await alsRes.json();
+    
+    var resultContainer = document.getElementById('supplement-result');
+    var geocodedLat = null;
+    var geocodedLng = null;
+    
+    if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+      var firstResult = alsData.SuggestedAddress[0];
+      var geo = firstResult.Address.PremisesAddress.GeospatialInformation;
+      geocodedLat = parseFloat(geo.Latitude);
+      geocodedLng = parseFloat(geo.Longitude);
+    }
+    
+    var distanceMeters = null;
+    
+    if (geocodedLat && geocodedLng && s.lat && s.lng) {
+      var distance = calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng);
+      distanceMeters = Math.round(distance * 1000);
+    }
+    
+    // 情況 A：距離 < 100 米
+    if (distanceMeters !== null && distanceMeters < 100) {
+      s.addr = fullAddress;
+      
+      if (CLOUD_ON) {
+        await supabaseClientInstance
+          .from('claw_stores')
+          .update({ addr: fullAddress })
+          .eq('id', parseInt(storeId));
+      }
+      
+      save();
+      await addPoints(15, '補充地址');
+      await recordTaskCompletion('supplement');
+      await recordRegionContribution('supplement', s.region, storeId);
+      
+      toast('✅ 地址驗證通過！+15 分', 'green');
+      closeModal();
+      setTimeout(function() { openStore(storeId); }, 300);
+      return;
+    }
+    
+    // 情況 B：100-300 米
+    if (distanceMeters !== null && distanceMeters >= 100 && distanceMeters < 300) {
+      s.addr = fullAddress;
+      
+      if (CLOUD_ON) {
+        await supabaseClientInstance
+          .from('claw_stores')
+          .update({ addr: fullAddress })
+          .eq('id', parseInt(storeId));
+      }
+      
+      save();
+      
+      // 提交管理員審核
+      if (CLOUD_ON) {
+        await supabaseClientInstance
+          .from('address_submissions')
+          .insert({
+            store_id: String(storeId),
+            submitted_address: fullAddress,
+            submitted_by: STATE.user.device,
+            user_id: STATE.user.user_id || null,
+            geocoded_lat: geocodedLat,
+            geocoded_lng: geocodedLng,
+            store_lat: s.lat || null,
+            store_lng: s.lng || null,
+            distance_meters: distanceMeters,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
+      }
+      
+      toast('📤 已提交成功！管理員審核通過後即可獲得 15 積分', 'gold');
+      closeModal();
+      return;
+    }
+    
+    // 情況 C：找不到或 > 300 米
+    if (CLOUD_ON) {
+      await supabaseClientInstance
+        .from('address_submissions')
+        .insert({
+          store_id: String(storeId),
+          submitted_address: fullAddress,
+          submitted_by: STATE.user.device,
+          user_id: STATE.user.user_id || null,
+          geocoded_lat: geocodedLat,
+          geocoded_lng: geocodedLng,
+          store_lat: s.lat || null,
+          store_lng: s.lng || null,
+          distance_meters: distanceMeters,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+    }
+    
+    toast('📤 已提交成功！管理員審核通過後即可獲得 15 積分', 'gold');
+    closeModal();
+    
+  } catch (e) {
+    console.warn('補充地址失敗:', e.message);
+    toast('提交失敗: ' + e.message, 'pink');
+    enableSubmitButton(submitBtn, '🔍 提交驗證地址');
+  } finally {
+    releaseSubmitLock('submitSupplementAddress');
+  }
+}
+
 function selectSizeUI(size) {
   window._sfSelections.size = size;
   document.querySelectorAll('.sf-size-btn').forEach(function(btn) {
