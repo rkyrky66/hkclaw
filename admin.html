@@ -3876,9 +3876,20 @@ async function approveAddress(submissionId, storeId, address, submittedBy, store
 
 // 拒絕地址
 async function rejectAddress(submissionId, address, submittedBy, storeName) {
-    if (!confirm('確定拒絕此地址嗎？\n\n' + storeName + ' 的地址：' + address)) return;
+    if (!confirm('確定拒絕此地址嗎？\n\n' + storeName + ' 的地址：' + address + '\n\n拒絕後將清空店鋪地址，補充地址任務重新開放。')) return;
     
     try {
+        // 先取得 submission 的 store_id
+        var { data: submission } = await sb.from('address_submissions')
+            .select('store_id')
+            .eq('id', submissionId)
+            .single();
+        
+        if (!submission) {
+            toast('找不到該提交記錄', 'error');
+            return;
+        }
+        
         await sb.from('address_submissions')
             .update({
                 status: 'rejected',
@@ -3886,6 +3897,11 @@ async function rejectAddress(submissionId, address, submittedBy, storeName) {
                 reviewed_by: currentUser ? currentUser.display_name : 'admin'
             })
             .eq('id', submissionId);
+        
+        // ✅ 清空 claw_stores.addr
+        await sb.from('claw_stores')
+            .update({ addr: '' })
+            .eq('id', parseInt(submission.store_id));
         
         // 通知用戶
         if (submittedBy) {
@@ -3906,7 +3922,7 @@ async function rejectAddress(submissionId, address, submittedBy, storeName) {
             }
         }
         
-        toast('✅ 已拒絕');
+        toast('✅ 已拒絕並清空地址');
         loadAddressSubmissions();
         
     } catch (e) {
