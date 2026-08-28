@@ -3749,7 +3749,130 @@ function refreshAll() {
     };
     if (loaders[currentTab]) loaders[currentTab]();
 }
+// ============================================================
+// 地址審核
+// ============================================================
+function loadAddressSubmissions() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('address_submissions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var submissions = result.data || [];
+            
+            if (submissions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有待審核的地址</p></div>';
+                return;
+            }
+            
+            var html = 
+                '<div style="margin-bottom:12px;">' +
+                    '<span style="font-size:13px;color:var(--text-muted);">📋 共 ' + submissions.length + ' 筆地址待審核</span>' +
+                '</div>';
+            
+            for (var i = 0; i < submissions.length; i++) {
+                var sub = submissions[i];
+                html += 
+                    '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
+                            '<div><strong style="font-size:16px;">🏪 店鋪 #' + sub.store_id + '</strong></div>' +
+                            '<span class="status-badge pending">⏳ 待審核</span>' +
+                        '</div>' +
+                        '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
+                            '<div>📍 提交地址：' + sub.submitted_address + '</div>' +
+                            '<div>📏 距離店鋪：' + (sub.distance_meters ? Math.round(sub.distance_meters) + ' 米' : '未知') + '</div>' +
+                            '<div>👤 提交者：' + (sub.submitted_by || '未知') + '</div>' +
+                            '<div>🕐 時間：' + new Date(sub.created_at).toLocaleString() + '</div>' +
+                        '</div>' +
+                        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-color);padding-top:12px;">' +
+                            '<button class="btn-sm success" onclick="approveAddress(\'' + sub.id + '\', \'' + sub.store_id + '\', \'' + sub.submitted_address.replace(/'/g, "\\'") + '\', \'' + (sub.submitted_by || '') + '\')">✅ 批准地址</button>' +
+                            '<button class="btn-sm danger" onclick="rejectAddress(\'' + sub.id + '\')">❌ 拒絕地址</button>' +
+                        '</div>' +
+                    '</div>';
+            }
+            
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
 
+// 批准地址
+async function approveAddress(submissionId, storeId, address, submittedBy) {
+    if (!confirm('確定批准此地址嗎？\n\n店鋪地址將更新為：' + address)) return;
+    
+    try {
+        await sb.from('address_submissions')
+            .update({
+                status: 'approved',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser ? currentUser.display_name : 'admin'
+            })
+            .eq('id', submissionId);
+        
+        await sb.from('claw_stores')
+            .update({ addr: address })
+            .eq('id', parseInt(storeId));
+        
+        if (submittedBy) {
+            var { data: userProfile } = await sb.from('user_profiles')
+                .select('total_points')
+                .eq('device_id', submittedBy)
+                .maybeSingle();
+            
+            if (userProfile) {
+                await sb.from('user_profiles')
+                    .update({
+                        total_points: (userProfile.total_points || 0) + 15
+                    })
+                    .eq('device_id', submittedBy);
+            }
+        }
+        
+        await sb.from('admin_actions')
+            .insert({
+                store_id: parseInt(storeId),
+                action_type: 'approve_address',
+                target_type: 'address_submission',
+                target_id: submissionId,
+                reason: '批准地址補充',
+                performed_by: currentUser ? currentUser.display_name : 'admin',
+                metadata: { address: address, reward: 15 }
+            });
+        
+        toast('✅ 已批准地址，+15 積分已發放');
+        loadAddressSubmissions();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 拒絕地址
+async function rejectAddress(submissionId) {
+    if (!confirm('確定拒絕此地址嗎？')) return;
+    
+    try {
+        await sb.from('address_submissions')
+            .update({
+                status: 'rejected',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: currentUser ? currentUser.display_name : 'admin'
+            })
+            .eq('id', submissionId);
+        
+        toast('✅ 已拒絕地址');
+        loadAddressSubmissions();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
 // ============================================================
 // 初始化
 // ============================================================
