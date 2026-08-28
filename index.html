@@ -4077,6 +4077,15 @@ for (var i = 0; i < ZOOM_LEVELS.length; i++) {
       ensureStoresVisible();
     }
     mapInitialized = true;
+        mapInitialized = true;
+    
+    // ✅ 全域事件委派：處理 popup 內的「店鋪詳情」和「商場列表」按鈕
+    document.removeEventListener('click', handleMapPopupClick);
+    document.addEventListener('click', handleMapPopupClick);
+    
+    initBackToTopButton();
+    addRegionPolygons();
+    isInitializingMap = false;
     initBackToTopButton();
     addRegionPolygons();
     isInitializingMap = false;
@@ -4091,6 +4100,31 @@ for (var i = 0; i < ZOOM_LEVELS.length; i++) {
     toast('地圖載入失敗，請重新整理', 'pink');
     isInitializingMap = false;
   }
+}
+
+// 全域處理地圖 popup 按鈕點擊
+function handleMapPopupClick(e) {
+    // 檢查是否點擊了「店鋪詳情」
+    var storeDetailLink = e.target.closest('[data-store-detail]');
+    if (storeDetailLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        var storeId = storeDetailLink.getAttribute('data-store-detail');
+        if (map) map.closePopup();
+        openStore(storeId);
+        return;
+    }
+    
+    // 檢查是否點擊了「商場列表」
+    var mallDetailLink = e.target.closest('[data-mall-detail]');
+    if (mallDetailLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        var mallName = mallDetailLink.getAttribute('data-mall-detail');
+        if (map) map.closePopup();
+        openMallModal(mallName);
+        return;
+    }
 }
 
 function addUserMarker(lat, lng) {
@@ -4338,18 +4372,7 @@ popupContent.innerHTML =
     (tagsHtml ? '<div style="margin-top:6px;">' + tagsHtml + '</div>' : '') +
     '<a href="javascript:void(0)" data-store-detail="' + String(s.id) + '" style="display:block;margin-top:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:6px;font-size:11px;color:#D4AF37;text-align:center;cursor:pointer;text-decoration:none;">👆 店鋪詳情</a>';
     
-// ✅ 使用 popupopen 事件綁定「店鋪詳情」按鈕
-marker.on('popupopen', function(e) {
-    var detailLink = e.popup.getElement().querySelector('[data-store-detail="' + String(s.id) + '"]');
-    if (detailLink) {
-        detailLink.addEventListener('click', function(ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            map.closePopup();
-            openStore(String(s.id));
-        });
-    }
-});
+
     
 marker.on('click', function(e) {
     console.log('🕵️ click 觸發:', s.name, 'popup 狀態:', marker.isPopupOpen());
@@ -4373,18 +4396,7 @@ marker.on('click', function(e) {
         .setContent(popupContent)
         .openOn(map);
         
-        // ✅ popup 打開後綁定事件
-        popup.on('add', function() {
-            var detailLink = popup.getElement().querySelector('[data-store-detail="' + String(s.id) + '"]');
-            if (detailLink) {
-                detailLink.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    map.closePopup();
-                    openStore(String(s.id));
-                });
-            }
-        });
+
         
         isAutoMoving = false;
     }, 350);
@@ -5173,18 +5185,7 @@ function openStoreFromMap(id) {
         .setContent(popupContent)
         .openOn(map);
         
-        // ✅ popup 打開後綁定「店鋪詳情」按鈕
-        popup.on('add', function() {
-            var detailLink = popup.getElement().querySelector('[data-store-detail="' + String(s.id) + '"]');
-            if (detailLink) {
-                detailLink.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    map.closePopup();
-                    openStore(String(s.id));
-                });
-            }
-        });
+
         
         setTimeout(function() { isAutoMoving = false; }, 100);
     }, 350);
@@ -5231,17 +5232,7 @@ function openMallFromMap(mallName) {
                 .setLatLng([stores[0].lat, stores[0].lng])
                 .setContent(popupContent)
                 .openOn(map);
-                popup.on('add', function() {
-                    var mallLink = popup.getElement().querySelector('[data-mall-detail]');
-                    if (mallLink) {
-                        mallLink.addEventListener('click', function(ev) {
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            map.closePopup();
-                            openMallModal(mallName);
-                        });
-                    }
-                });
+
                 
             }
         });
