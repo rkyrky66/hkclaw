@@ -4366,11 +4366,14 @@ async function parseGoogleMapLink(storeId) {
     var lng = null;
     var source = '';
     
-    // 1. 優先抓取 !3d 和 !4d（店鋪圖釘實際位置）
-    var match1 = link.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-    if (match1) {
-        lat = parseFloat(match1[1]);
-        lng = parseFloat(match1[2]);
+    // 1. 優先抓取所有 !3d!4d 組合，取最後一組（店鋪圖釘實際位置）
+    var matches = link.matchAll(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/g);
+    var matchArray = Array.from(matches);
+    
+    if (matchArray.length > 0) {
+        var lastMatch = matchArray[matchArray.length - 1];
+        lat = parseFloat(lastMatch[1]);
+        lng = parseFloat(lastMatch[2]);
         source = '店鋪圖釘位置';
     }
     
@@ -4427,7 +4430,6 @@ async function parseGoogleMapLink(storeId) {
             if (nomData.address.suburb) parts.push(nomData.address.suburb);
             var apiAddress = parts.join(' ');
             
-            // 填入「抓取結果」地址
             var scrapedAddr = document.getElementById('scraped-addr-' + storeId);
             if (scrapedAddr) scrapedAddr.value = apiAddress;
             
