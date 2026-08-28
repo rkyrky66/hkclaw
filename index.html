@@ -4490,13 +4490,13 @@ var renderStoreItem = function(s, index) {
     if (!isVerified) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2</span>';
     } else {
-        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">認證 ✅</span>';
     }
     
     if (!hasSupplemented) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
     } else {
-        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">補充 ✅</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完成補充\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">補充 ✅</span>';
     }
     
     buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
@@ -6783,7 +6783,10 @@ async function submitSupplementAddress(storeId) {
       await addPoints(15, '補充地址');
       await recordTaskCompletion('supplement');
       await recordRegionContribution('supplement', s.region, storeId);
-      
+       if (CURRENT === 'map') {
+        updateMapList();
+        updateMapMarkers();
+      }
       toast('✅ 地址驗證通過！+15 分', 'green');
       closeModal();
       setTimeout(function() { openStore(storeId); }, 300);
@@ -6820,7 +6823,11 @@ async function submitSupplementAddress(storeId) {
           created_at: new Date().toISOString()
         });
     }
-    
+        // ✅ 刷新地圖列表
+    if (CURRENT === 'map') {
+      updateMapList();
+      updateMapMarkers();
+    }
     toast('📤 已提交成功！管理員審核通過後即可獲得 15 積分', 'gold');
     closeModal();
     
