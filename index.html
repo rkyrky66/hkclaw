@@ -619,7 +619,20 @@ input, select, textarea { font-size: 16px; }
 // ============================================================
 // 配置與初始化
 // ============================================================
-
+// ✅ 新增這個函數
+async function getOpenRouterApiKey() {
+    var result = await supabaseClientInstance
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'openrouter_api_key')
+        .single();
+    
+    if (!result.error && result.data) {
+        return result.data.value;
+    }
+    return null;
+}
+var AI_MODEL = "minimax/minimax-m3";
 var SUPABASE_URL = "https://vyoyiqbqmlqfipsaqpbs.supabase.co";
 var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5b3lpcWJxbWxxZmlwc2FxcGJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTg4NTYsImV4cCI6MjEwMDc3NDg1Nn0.up5fdw0ElKh5LGUzKVd0VnMEI2hLUeFhuf1QkNlX92M";
 var supabaseClientInstance = null;
@@ -6286,6 +6299,81 @@ function calculateGlobalTitle(allContributions) {
 // 提交店鋪實證 (支援「店鋪存在」和「店鋪有問題」)
 // ============================================================
 
+// ============================================================
+// AI 認證核對
+// ============================================================
+
+// 計算兩點距離（米）
+function calculateGpsDistance(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// AI 核對兩張照片 + GPS
+async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
+    try {
+        // ✅ 從 Supabase 讀取 API Key
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) {
+            console.warn('⚠️ 無法取得 OpenRouter API Key');
+            return null;
+        }
+        
+        var prompt = '...';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,  // ✅ 使用讀取的 Key
+                'Content-Type': 'application/json'
+            },
+            // ...
+        });
+        
+        // ...
+    } catch (e) {
+        console.warn('⚠️ AI 核對失敗:', e.message);
+        return null;
+    }
+}
+// 執行完整 AI 核對（兩組）
+async function runAiVerificationCheck(storeId, firstSubmitterPhoto, firstSubmitterGps, verifier1Photo, verifier1Gps, verifier2Photo, verifier2Gps) {
+    console.log('🤖 開始 AI 認證核對...');
+    
+    var results = {
+        group1: null,
+        group2: null,
+        allPassed: false
+    };
+    
+    // 組 1：首發者 vs 認證者1
+    if (firstSubmitterPhoto && verifier1Photo) {
+        results.group1 = await aiCompareStorePhotos(firstSubmitterPhoto, firstSubmitterGps, verifier1Photo, verifier1Gps);
+        console.log('🤖 組1（首發者 vs 認證者1）:', results.group1);
+    }
+    
+    // 等待 1 秒避免速率限制
+    await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+    
+    // 組 2：首發者 vs 認證者2
+    if (firstSubmitterPhoto && verifier2Photo) {
+        results.group2 = await aiCompareStorePhotos(firstSubmitterPhoto, firstSubmitterGps, verifier2Photo, verifier2Gps);
+        console.log('🤖 組2（首發者 vs 認證者2）:', results.group2);
+    }
+    
+    // 檢查是否全部通過
+    results.allPassed = !!(results.group1 && results.group1.is_same_store === true && 
+                           results.group2 && results.group2.is_same_store === true);
+    
+    return results;
+}
+
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
     isSubmittingVerification = true;
@@ -6421,14 +6509,15 @@ async function submitVerification(storeId) {
                             is_verified: false
                         };
                     } else if (reviewResult === 'verifier_2') {
-                        // 第二位認證者
-                        updateData = {
-                            verification_count: 1,
-                            verification_count_2: 1,
-                            status: 'verified',
-                            is_verified: true
-                        };
-                    }
+    // 第二位認證者提交
+    // 暫時不直接通過，等 AI 核對
+    updateData = {
+        verification_count: 1,
+        verification_count_2: 1,
+        status: 'pending',  // ✅ 暫時 pending
+        is_verified: false
+    };
+}
                     // 🕵️ 除錯 log
 console.log('🕵️ updateData:', JSON.stringify(updateData));
 console.log('🕵️ updateData keys:', Object.keys(updateData).length);
@@ -6446,6 +6535,74 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                 }
             }
             
+// 如果 reviewResult === 'verifier_2'，觸發 AI 核對
+if (reviewResult === 'verifier_2') {
+    // 取得首發者、認證者1、認證者2的資料
+    var firstSubmitterPhoto = s.photo || '';
+    var firstSubmitterGps = { lat: s.lat || 0, lng: s.lng || 0 };
+    var verifier1Photo = verification.photo_url || '';
+    var verifier1Gps = { lat: verification.lat || 0, lng: verification.lng || 0 };
+    
+    // 從 verification_reviews 取得認證者1的照片
+    var reviewData = null;
+    try {
+        var reviewResult2 = await supabaseClientInstance
+            .from('verification_reviews')
+            .select('verifier_1_photo, verifier_1_gps, verifier_2_photo, verifier_2_gps')
+            .eq('store_id', String(storeId))
+            .single();
+        if (!reviewResult2.error && reviewResult2.data) {
+            reviewData = reviewResult2.data;
+        }
+    } catch (e) {
+        console.warn('⚠️ 讀取認證者資料失敗:', e.message);
+    }
+    
+    if (reviewData) {
+        var verifier2Photo = reviewData.verifier_2_photo || verification.photo_url || '';
+        var verifier2Gps = reviewData.verifier_2_gps || { lat: verification.lat || 0, lng: verification.lng || 0 };
+        
+        // 執行 AI 核對
+        var aiResults = await runAiVerificationCheck(
+            storeId,
+            firstSubmitterPhoto, firstSubmitterGps,
+            reviewData.verifier_1_photo || '', reviewData.verifier_1_gps || { lat: 0, lng: 0 },
+            verifier2Photo, verifier2Gps
+        );
+        
+        if (aiResults && aiResults.allPassed) {
+            // AI 核對通過 → 自動通過認證
+            await supabaseClientInstance
+                .from('claw_stores')
+                .update({
+                    status: 'verified',
+                    is_verified: true
+                })
+                .eq('id', numericStoreId);
+            
+            console.log('✅ AI 核對通過，自動認證成功');
+            toast('🎉 AI 核對通過，自動認證成功！', 'green');
+            
+            // 觸發首發者追加分數
+            if (CLOUD_ON) {
+                await supabaseClientInstance
+                    .from('claw_stores')
+                    .update({ submitter_reward_claimed: false })
+                    .eq('id', numericStoreId);
+            }
+            
+            updateAchievementStat('store_complete');
+            var regionStat = getRegionStat(updatedStore ? updatedStore.region : s.region);
+            if (regionStat) updateAchievementStat(regionStat);
+            
+        } else {
+            // AI 核對未通過 → 留在 pending，管理員審核
+            console.log('⚠️ AI 核對未通過，等待管理員審核');
+            toast('📤 已提交，等待 AI 核對和管理員審核', 'gold');
+        }
+    }
+}
+
             // 4. 更新本地
             STATE.verifications = STATE.verifications || {};
             STATE.verifications[s.id] = true;
