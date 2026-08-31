@@ -6622,7 +6622,7 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
             },
             body: JSON.stringify({
                 model: AI_MODEL,
-                max_tokens: 100,
+                max_tokens: 2000,
                 messages: [
                     {
                         role: 'user',
