@@ -6610,7 +6610,9 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
             return null;
         }
         
-        var prompt = '你是一個夾公仔店（Claw Crane Shop）的門面辨識專家。請仔細比對這兩張照片中的店鋪門面，判斷它們是否為「同一家店鋪的門面」。請特別注意以下細節：招牌（文字內容、字體、電話、燈箱海報）、店內機台（夾公仔機的擺放位置、機台顏色、擋板貼紙）、周邊（門牌號碼、隔壁店鋪、門口的地磚、柱子）。照片1 GPS：' + gps1.lat + ', ' + gps1.lng + '；照片2 GPS：' + gps2.lat + ', ' + gps2.lng + '；GPS 距離約 ' + Math.round(calculateGpsDistance(gps1.lat, gps1.lng, gps2.lat, gps2.lng)) + ' 米。請嚴格以 JSON 格式回應：{"is_same_store": true/false, "confidence_score": 0.95, "reasons": ["原因1", "原因2"]}';
+        var gpsDistance = Math.round(calculateGpsDistance(gps1.lat, gps1.lng, gps2.lat, gps2.lng));
+        
+        var prompt = '比較兩張照片是否同一店鋪門面。照片1 GPS：' + gps1.lat + ', ' + gps1.lng + '；照片2 GPS：' + gps2.lat + ', ' + gps2.lng + '；GPS 距離 ' + gpsDistance + ' 米（需小於50米）。只回傳 JSON：{"is_same_store": true 或 false, "confidence_score": 0.0到1.0}';
         
         var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -6620,14 +6622,14 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
             },
             body: JSON.stringify({
                 model: AI_MODEL,
-                max_tokens: 500,
+                max_tokens: 100,
                 messages: [
                     {
                         role: 'user',
                         content: [
                             { type: 'text', text: prompt },
-                            { type: 'image_url', image_url: { url: photo1Url } },
-                            { type: 'image_url', image_url: { url: photo2Url } }
+                            { type: 'image_url', image_url: { url: photo1Url, detail: 'low' } },
+                            { type: 'image_url', image_url: { url: photo2Url, detail: 'low' } }
                         ]
                     }
                 ]
@@ -6643,14 +6645,16 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
         var data = await response.json();
         var content = data.choices[0].message.content;
         
-        // ✅ 清理 Markdown 格式
+        if (!content) {
+            console.warn('⚠️ AI 回傳內容為空');
+            return null;
+        }
+        
         var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
         
-        // 嘗試解析 JSON
         try {
             return JSON.parse(cleanContent);
         } catch (e) {
-            // 提取第一個完整的 JSON 物件
             var startIdx = cleanContent.indexOf('{');
             var endIdx = cleanContent.lastIndexOf('}');
             if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
@@ -6658,7 +6662,6 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
                 try {
                     return JSON.parse(jsonStr);
                 } catch (e2) {
-                    console.warn('⚠️ JSON 解析失敗:', jsonStr);
                     return null;
                 }
             }
