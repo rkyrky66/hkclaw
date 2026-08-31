@@ -3187,6 +3187,174 @@ async function checkOAuthCallback() {
   }
 }
 
+// ============================================================
+// 登入後本地與雲端數據合併
+// ============================================================
+async function mergeLocalAndCloudData(cloudProfile, cloudFavorites, cloudRegionContributions, cloudAchievements, cloudTaskProgress, cloudCheckins) {
+    
+    var mergeResult = {
+        points: STATE.points || 0,
+        total_xp: STATE.total_xp || 0,
+        favStores: STATE.favStores || [],
+        favMachines: STATE.favMachines || [],
+        achievements: STATE.achievements || { unlocked: [], stats: {} },
+        taskProgress: STATE.taskProgress || {},
+        weeklyCheckin: STATE.weeklyCheckin || {},
+        titles: STATE.titles || []
+    };
+    
+    // ========== 1. 積分合併（取較大值） ==========
+    if (cloudProfile && cloudProfile.total_points !== undefined) {
+        mergeResult.points = Math.max(STATE.points || 0, cloudProfile.total_points || 0);
+    }
+    
+    // ========== 2. XP 合併（取較大值） ==========
+    if (cloudProfile && cloudProfile.total_xp !== undefined) {
+        mergeResult.total_xp = Math.max(STATE.total_xp || 0, cloudProfile.total_xp || 0);
+    }
+    
+    // ========== 3. 稱號合併（聯集） ==========
+    var localTitles = STATE.titles || [];
+    var cloudTitles = [];
+    if (cloudProfile && cloudProfile.titles && Array.isArray(cloudProfile.titles)) {
+        cloudTitles = cloudProfile.titles;
+    }
+    var mergedTitles = localTitles.slice();
+    for (var ti = 0; ti < cloudTitles.length; ti++) {
+        if (mergedTitles.indexOf(cloudTitles[ti]) === -1) {
+            mergedTitles.push(cloudTitles[ti]);
+        }
+    }
+    mergeResult.titles = mergedTitles;
+    
+    // ========== 4. 收藏合併（聯集） ==========
+    var localFavStores = STATE.favStores || [];
+    var cloudFavStores = [];
+    if (cloudFavorites && cloudFavorites.stores) {
+        cloudFavStores = cloudFavorites.stores.map(function(f) { return String(f.store_id); });
+    }
+    var mergedFavStores = localFavStores.slice();
+    for (var fsi = 0; fsi < cloudFavStores.length; fsi++) {
+        if (mergedFavStores.indexOf(cloudFavStores[fsi]) === -1) {
+            mergedFavStores.push(cloudFavStores[fsi]);
+        }
+    }
+    mergeResult.favStores = mergedFavStores;
+    
+    var localFavMachines = STATE.favMachines || [];
+    var cloudFavMachines = [];
+    if (cloudFavorites && cloudFavorites.machines) {
+        cloudFavMachines = cloudFavorites.machines.map(function(f) { return String(f.machine_id); });
+    }
+    var mergedFavMachines = localFavMachines.slice();
+    for (var fmi = 0; fmi < cloudFavMachines.length; fmi++) {
+        if (mergedFavMachines.indexOf(cloudFavMachines[fmi]) === -1) {
+            mergedFavMachines.push(cloudFavMachines[fmi]);
+        }
+    }
+    mergeResult.favMachines = mergedFavMachines;
+    
+    // ========== 5. 成就解鎖合併（聯集） ==========
+    var localUnlocked = (STATE.achievements && STATE.achievements.unlocked) || [];
+    var cloudUnlocked = (cloudAchievements && cloudAchievements.unlocked) || [];
+    var mergedUnlocked = localUnlocked.slice();
+    for (var ui = 0; ui < cloudUnlocked.length; ui++) {
+        if (mergedUnlocked.indexOf(cloudUnlocked[ui]) === -1) {
+            mergedUnlocked.push(cloudUnlocked[ui]);
+        }
+    }
+    mergeResult.achievements.unlocked = mergedUnlocked;
+    
+    // ========== 6. 成就統計合併（各項取較大值） ==========
+    if (!mergeResult.achievements.stats) mergeResult.achievements.stats = {};
+    var statKeys = [
+        'submit_store', 'verify_store', 'supplement', 'store_complete',
+        'region_hk_island', 'region_kowloon', 'region_nt',
+        'perfect_file', 'streak_days', 'weekly_perfect', 'monthly_perfect',
+        'cold_region_verify', 'report_submitted', 'report_confirmed',
+        'checkin_streak'
+    ];
+    for (var si = 0; si < statKeys.length; si++) {
+        var key = statKeys[si];
+        var localVal = (STATE.achievements && STATE.achievements.stats && STATE.achievements.stats[key]) || 0;
+        var cloudVal = (cloudAchievements && cloudAchievements.stats && cloudAchievements.stats[key]) || 0;
+        mergeResult.achievements.stats[key] = Math.max(localVal, cloudVal);
+    }
+    
+    // ========== 7. 地區貢獻合併（各區取較大值） ==========
+    var cloudRegionStats = {
+        region_hk_island: 0,
+        region_kowloon: 0,
+        region_nt: 0
+    };
+    if (cloudRegionContributions && Array.isArray(cloudRegionContributions)) {
+        cloudRegionContributions.forEach(function(c) {
+            var regionKey = '';
+            if (c.region_group === 'hk') regionKey = 'region_hk_island';
+            else if (c.region_group === 'kl') regionKey = 'region_kowloon';
+            else if (c.region_group === 'nt') regionKey = 'region_nt';
+            if (regionKey) {
+                cloudRegionStats[regionKey] += (c.contribution_value || 0);
+            }
+        });
+    }
+    for (var rk in cloudRegionStats) {
+        mergeResult.achievements.stats[rk] = Math.max(
+            mergeResult.achievements.stats[rk] || 0,
+            cloudRegionStats[rk] || 0
+        );
+    }
+    
+    // ========== 8. 每日任務進度合併（各項取較大值） ==========
+    var today = todayKey();
+    var localTask = (STATE.taskProgress && STATE.taskProgress[today]) || {};
+    var cloudTask = (cloudTaskProgress && cloudTaskProgress[today]) || {};
+    
+    if (!mergeResult.taskProgress[today]) mergeResult.taskProgress[today] = {};
+    var taskKeys = ['submit_store', 'verify_store', 'supplement', 'checkin', 'machine_checkin', 'share'];
+    for (var tki = 0; tki < taskKeys.length; tki++) {
+        var taskKey = taskKeys[tki];
+        mergeResult.taskProgress[today][taskKey] = Math.max(
+            (localTask[taskKey] || 0),
+            (cloudTask[taskKey] || 0)
+        );
+    }
+    mergeResult.taskProgress[today].total_points = Math.max(
+        (localTask.total_points || 0),
+        (cloudTask.total_points || 0)
+    );
+    mergeResult.taskProgress[today].goal_reached = (localTask.goal_reached || false) || (cloudTask.goal_reached || false);
+    
+    // ========== 9. 簽到記錄合併（聯集） ==========
+    var weekStart = getWeekStartDate(new Date());
+    var weekKey = weekStart.toISOString().slice(0, 10);
+    if (!mergeResult.weeklyCheckin[weekKey]) {
+        mergeResult.weeklyCheckin[weekKey] = { days: [], claimed: false };
+    }
+    if (STATE.weeklyCheckin && STATE.weeklyCheckin[weekKey] && STATE.weeklyCheckin[weekKey].days) {
+        STATE.weeklyCheckin[weekKey].days.forEach(function(day) {
+            if (mergeResult.weeklyCheckin[weekKey].days.indexOf(day) === -1) {
+                mergeResult.weeklyCheckin[weekKey].days.push(day);
+            }
+        });
+    }
+    if (cloudCheckins && Array.isArray(cloudCheckins)) {
+        cloudCheckins.forEach(function(checkin) {
+            var date = new Date(checkin.checkin_date);
+            var day = date.getDay();
+            var dayNum = day === 0 ? 7 : day;
+            if (mergeResult.weeklyCheckin[weekKey].days.indexOf(dayNum) === -1) {
+                mergeResult.weeklyCheckin[weekKey].days.push(dayNum);
+            }
+        });
+    }
+    
+    return mergeResult;
+}
+
+// ============================================================
+// 登入後同步用戶數據（完整合併版）
+// ============================================================
 async function syncUserDataAfterBind(user) {
   try {
     var deviceId = STATE.user.device;
@@ -3205,21 +3373,142 @@ async function syncUserDataAfterBind(user) {
     if (existingResult.error) throw existingResult.error;
     
     var existingUser = existingResult.data;
-        if (existingUser && existingUser.extended_post_lifespan) {
+    if (existingUser && existingUser.extended_post_lifespan) {
         STATE.extendedPostLifespan = true;
         save();
     }
-    var isNewUser = !existingUser;  // ✅ 是否為新用戶
+    var isNewUser = !existingUser;
     var userId = null;
     
+    // ========== 讀取雲端資料（準備合併） ==========
+    var cloudFavoritesStores = [];
+    var cloudFavoritesMachines = [];
+    var cloudRegionContributions = [];
+    var cloudAchievements = { unlocked: [], stats: {} };
+    var cloudTaskProgress = {};
+    var cloudCheckins = [];
+    
     if (existingUser) {
-      // 已有記錄 → 更新，不發放綁定獎勵
-      userId = existingUser.id;
+        userId = existingUser.id;
+        
+        try {
+            // 讀取雲端收藏
+            var favResult = await supabaseClientInstance
+                .from('user_favorites')
+                .select('store_id, machine_id')
+                .eq('user_id', userId);
+            if (!favResult.error && favResult.data) {
+                favResult.data.forEach(function(f) {
+                    if (f.store_id) cloudFavoritesStores.push(f);
+                    if (f.machine_id) cloudFavoritesMachines.push(f);
+                });
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端收藏失敗:', e.message);
+        }
+        
+        try {
+            // 讀取雲端地區貢獻
+            var regionResult = await supabaseClientInstance
+                .from('user_region_contributions')
+                .select('*')
+                .eq('user_id', userId);
+            if (!regionResult.error && regionResult.data) {
+                cloudRegionContributions = regionResult.data;
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端地區貢獻失敗:', e.message);
+        }
+        
+        try {
+            // 讀取雲端成就解鎖
+            var achResult = await supabaseClientInstance
+                .from('user_achievements')
+                .select('achievement_key')
+                .eq('user_id', userId);
+            if (!achResult.error && achResult.data) {
+                cloudAchievements.unlocked = achResult.data.map(function(a) { return a.achievement_key; });
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端成就失敗:', e.message);
+        }
+        
+        try {
+            // 讀取雲端成就統計
+            var statsResult = await supabaseClientInstance
+                .from('user_stats')
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle();
+            if (!statsResult.error && statsResult.data) {
+                cloudAchievements.stats = statsResult.data;
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端成就統計失敗:', e.message);
+        }
+        
+        try {
+            // 讀取雲端任務進度
+            var today = todayKey();
+            var taskResult = await supabaseClientInstance
+                .from('task_progress')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('date', today)
+                .maybeSingle();
+            if (!taskResult.error && taskResult.data) {
+                cloudTaskProgress[today] = taskResult.data;
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端任務進度失敗:', e.message);
+        }
+        
+        try {
+            // 讀取雲端簽到
+            var weekStart = getWeekStartDate(new Date());
+            var weekStartStr = weekStart.toISOString().slice(0, 10);
+            var todayStr = todayKey();
+            var checkinResult = await supabaseClientInstance
+                .from('user_checkins')
+                .select('checkin_date')
+                .eq('device_id', deviceId)
+                .gte('checkin_date', weekStartStr)
+                .lte('checkin_date', todayStr);
+            if (!checkinResult.error && checkinResult.data) {
+                cloudCheckins = checkinResult.data;
+            }
+        } catch (e) {
+            console.warn('⚠️ 讀取雲端簽到失敗:', e.message);
+        }
+    }
+    
+    // ========== 執行完整合併 ==========
+    var mergedData = await mergeLocalAndCloudData(
+        existingUser,
+        { stores: cloudFavoritesStores, machines: cloudFavoritesMachines },
+        cloudRegionContributions,
+        cloudAchievements,
+        cloudTaskProgress,
+        cloudCheckins
+    );
+    
+    // ========== 寫入合併結果到 STATE ==========
+    STATE.points = mergedData.points;
+    STATE.total_xp = mergedData.total_xp;
+    STATE.favStores = mergedData.favStores;
+    STATE.favMachines = mergedData.favMachines;
+    STATE.achievements = mergedData.achievements;
+    STATE.taskProgress = mergedData.taskProgress;
+    STATE.weeklyCheckin = mergedData.weeklyCheckin;
+    STATE.titles = mergedData.titles;
+    
+    // ========== 更新或建立雲端 user_profiles ==========
+    if (existingUser) {
       var updates = {
         display_name: displayName,
         avatar_url: avatarUrl,
-        total_points: Math.max(existingUser.total_points || 0, STATE.points),
-        total_xp: Math.max(existingUser.total_xp || 0, STATE.total_xp || 0),
+        total_points: mergedData.points,
+        total_xp: mergedData.total_xp,
         last_active_at: new Date().toISOString(),
         is_anonymous: false
       };
@@ -3228,20 +3517,15 @@ async function syncUserDataAfterBind(user) {
         .update(updates)
         .eq('id', userId);
       if (updateResult.error) throw updateResult.error;
-      
-      // 使用雲端較大的積分
-      if (existingUser.total_points > STATE.points) STATE.points = existingUser.total_points;
-      if (existingUser.total_xp > (STATE.total_xp || 0)) STATE.total_xp = existingUser.total_xp;
     } else {
-      // 新記錄 → 建立，發放綁定獎勵
       var newUserData = {
         device_id: deviceId,
         google_id: googleId,
         email: email,
         display_name: displayName,
         avatar_url: avatarUrl,
-        total_points: STATE.points,
-        total_xp: STATE.total_xp || 0,
+        total_points: mergedData.points,
+        total_xp: mergedData.total_xp,
         level: STATE.level || 1,
         is_anonymous: false,
         bound_at: new Date().toISOString(),
@@ -3257,6 +3541,7 @@ async function syncUserDataAfterBind(user) {
       userId = insertResult.data.id;
     }
     
+    // ========== 更新 STATE.user ==========
     STATE.user.is_bound = true;
     STATE.user.email = email;
     STATE.user.google_id = googleId;
@@ -3264,30 +3549,31 @@ async function syncUserDataAfterBind(user) {
     STATE.user.display_name = displayName;
     STATE.user.avatar_url = avatarUrl;
     
-    // 同步收藏
-    if (STATE.favStores.length > 0 || STATE.favMachines.length > 0) {
+    save();
+    
+    // ========== 同步合併後的收藏到雲端 ==========
+    if (mergedData.favStores.length > 0 || mergedData.favMachines.length > 0) {
       await syncFavorites(userId);
     }
-    // 同步成就
-    if (STATE.achievements && STATE.achievements.unlocked && STATE.achievements.unlocked.length > 0) {
+    
+    // ========== 同步合併後的成就到雲端 ==========
+    if (mergedData.achievements.unlocked.length > 0) {
       await syncAchievements(userId);
     }
-    // 同步最近搜索
+    
+    // ========== 同步最近搜索 ==========
     if (STATE.recentRegions.length > 0) {
       await syncRecentRegions();
     }
-    // 同步任務進度
+    
+    // ========== 同步任務進度 ==========
     await loadTaskProgressFromCloud();
     
-    save();
-    
     if (isNewUser) {
-      // ✅ 只有新用戶才發放綁定獎勵
       addPoints(20, 'Google 帳號綁定獎勵');
       toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
     } else {
-      // 已有記錄 → 只提示登入成功
-      toast('✅ 帳號登入成功！數據已同步', 'green');
+      toast('✅ 帳號登入成功！數據已合併同步', 'green');
     }
     
     if (CURRENT === 'map') {
@@ -6318,25 +6604,57 @@ function calculateGpsDistance(lat1, lng1, lat2, lng2) {
 // AI 核對兩張照片 + GPS
 async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
     try {
-        // ✅ 從 Supabase 讀取 API Key
+        // 從 Supabase 讀取 API Key
         var apiKey = await getOpenRouterApiKey();
         if (!apiKey) {
             console.warn('⚠️ 無法取得 OpenRouter API Key');
             return null;
         }
         
-        var prompt = '...';
+        var prompt = '你是一個夾公仔店（Claw Crane Shop）的門面辨識專家。請仔細比對這兩張照片中的店鋪門面，判斷它們是否為「同一家店鋪的門面」。請特別注意以下細節：招牌（文字內容、字體、電話、燈箱海報）、店內機台（夾公仔機的擺放位置、機台顏色、擋板貼紙）、周邊（門牌號碼、隔壁店鋪、門口的地磚、柱子）。照片1 GPS：' + gps1.lat + ', ' + gps1.lng + '；照片2 GPS：' + gps2.lat + ', ' + gps2.lng + '；GPS 距離約 ' + Math.round(calculateGpsDistance(gps1.lat, gps1.lng, gps2.lat, gps2.lng)) + ' 米。請嚴格以 JSON 格式回應：{"is_same_store": true/false, "confidence_score": 0.95, "reasons": ["原因1", "原因2"]}';
         
         var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer ' + apiKey,  // ✅ 使用讀取的 Key
+                'Authorization': 'Bearer ' + apiKey,
                 'Content-Type': 'application/json'
             },
-            // ...
+            body: JSON.stringify({
+                model: AI_MODEL,
+                max_tokens: 200,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: photo1Url } },
+                            { type: 'image_url', image_url: { url: photo2Url } }
+                        ]
+                    }
+                ]
+            })
         });
         
-        // ...
+        if (!response.ok) {
+            var errorText = await response.text();
+            console.warn('⚠️ AI 核對失敗:', response.status, errorText);
+            return null;
+        }
+        
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        
+        // 解析 JSON
+        try {
+            return JSON.parse(content);
+        } catch (e) {
+            // 嘗試提取 JSON
+            var match = content.match(/\{[\s\S]*\}/);
+            if (match) {
+                return JSON.parse(match[0]);
+            }
+            return null;
+        }
     } catch (e) {
         console.warn('⚠️ AI 核對失敗:', e.message);
         return null;
