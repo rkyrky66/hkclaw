@@ -6604,7 +6604,6 @@ function calculateGpsDistance(lat1, lng1, lat2, lng2) {
 // AI 核對兩張照片 + GPS
 async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
     try {
-        // 從 Supabase 讀取 API Key
         var apiKey = await getOpenRouterApiKey();
         if (!apiKey) {
             console.warn('⚠️ 無法取得 OpenRouter API Key');
@@ -6621,7 +6620,7 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
             },
             body: JSON.stringify({
                 model: AI_MODEL,
-                max_tokens: 200,
+                max_tokens: 500,
                 messages: [
                     {
                         role: 'user',
@@ -6644,14 +6643,24 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
         var data = await response.json();
         var content = data.choices[0].message.content;
         
-        // 解析 JSON
+        // ✅ 清理 Markdown 格式
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        
+        // 嘗試解析 JSON
         try {
-            return JSON.parse(content);
+            return JSON.parse(cleanContent);
         } catch (e) {
-            // 嘗試提取 JSON
-            var match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                return JSON.parse(match[0]);
+            // 提取第一個完整的 JSON 物件
+            var startIdx = cleanContent.indexOf('{');
+            var endIdx = cleanContent.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                var jsonStr = cleanContent.slice(startIdx, endIdx + 1);
+                try {
+                    return JSON.parse(jsonStr);
+                } catch (e2) {
+                    console.warn('⚠️ JSON 解析失敗:', jsonStr);
+                    return null;
+                }
             }
             return null;
         }
