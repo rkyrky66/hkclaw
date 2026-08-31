@@ -4998,34 +4998,164 @@ function buildStoreContent(s, _a) {
     var isInMall = s.mall && s.mall.trim() !== '';
     var mallInfo = isInMall ? '<span class="text-[10px] text-white/30 ml-2">' + s.mall + '</span>' : '';
     var isVerified = s.status === "verified" || s.verified === "verified";
-    var hasWarning = s.is_suspicious === true;
     var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
-var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + totalVerifications + '/2)</span>';
-    var warningBadge = hasWarning ? '<span class="text-[10px] text-yellow-400 ml-1">⚠️ 有爭議</span>' : '';
+    var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + totalVerifications + '/2)</span>';
+    
     // 獲取貢獻標記資訊
     var markerInfo = getMarkerLevelInfo(s.id);
-var userContribution = getUserContributionForStore(s);
-var contributionLevel = getContributionLevel(userContribution.score);
- var contributionBadge = '';
-    if (userContribution.score > 0) {  // ✅ 改為使用 userContribution.score
-        var levelClass = 'level-' + markerInfo.level;
+    var userContribution = getUserContributionForStore(s);
+    var contributionLevel = getContributionLevel(userContribution.score);
+    
+    var contributionBadge = '';
+    if (userContribution.score > 0) {
         contributionBadge = '<div class="mt-2">' +
             '<span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold" style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);color:#D4AF37;">' +
                 contributionLevel.icon + ' 我的參與度：' + userContribution.score + ' 分（' + contributionLevel.label + '）' +
             '</span>' +
-            (userContribution.effects.length > 0 ? 
-                '<span class="text-[10px] text-white/40 ml-2">' + 
-                    userContribution.effects.map(function(eff) {
-                        var labels = { submit: '🏪提交', verify: '🕵️認證', supplement: '📝補充', checkin: '📍打卡', post: '📢戰績' };
-                        return labels[eff] || eff;
-                    }).join(' + ') + 
-                '</span>' : '') +
         '</div>';
     }
     
     var photoHtml = buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel);
-    var adBanner = isAdFree() ? '' : '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;text-align:center;color:rgba(255,255,255,0.3);font-size:10px;margin-bottom:8px;height:50px;display:flex;align-items:center;justify-content:center;">[ 廣告 ]</div>';
-        // ✅ 投票顯示
+    
+    // ========== 機台快照 HTML ==========
+    var machinesHtml = buildMachineSnapshot(s);
+    
+    // ========== 投票結果 ==========
+    var fieldVoteHtml = buildFieldVoteDisplay(s);
+    
+    // ========== 固定廣告 Banner ==========
+    var adBanner = isAdFree() ? '' : '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;text-align:center;color:rgba(255,255,255,0.3);font-size:10px;flex-shrink:0;">[ 廣告 ]</div>';
+    
+    // ========== 固定按鈕列 ==========
+    var fixedButtons = '<div style="flex-shrink:0;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);">' +
+        '<div class="flex gap-2">' +
+            (totalVerifications >= 2 ? '' : '<button onclick="openVerifyForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-neongreen/20 border border-neongreen/50 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">🕵️ 認證</button>') +
+            (!(s.addr && s.addr !== '' && s.addr !== '（未填地址）') ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-gold/20 border border-gold/50 py-2.5 text-xs font-black text-gold whitespace-nowrap">📝 補充</button>' : '') +
+            '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡</button>' +
+            '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎰 機台</button>' +
+            '<button onclick="quickAction(\'post\', \'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neonpink/30 py-2.5 text-xs font-black text-neonpink whitespace-nowrap">📢 戰績</button>' +
+        '</div>' +
+    '</div>';
+    
+    return adBanner + '\n' +
+    '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:8px;">' +
+        '<div class="flex items-start justify-between border-b border-gold/30 pb-3 flex-shrink-0">\n' +
+            '<div class="flex-1 min-w-0">\n' +
+                '<div class="flex items-center gap-2 flex-wrap">\n' +
+                    backBtn + '\n' +
+                    '<h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n' +
+                    mallInfo + '\n' +
+                '</div>\n' +
+                '<div class="flex items-center gap-2 mt-1">\n' +
+                    '<p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n' +
+                    '<span class="ml-auto whitespace-nowrap">' + statusBadge + '</span>\n' +
+                '</div>\n' +
+                contributionBadge + '\n' +
+            '</div>\n' +
+            '<button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors flex-shrink-0 ml-2">✕</button>\n' +
+        '</div>\n' +
+        photoHtml + '\n' +
+        machinesHtml + '\n' +
+        fieldVoteHtml + '\n' +
+        '<div class="mt-2 flex justify-end">\n' +
+            '<button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink">🚨 回報</button>\n' +
+        '</div>\n' +
+    '</div>' +
+    fixedButtons;
+}
+
+// ========== 機台快照 HTML ==========
+function buildMachineSnapshot(s) {
+    if (!s.machines || s.machines.length === 0) {
+        return '<div class="mt-4">' +
+            '<div class="flex items-center justify-between">' +
+                '<h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台快照</h3>' +
+                '<span class="text-[10px] text-white/30">點擊照片放大</span>' +
+            '</div>' +
+            '<p class="py-6 text-center text-xs text-white/40">尚無機台</p>' +
+        '</div>';
+    }
+    
+    var machineCards = [];
+    for (var mi = 0; mi < s.machines.length; mi++) {
+        var m = s.machines[mi];
+        var isFresh = (now() - m.updated < 24 * HOUR);
+        var isMedium = (now() - m.updated < 3 * DAY);
+        var isOld = (now() - m.updated < 7 * DAY);
+        var isVeryOld = (now() - m.updated < 14 * DAY);
+        
+        var borderColor = '#00FF00';
+        var borderWidth = '2px';
+        var glow = 'glow-green';
+        var freshLabel = '';
+        
+        if (isFresh) {
+            borderColor = '#00FF00';
+            glow = 'glow-green';
+            freshLabel = '<span class="text-[9px] text-neongreen">🟢 ' + timeAgo(m.updated) + '</span>';
+        } else if (isMedium) {
+            borderColor = '#00CC66';
+            glow = '';
+            freshLabel = '<span class="text-[9px] text-neongreen">🟢 ' + timeAgo(m.updated) + '</span>';
+        } else if (isOld) {
+            borderColor = '#FFB800';
+            glow = '';
+            freshLabel = '<span class="text-[9px] text-yellow-400">🟡 ' + timeAgo(m.updated) + '</span>';
+        } else if (isVeryOld) {
+            borderColor = '#FF8C00';
+            glow = '';
+            freshLabel = '<span class="text-[9px] text-orange-400">🟠 ' + timeAgo(m.updated) + '</span>';
+        } else {
+            borderColor = '#FF4444';
+            glow = '';
+            freshLabel = '<span class="text-[9px] text-red-400">🔴 ' + timeAgo(m.updated) + '</span>';
+        }
+        
+        var photoHtml = m.photo ? 
+            '<img src="' + m.photo + '" class="h-40 w-full rounded-lg object-cover cursor-pointer" onclick="openImageLightbox(\'' + m.photo + '\')" alt="機台 ' + m.no + '" />' : 
+            '<div class="flex h-40 w-full items-center justify-center rounded-lg bg-black/50 text-5xl cursor-pointer" onclick="toast(\'此機台尚無照片\', \'gold\')">🎰</div>';
+        
+        var featsHtml = '';
+        if (m.feats && m.feats.length > 0) {
+            featsHtml = m.feats.slice(0, 3).map(function(f) {
+                return '<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">' + f + '</span>';
+            }).join('');
+        }
+        
+        var prizeText = m.prize || '待更新';
+        var isFavMachine = STATE.favMachines.indexOf(m.id) !== -1;
+        
+        machineCards.push(
+            '<div class="rounded-xl border p-2 text-left ' + glow + '" style="border-color:' + borderColor + ';border-width:' + borderWidth + ';background:#09090b;">' +
+                '<div class="flex items-center justify-between mb-1">' +
+                    '<b class="text-xs text-gold">台號 ' + m.no + '</b>' +
+                    freshLabel +
+                '</div>' +
+                photoHtml +
+                '<div class="mt-1.5 flex flex-wrap gap-1">' + featsHtml + '</div>' +
+                '<p class="mt-1 truncate text-[10px] text-white/50">🎁 <span class="text-gold">' + prizeText + '</span></p>' +
+                '<div class="mt-2 flex gap-1.5">' +
+                    '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-gold/30 py-1.5 text-[10px] font-bold text-gold">📸 更新</button>' +
+                    '<button onclick="toggleFavMachine(\'' + m.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-neonpink/30 py-1.5 text-[10px] font-bold ' + (isFavMachine ? 'text-neonpink' : 'text-white/40') + '">' + (isFavMachine ? '❤️' : '🤍') + '</button>' +
+                    '<button onclick="reportMachine(\'' + m.id + '\', \'' + m.no + '\')" class="flex-1 rounded-lg bg-white/10 border border-white/20 py-1.5 text-[10px] font-bold text-white/40">🚨</button>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+    
+    return '<div class="mt-4">' +
+        '<div class="flex items-center justify-between">' +
+            '<h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台快照</h3>' +
+            '<span class="text-[10px] text-white/30">點擊照片放大</span>' +
+        '</div>' +
+        '<div class="mt-3 grid grid-cols-2 gap-3">' +
+            machineCards.join('') +
+        '</div>' +
+    '</div>';
+}
+
+// ========== 投票結果 HTML ==========
+function buildFieldVoteDisplay(s) {
     var allVotes = window._allFieldVotes || [];
     var storeVotes = allVotes.filter(function(v) { return String(v.store_id) === String(s.id); });
     
@@ -5056,109 +5186,69 @@ var contributionLevel = getContributionLevel(userContribution.score);
         } else if (field.key === 'hour24') {
             answerDisplay = mainAnswer === 'true' ? '24小時' : '非24小時';
         } else if (field.key === 'token') {
-    answerDisplay = mainAnswer === '5dollar' ? '用5元' : '用代幣';
-}
+            answerDisplay = mainAnswer === '5dollar' ? '用5元' : '用代幣';
+        }
         
-        if (votes.length === 1) {
-    fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + answerDisplay + '</span>';
-} else if (votes.length <= 10) {
-    var otherCounts = sorted.slice(1).map(function(a) { return answerCounts[a]; });
-    var totalOther = otherCounts.reduce(function(sum, c) { return sum + c; }, 0);
+        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60 text-[11px]">' + icon + ' ' + mainCount + '人 ' + answerDisplay + '</span>';
+    });
     
-    if (totalOther > 0) {
-        // 有異議
-        var otherAnswer = sorted[1];
-        var otherDisplay = '';
-        if (field.key === 'size') {
-            otherDisplay = otherAnswer === 'small' ? '小型' : otherAnswer === 'large' ? '大型' : '中型';
-        } else if (field.key === 'has_staff') {
-            otherDisplay = otherAnswer === 'true' ? '有場務' : '無場務';
-        } else if (field.key === 'has_e_coin') {
-            otherDisplay = otherAnswer === 'true' ? '有電子兌幣' : '無電子兌幣';
-        } else if (field.key === 'hour24') {
-            otherDisplay = otherAnswer === 'true' ? '24小時' : '非24小時';
-        } else if (field.key === 'token') {
-            otherDisplay = otherAnswer === '5dollar' ? '用5元' : '用代幣';
-        }
-        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · ' + totalOther + ' 人表示 ' + otherDisplay + '</span>';
+    return '<div class="mt-3 flex flex-wrap gap-2 text-[11px]">' + fieldVoteHtml + '</div>';
+}
+
+// ========== 收藏機台 ==========
+function toggleFavMachine(machineId) {
+    if (!requireLogin('收藏機台')) return;
+    
+    var arr = STATE.favMachines;
+    var i = arr.indexOf(machineId);
+    
+    if (i >= 0) {
+        arr.splice(i, 1);
+        toast('已取消收藏', 'pink');
     } else {
-        // 無異議
-        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人皆表示 ' + answerDisplay + '</span>';
+        arr.push(machineId);
+        toast('❤️ 已收藏機台', 'green');
     }
-} else {
-    // > 10 票：使用最近 5 票異議規則
-    var thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    var recentVotes = votes.filter(function(v) { return new Date(v.voted_at) >= thirtyDaysAgo; });
-    var recentDissent = recentVotes.filter(function(v) { return v.answer !== mainAnswer; });
     
-    if (recentDissent.length > 0) {
-        var dissentAnswer = recentDissent[0].answer;
-        var dissentDisplay = '';
-        if (field.key === 'size') {
-            dissentDisplay = dissentAnswer === 'small' ? '小型' : dissentAnswer === 'large' ? '大型' : '中型';
-        } else if (field.key === 'has_staff') {
-            dissentDisplay = dissentAnswer === 'true' ? '有場務' : '無場務';
-        } else if (field.key === 'has_e_coin') {
-            dissentDisplay = dissentAnswer === 'true' ? '有電子兌幣' : '無電子兌幣';
-        } else if (field.key === 'hour24') {
-            dissentDisplay = dissentAnswer === 'true' ? '24小時' : '非24小時';
-        } else if (field.key === 'token') {
-            dissentDisplay = dissentAnswer === '5dollar' ? '用5元' : '用代幣';
-        }
-        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + ' · 最近 ' + recentDissent.length + ' 人表示 ' + dissentDisplay + '</span>';
-    } else {
-        fieldVoteHtml += '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">' + icon + ' ' + mainCount + ' 人表示 ' + answerDisplay + '</span>';
+    save();
+    
+    // 刷新店鋪頁面
+    var currentStoreId = STATE._currentViewingStore;
+    if (currentStoreId) {
+        updateStoreContent(currentStoreId);
     }
 }
-    });
-    // 機台 HTML 生成 (分離邏輯避免嵌套 return)
-    var machinesHtml = '';
-    if (s.machines && s.machines.length > 0) {
-        var machineItems = [];
-        for (var mi = 0; mi < s.machines.length; mi++) {
-            var m = s.machines[mi];
-            var isFresh = (now() - m.updated < 2 * DAY);
-            var borderClass = isFresh ? 'border-neongreen/70 glow-green' : 'border-white/20 stale';
-            var staleBadge = isFresh ? '' : '<span class="text-[9px] text-white/40">[存疑]</span>';
-            var photoContent = m.photo ? '<img src="' + m.photo + '" class="h-24 w-full rounded-lg object-cover" alt="機台 ' + m.no + '" />' : '<div class="flex h-24 w-full items-center justify-center rounded-lg bg-black/50 text-3xl">🎰</div>';
-            var featsHtml = '';
-            if (m.feats && m.feats.length > 0) {
-                var featItems = [];
-                for (var fi = 0; fi < Math.min(m.feats.length, 2); fi++) {
-                    featItems.push('<span class="rounded bg-neonpink/15 px-1.5 py-0.5 text-[9px] text-neonpink">' + m.feats[fi] + '</span>');
-                }
-                featsHtml = featItems.join('');
-            }
-            var prizeText = m.prize || '待更新';
-            var timeText = timeAgo(m.updated);
-            
-            machineItems.push(
-                '<div class="rounded-xl border ' + borderClass + ' bg-zinc-950 p-2 text-left">' +
-                    photoContent +
-                    '<div class="mt-1.5 flex items-center justify-between"><b class="text-xs text-gold">台號 ' + m.no + '</b>' + staleBadge + '</div>' +
-                    '<div class="mt-1 flex flex-wrap gap-1">' + featsHtml + '</div>' +
-                    '<p class="mt-1 truncate text-[10px] text-white/50">🎁 <span class="text-gold">' + prizeText + '</span></p>' +
-                    '<p class="text-[9px] text-white/40">' + timeText + '</p>' +
-                '</div>'
-            );
-        }
-        machinesHtml = machineItems.join('');
-    } else {
-        machinesHtml = '<p class="col-span-2 py-6 text-center text-xs text-white/40">尚無機台</p>';
-    }
+
+// ========== 回報機台 ==========
+function reportMachine(machineId, machineNo) {
+    if (!confirm('⚠️ 回報機台\n\n確定要回報台號 ' + machineNo + ' 的資訊不實或虛假內容嗎？')) return;
     
-    return adBanner + '\n    <div class="flex items-start justify-between border-b border-gold/30 pb-3 pt-3 flex-shrink-0">\n      <div class="flex-1 min-w-0">\n        <div class="flex items-center gap-2 flex-wrap">\n          ' + backBtn + '\n          <h2 class="text-lg font-black text-gold neon-gold">' + s.name + '</h2>\n          ' + mallInfo + '\n        </div>\n        <div class="flex items-center gap-2 mt-1">\n          <p class="text-xs text-white/50">' + s.region + ' · ' + (s.addr && s.addr !== '' ? s.addr : '地鋪') + '</p>\n          <span class="ml-auto text-[10px] text-yellow-400 whitespace-nowrap">' + 
-    (totalVerifications >= 2 ? '✅已認證' : '認證中(' + totalVerifications + '/2)') + 
-    (s.supplement_photo ? ' ✅已補充' : '') + 
-'</span>\n        </div>\n        ' + contributionBadge + '\n      </div>\n      <button onclick="closeStoreModal()" class="text-2xl text-white/50 hover:text-white transition-colors flex-shrink-0">✕</button>\n    </div>\n    ' + photoHtml + '\n    \n    <!-- 第一 ROW：認證 + 補充 -->\n    <div class="mt-3 flex gap-2 flex-shrink-0">\n' +
-      (totalVerifications >= 2 ? '' : '<button onclick="openVerifyForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-neongreen/20 border border-neongreen/50 py-3 text-sm font-black text-neongreen glow-green whitespace-nowrap">🕵️ 認證此店 (+15分)</button>') + '\n' +
-      (!(s.addr && s.addr !== '' && s.addr !== '（未填地址）') ? '<button onclick="openSupplementForm(\'' + s.id + '\')" class="flex-1 rounded-2xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold glow-gold whitespace-nowrap">📝 補充地址 (+15分)</button>' : '') + '\n' +
-    '</div>\n    \n    <!-- 第二 ROW：打卡 + 更新機台 + 戰報 -->\n    <div class="mt-2 flex gap-2 flex-shrink-0">\n' +
-      '<button onclick="doStoreCheckin(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neongreen/30 py-2.5 text-xs font-black text-neongreen whitespace-nowrap">📍 打卡 (+5分)</button>\n' +
-      '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-gold/30 py-2.5 text-xs font-black text-gold whitespace-nowrap">🎰 更新機台 (+5分)</button>\n' +
-      '<button onclick="quickAction(\'post\', \'' + s.id + '\')" class="flex-1 rounded-xl bg-white/10 border border-neonpink/30 py-2.5 text-xs font-black text-neonpink whitespace-nowrap">📢 戰報 (+5分)</button>\n' +
-    '</div>\n    \n    <!-- 投票結果 -->\n    <div class="mt-3 flex flex-wrap gap-2 text-[11px] flex-shrink-0">\n      ' + fieldVoteHtml + '\n      ' + (s.addr && s.addr !== '' ? '<span class="rounded bg-white/10 px-2 py-0.5 text-white/60">📍 ' + s.addr + '</span>' : '') + '\n    </div>\n    \n    <!-- 回報按鈕靠右 -->\n    <div class="mt-2 flex justify-end flex-shrink-0">\n      <button onclick="openReportForm(\'store\', \'' + s.id + '\', \'' + s.name.replace(/'/g, "\\'") + '\')" class="rounded-full border border-neonpink/30 px-3 py-1 text-xs text-neonpink whitespace-nowrap">🚨 回報</button>\n    </div>\n    \n    <!-- 現場機台流 -->\n    <div class="mt-4">\n      <div class="flex items-center justify-between">\n        <h3 class="text-sm font-black text-neongreen neon-green">🎰 現場機台流</h3>\n        <span class="text-[10px] text-white/40">綠框=48H內更新 · 灰框=存疑</span>\n      </div>\n      <div class="mt-3 grid grid-cols-2 gap-3">\n        ' + machinesHtml + '\n      </div>\n    </div>\n  ';
+    if (!requireLogin('回報')) return;
+    
+    var reportData = {
+        target_type: 'machine',
+        target_id: machineId,
+        reporter_device: STATE.user.device,
+        reporter_user_id: STATE.user.user_id || null,
+        category: 'machine_not_exist',
+        reason: '機台資訊不實或虛假',
+        status: 'pending',
+        created_at: new Date().toISOString()
+    };
+    
+    if (CLOUD_ON) {
+        supabaseClientInstance
+            .from('reports')
+            .insert(reportData)
+            .then(function() {
+                toast('✅ 已回報，感謝你的貢獻', 'green');
+            })
+            .catch(function(e) {
+                toast('回報失敗: ' + e.message, 'pink');
+            });
+    } else {
+        toast('✅ 已回報（離線）', 'green');
+    }
 }
 
 function buildPhotoWithArrows(s, hasNav, prevId, nextId, locationLabel) {
@@ -10862,8 +10952,9 @@ function timeAgo(ts) {
 function openModal(html) {
   var root = document.getElementById("modal-root");
   root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
-  root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:75vh; max-height:75vh; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + html + '</div>';
+  root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:90vh; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">' + html + '</div>';
 }
+
 function closeModal() {
   // 停止所有 GPS 追蹤
   stopIntelGpsTracking();
