@@ -2503,11 +2503,12 @@ async function markStoreSuspicious(storeId) {
 // ============================================================
 // 認證審核清單
 // ============================================================
+var verificationFilter = 'all';
+
 function loadVerifications() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
-    // 查詢所有 claw_stores + LEFT JOIN verification_reviews
     sb.from('claw_stores')
         .select('id, name, region, addr, photo, lat, lng, ai_verification_status, submit_ai_confidence, status, first_verifier_device, second_verifier_device')
         .order('id', { ascending: false })
@@ -2520,7 +2521,6 @@ function loadVerifications() {
                 return;
             }
             
-            // 查詢 verification_reviews
             return sb.from('verification_reviews')
                 .select('*')
                 .then(function(reviewResult) {
@@ -2530,55 +2530,68 @@ function loadVerifications() {
                         reviews[reviewData[i].store_id] = reviewData[i];
                     }
                     
-                    // 統計
-                    var failedCount = 0;
-                    var uncheckedCount = 0;
-                    var passedCount = 0;
-                    var manualCount = 0;
-                    var noReviewCount = 0;
-                    
-                    for (var i = 0; i < stores.length; i++) {
-                        var s = stores[i];
+                    // 計算每個店鋪的狀態
+                    function getStoreStatus(s) {
                         var r = reviews[String(s.id)];
-                        if (!r) {
-                            noReviewCount++;
-                        } else if (r.manual_pass === true) {
-                            manualCount++;
-                        } else if (r.ai_check_result === 'failed') {
-                            failedCount++;
-                        } else if (r.ai_check_result === 'passed') {
-                            passedCount++;
-                        } else {
-                            uncheckedCount++;
-                        }
+                        if (!r) return 'no_review';
+                        if (r.manual_pass === true) return 'manual';
+                        if (r.ai_check_result === 'failed') return 'failed';
+                        if (r.ai_check_result === 'passed') return 'passed';
+                        return 'unchecked';
+                    }
+                    
+                    // 統計
+                    var counts = { failed: 0, unchecked: 0, passed: 0, manual: 0, no_review: 0 };
+                    for (var i = 0; i < stores.length; i++) {
+                        counts[getStoreStatus(stores[i])]++;
+                    }
+                    
+                    // 排序
+                    stores.sort(function(a, b) {
+                        var order = { 'failed': 0, 'unchecked': 1, 'no_review': 2, 'manual': 3, 'passed': 4 };
+                        return order[getStoreStatus(a)] - order[getStoreStatus(b)];
+                    });
+                    
+                    // 篩選
+                    var filteredStores = stores;
+                    if (verificationFilter !== 'all') {
+                        filteredStores = stores.filter(function(s) {
+                            return getStoreStatus(s) === verificationFilter;
+                        });
+                    }
+                    
+                    function buildFilterBtn(filter, label) {
+                        var isActive = verificationFilter === filter;
+                        var count = counts[filter] || 0;
+                        return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="verificationFilter=\'' + filter + '\';loadVerifications()">' + label + ' (' + count + ')</button>';
                     }
                     
                     var html = '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
                         '<span style="font-size:13px;color:var(--text-muted);">🔍 認證審核</span>' +
-                        '<span class="status-badge suspicious">❌ 失敗 ' + failedCount + '</span>' +
-                        '<span class="status-badge pending">⏳ 未核對 ' + uncheckedCount + '</span>' +
-                        '<span class="status-badge confirmed">✅ AI 通過 ' + passedCount + '</span>' +
-                        '<span class="status-badge confirmed">🧑 人工通過 ' + manualCount + '</span>' +
-                        '<span class="status-badge pending">📝 無認證 ' + noReviewCount + '</span>' +
-                        '<button class="btn-sm warning" onclick="batchAiCheckUnchecked()" style="margin-left:auto;">🔄 補做 AI 核對</button>' +
+                        '<button class="btn-sm warning" onclick="batchAiCheckUnchecked()">🔄 補做 AI 核對</button>' +
+                    '</div>' +
+                    '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+                        buildFilterBtn('all', '全部') +
+                        buildFilterBtn('failed', '❌ 失敗') +
+                        buildFilterBtn('unchecked', '⏳ 未核對') +
+                        buildFilterBtn('no_review', '📝 無認證') +
+                        buildFilterBtn('manual', '🧑 人工通過') +
+                        buildFilterBtn('passed', '🤖 AI 通過') +
                     '</div>';
                     
-                    // 排序：failed → unchecked → 無認證 → 人工通過 → passed
-                    stores.sort(function(a, b) {
-                        function getOrder(s) {
-                            var r = reviews[String(s.id)];
-                            if (!r) return 2;
-                            if (r.manual_pass === true) return 3;
-                            if (r.ai_check_result === 'failed') return 0;
-                            if (r.ai_check_result === 'passed') return 4;
-                            return 1;
-                        }
-                        return getOrder(a) - getOrder(b);
-                    });
+                    if (filteredStores.length === 0) {
+                        html += '<div class="empty-state"><i class="fas fa-check-circle"></i><p>沒有符合條件的店鋪</p></div>';
+                        container.innerHTML = html;
+                        return;
+                    }
                     
-                    for (var i = 0; i < stores.length; i++) {
-                        var s = stores[i];
+                    // ✅ 滑動區
+                    html += '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;">';
+                    
+                    for (var i = 0; i < filteredStores.length; i++) {
+                        var s = filteredStores[i];
                         var r = reviews[String(s.id)] || {};
+                        var storeStatus = getStoreStatus(s);
                         
                         var firstGps = { lat: s.lat, lng: s.lng };
                         var gps1 = r.verifier_1_gps || { lat: null, lng: null };
@@ -2630,18 +2643,29 @@ function loadVerifications() {
                             group2Color = 'suspicious';
                         }
                         
-                        // 縮圖
+                        // 狀態標記
+                        var statusBadge = '';
+                        if (storeStatus === 'manual') {
+                            statusBadge = '<span class="status-badge confirmed">🧑 人工核對通過</span>';
+                        } else if (storeStatus === 'passed') {
+                            statusBadge = '<span class="status-badge confirmed">🤖 AI 核對通過</span>';
+                        } else if (storeStatus === 'failed') {
+                            statusBadge = '<span class="status-badge suspicious">🤖 AI 核對不通過</span>';
+                        } else if (storeStatus === 'no_review') {
+                            statusBadge = '<span class="status-badge pending">📝 無認證</span>';
+                        } else {
+                            statusBadge = '<span class="status-badge pending">⏳ 待核對</span>';
+                        }
+                        
                         function createThumb(photoUrl, label) {
-    if (!photoUrl) return '<div style="width:150px;height:150px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;color:var(--text-muted);font-size:11px;">' + label + '</div>';
-    return '<img src="' + photoUrl + '" onclick="openImageLightbox(\'' + photoUrl + '\')" style="width:150px;height:150px;object-fit:cover;border-radius:8px;cursor:pointer;" alt="' + label + '" />';
-}
+                            if (!photoUrl) return '<div style="width:150px;height:150px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;color:var(--text-muted);font-size:11px;">' + label + '</div>';
+                            return '<img src="' + photoUrl + '" onclick="openImageLightbox(\'' + photoUrl + '\')" style="width:150px;height:150px;object-fit:cover;border-radius:8px;cursor:pointer;" alt="' + label + '" />';
+                        }
                         
                         html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
                             '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
                                 '<strong style="font-size:16px;">🏪 ' + (s.name || '未知') + '</strong>' +
-                                (r.manual_pass === true ? '<span class="status-badge confirmed">🧑 人工核對通過</span>' : 
-                                (r.ai_check_result === 'passed' ? '<span class="status-badge confirmed">🤖 AI 核對通過</span>' : 
-                                '<span class="status-badge pending">⏳ 待核對</span>')) +
+                                statusBadge +
                             '</div>' +
                             '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' +
                                 '<span class="status-badge ' + submitAiColor + '">📸 提交AI：' + submitAiStatus + '</span>' +
@@ -2653,7 +2677,6 @@ function loadVerifications() {
                                 (r.manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassVerification(\'' + s.id + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')">✅ 人工通過</button>' : '') +
                             '</div>' +
                             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">' +
-                                // 首發者
                                 '<div class="compare-card">' +
                                     '<div class="label">📌 首發者</div>' +
                                     '<div style="font-size:11px;color:var(--text-muted);">' + (r.first_submitter_device || (s.submitted_by_device || '未知')) + '</div>' +
@@ -2661,7 +2684,6 @@ function loadVerifications() {
                                     '<div class="gps">📍 ' + (s.lat || 'N/A') + ', ' + (s.lng || 'N/A') + '</div>' +
                                     '<button class="btn-sm danger" onclick="revokeSubmitter(\'' + s.id + '\', \'' + (r.first_submitter_device || s.submitted_by_device || '') + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回首發者</button>' +
                                 '</div>' +
-                                // 認證者1
                                 '<div class="compare-card">' +
                                     '<div class="label">🔍 認證者1</div>' +
                                     '<div style="font-size:11px;color:var(--text-muted);">' + (r.verifier_1_device || '無') + '</div>' +
@@ -2670,7 +2692,6 @@ function loadVerifications() {
                                     (dist1 !== null ? '<div style="font-size:10px;color:var(--warning);">距離：' + dist1 + ' 米</div>' : '') +
                                     (r.verifier_1_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + s.id + '\', \'' + (r.verifier_1_device || '') + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者1</button>' : '') +
                                 '</div>' +
-                                // 認證者2
                                 '<div class="compare-card">' +
                                     '<div class="label">🔍 認證者2</div>' +
                                     '<div style="font-size:11px;color:var(--text-muted);">' + (r.verifier_2_device || '無') + '</div>' +
@@ -2682,6 +2703,8 @@ function loadVerifications() {
                             '</div>' +
                         '</div>';
                     }
+                    
+                    html += '</div>';  // 滑動區結束
                     
                     container.innerHTML = html;
                 });
@@ -2800,11 +2823,18 @@ async function batchAiCheckUnchecked() {
             var store = storeList[si];
             console.log('📸 補做提交 AI：store_id:', store.id, store.name);
             
-            if (store.photo) {
-                var submitAiResult = await aiCheckClawStore(store.photo);
-                console.log('   提交 AI 結果:', submitAiResult);
-                
-                if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
+                            if (store.photo) {
+                    // ✅ 重試 3 次 + 每次間隔 3 秒
+                    var submitAiResult = null;
+                    for (var submitAttempt = 0; submitAttempt < 3; submitAttempt++) {
+                        submitAiResult = await aiCheckClawStore(store.photo);
+                        if (submitAiResult !== null) break;
+                        console.log('   ⚠️ 重試第 ' + (submitAttempt + 1) + ' 次...');
+                        await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                    }
+                    console.log('   提交 AI 結果:', submitAiResult);
+                    
+                    if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
                     var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
                     await sb.from('claw_stores')
                         .update({ 
@@ -2814,7 +2844,7 @@ async function batchAiCheckUnchecked() {
                         .eq('id', store.id);
                     console.log('   ✅ 提交 AI 已寫入:', submitStatus);
                 }
-                await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+                await new Promise(function(resolve) { setTimeout(resolve, 5000); });
             } else {
                 console.log('   ⚠️ 無照片，跳過');
             }
@@ -2834,12 +2864,19 @@ async function batchAiCheckUnchecked() {
             
             if (hasVerifier1 && hasVerifier2) {
                 console.log('   有 2 位認證者，執行完整核對...');
-                var aiResults = await runAiVerificationCheck(
-                    review.store_id,
-                    review.first_submitter_photo, firstGps,
-                    review.verifier_1_photo, gps1,
-                    review.verifier_2_photo, gps2
-                );
+                // ✅ 重試 3 次
+                var aiResults = null;
+                for (var attempt = 0; attempt < 3; attempt++) {
+                    aiResults = await runAiVerificationCheck(
+                        review.store_id,
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1,
+                        review.verifier_2_photo, gps2
+                    );
+                    if (aiResults && aiResults.group1 && aiResults.group2) break;
+                    console.log('   ⚠️ 重試第 ' + (attempt + 1) + ' 次...');
+                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                }
                 
                 console.log('   AI 核對結果:', aiResults);
                 
@@ -2863,12 +2900,19 @@ async function batchAiCheckUnchecked() {
                     console.log('   ⚠️ AI 沒回應');
                     errorCount++;
                 }
-            } else if (hasVerifier1) {
+                        } else if (hasVerifier1) {
                 console.log('   只有 1 位認證者，執行單組核對...');
-                var aiResult1 = await aiCompareStorePhotos(
-                    review.first_submitter_photo, firstGps,
-                    review.verifier_1_photo, gps1
-                );
+                // ✅ 重試 3 次
+                var aiResult1 = null;
+                for (var attempt1 = 0; attempt1 < 3; attempt1++) {
+                    aiResult1 = await aiCompareStorePhotos(
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1
+                    );
+                    if (aiResult1 !== null) break;
+                    console.log('   ⚠️ 重試第 ' + (attempt1 + 1) + ' 次...');
+                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                }
                 
                 console.log('   AI 結果:', aiResult1);
                 
@@ -2895,7 +2939,7 @@ async function batchAiCheckUnchecked() {
                 errorCount++;
             }
             
-            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            await new Promise(function(resolve) { setTimeout(resolve, 5000); });
         }
         
         processedCount = storeList.length + uniqueReviews.length;
