@@ -4912,14 +4912,21 @@ var renderStoreItem = function(s, index) {
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
         if (!isVerified) {
-        var isFirstVerifier = !s.first_verifier_device;
-        var verifyButtonText = isFirstVerifier ? '🔥 搶先認證' : '追加認證';
-        var verifyButtonColor = isFirstVerifier ? '#FFB800' : '#3B82F6';
+    var hasFirstVerifier = !!s.first_verifier_device;
+    var hasSecondVerifier = !!s.second_verifier_device;
+    
+    if (hasFirstVerifier && hasSecondVerifier) {
+        // 已有 2 位認證者
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
+    } else {
+        var verifyButtonText = !hasFirstVerifier ? '🔥 認證' : '追加認證';
+        var verifyButtonColor = !hasFirstVerifier ? '#FFB800' : '#3B82F6';
         
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + verifyButtonColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + verifyButtonText + '</span>';
-    } else {
-        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
     }
+} else {
+    buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
+}
     
     if (!hasSupplemented) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
