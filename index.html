@@ -1909,7 +1909,7 @@ async function addPoints(n, why) {
 
 // ----- 收藏同步 (P1) -----
 async function toggleFav(type, id) {
-  if (!requireLogin('收藏')) return;
+
   var key = type === "store" ? "favStores" : "favMachines";
   var arr = STATE[key];
   var i = arr.indexOf(id);
@@ -5535,7 +5535,7 @@ function buildFieldVoteDisplay(s) {
 
 // ========== 收藏機台 ==========
 function toggleFavMachine(machineId) {
-    if (!requireLogin('收藏機台')) return;
+
     
     var arr = STATE.favMachines;
     var i = arr.indexOf(machineId);
@@ -6745,10 +6745,7 @@ async function runAiVerificationCheck(storeId, firstSubmitterPhoto, firstSubmitt
 async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
     isSubmittingVerification = true;
-    if (!requireLogin('實證店鋪')) {
-        isSubmittingVerification = false;
-        return;
-    }
+
     
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
@@ -7440,7 +7437,7 @@ function selectSupplementStreet(street) {
 // 提交補充地址驗證
 async function submitSupplementAddress(storeId) {
   if (!acquireSubmitLock('submitSupplementAddress')) return;
-  if (!requireLogin('補充地址')) return;
+
   
   var submitBtn = disableSubmitButton('supplement-submit-btn', '⏳ 驗證中...');
   
@@ -7794,8 +7791,7 @@ async function verifySupplementAddress(storeId) {
 // 提交驗證通過的地址
 async function submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng, distanceMeters) {
     if (!acquireSubmitLock('submitVerifiedAddress')) return;
-    if (!requireLogin('補充地址')) return;
-    
+
     var submitBtn = document.getElementById('sa-verify-btn');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -7832,8 +7828,7 @@ async function submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng,
 // 提交地址給管理員審核
 async function submitAddressForReview(storeId, address, geocodedLat, geocodedLng, distanceMeters) {
     if (!acquireSubmitLock('submitAddressForReview')) return;
-    if (!requireLogin('補充地址')) return;
-    
+
     var submitBtn = document.getElementById('sa-verify-btn');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -8068,14 +8063,18 @@ async function submitPlayerPost() {
         }
         
         if (store.lat && store.lng) {
+            var isMallStorePost = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
+            var limitDistancePost = isMallStorePost ? 0.4 : 0.25;
+            var limitMetersPost = Math.round(limitDistancePost * 1000);
+            
             var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
             var distanceMeters = Math.round(distance * 1000);
-            if (distance > 0.5) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布戰報', 'pink');
+            if (distance > limitDistancePost) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMetersPost + ' 米內發布戰報', 'pink');
                 enableSubmitButton(submitBtn, '✅ 發布戰報');
                 return;
             }
-            toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMetersPost + ' 米範圍內，可以發布', 'green');
         }
         
         var selectedTags = [];
@@ -8246,15 +8245,19 @@ async function submitOwnerPost() {
             return;
         }
         
-        if (store.lat && store.lng) {
+              if (store.lat && store.lng) {
+            var isMallStoreOwner = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
+            var limitDistanceOwner = isMallStoreOwner ? 0.4 : 0.25;
+            var limitMetersOwner = Math.round(limitDistanceOwner * 1000);
+            
             var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
             var distanceMeters = Math.round(distance * 1000);
-            if (distance > 0.5) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 500 米內發布宣傳\n\n實況資訊的真實性是我們的核心價值', 'pink');
+            if (distance > limitDistanceOwner) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMetersOwner + ' 米內發布宣傳\n\n實況資訊的真實性是我們的核心價值', 'pink');
                 enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
                 return;
             }
-            toast('✅ 距離 ' + distanceMeters + ' 米，在 500 米範圍內，可以發布', 'green');
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMetersOwner + ' 米範圍內，可以發布', 'green');
         } else {
             toast('⚠️ 該店鋪尚無 GPS 座標，將記錄您的發布位置', 'gold');
         }
@@ -9944,11 +9947,15 @@ async function submitMachine(sid) {
             enableSubmitButton(submitBtn, '✅ 提交機台情報');
             return; 
         }
-        
         if (s.lat && s.lng) {
+            var isMallStoreMachine = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+            var limitDistanceMachine = isMallStoreMachine ? 0.4 : 0.25;
+            var limitMetersMachine = Math.round(limitDistanceMachine * 1000);
+            
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
-            if (distance > 0.2) {
-                toast('⚠️ 你距離該店鋪 ' + (distance * 1000).toFixed(0) + ' 米，請在 200 米內上架機台', 'pink');
+            var distanceMetersMachine = Math.round(distance * 1000);
+            if (distance > limitDistanceMachine) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMetersMachine + ' 米，請在 ' + limitMetersMachine + ' 米內上架機台', 'pink');
                 enableSubmitButton(submitBtn, '✅ 提交機台情報');
                 return;
             }
@@ -10098,8 +10105,7 @@ function hasCheckedInToday(storeId) {
 // ============================================================
 async function doStoreCheckin(storeId) {
     if (!acquireSubmitLock('doStoreCheckin')) return;
-    
-    if (!requireLogin('打卡')) return;
+  
     
     try {
         var s = STORES.find(function(x) { return x.id === storeId; });
@@ -10122,13 +10128,17 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
         }
         
         if (s.lat && s.lng) {
+            var isMallStoreCheckin = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+            var limitDistanceCheckin = isMallStoreCheckin ? 0.4 : 0.25;
+            var limitMetersCheckin = Math.round(limitDistanceCheckin * 1000);
+            
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
             var distanceMeters = Math.round(distance * 1000);
-            if (distance > 0.3) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 300 米內打卡', 'pink');
+            if (distance > limitDistanceCheckin) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMetersCheckin + ' 米內打卡', 'pink');
                 return;
             }
-            toast('✅ 距離 ' + distanceMeters + ' 米，在 300 米範圍內', 'green');
+            toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMetersCheckin + ' 米範圍內', 'green');
         }
         
         // 記錄打卡
@@ -12909,7 +12919,7 @@ function updateHunterSubmitButton() {
 // 提交搜證任務
 async function submitHunterTask() {
     if (!acquireSubmitLock('submitHunterTask')) return;
-    if (!requireLogin('搜證任務')) return;
+
     
     var submitBtn = disableSubmitButton('ht-submit-btn', '⏳ 提交中...');
     
@@ -12947,7 +12957,7 @@ async function submitHunterTask() {
         
         // 驗證距離
         var isMallStore = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
-        var limitDistance = isMallStore ? 0.5 : 0.3;
+                    var limitDistance = isMallStore ? 0.4 : 0.25;
         
         if (store.lat && store.lng) {
             var distance = calculateDistance(store.lat, store.lng, _finalGpsLat, _finalGpsLng);
