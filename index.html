@@ -6928,7 +6928,7 @@ async function submitVerification(storeId) {
                     console.warn('⚠️ 讀取認證者資料失敗:', e.message);
                 }
                 
-                if (reviewData) {
+                                if (reviewData) {
                     var aiResults = await runAiVerificationCheck(
                         storeId,
                         firstSubmitterPhoto, firstSubmitterGps,
@@ -6939,30 +6939,49 @@ async function submitVerification(storeId) {
                     var aiCheckResult = 'unchecked';
                     var aiGroup1Result = null;
                     var aiGroup2Result = null;
+                    var aiGroup1Confidence = null;
+                    var aiGroup2Confidence = null;
                     
                     if (aiResults && aiResults.group1 && aiResults.group2) {
                         aiGroup1Result = aiResults.group1.is_same_store === true;
                         aiGroup2Result = aiResults.group2.is_same_store === true;
+                        aiGroup1Confidence = aiResults.group1.confidence_score || 0;
+                        aiGroup2Confidence = aiResults.group2.confidence_score || 0;
+                        
+                        // ✅ 信心分數門檻
+                        var CONFIDENCE_THRESHOLD = 0.8;
                         
                         if (aiGroup1Result && aiGroup2Result) {
-                            aiCheckResult = 'passed';
+                            // 兩組都判斷同一店鋪
+                            if (aiGroup1Confidence >= CONFIDENCE_THRESHOLD && aiGroup2Confidence >= CONFIDENCE_THRESHOLD) {
+                                aiCheckResult = 'passed';
+                            } else {
+                                aiCheckResult = 'failed';  // 低信心 → 轉人手審核
+                            }
                         } else {
-                            aiCheckResult = 'failed';
+                            // 至少一組判斷不同店鋪
+                            if (aiGroup1Confidence >= CONFIDENCE_THRESHOLD && aiGroup2Confidence >= CONFIDENCE_THRESHOLD) {
+                                aiCheckResult = 'failed';  // 高信心不通過 → 退回
+                            } else {
+                                aiCheckResult = 'failed';  // 低信心 → 轉人手審核
+                            }
                         }
                     }
                     
-                    // 寫入 AI 結果
+                    // ✅ 寫入 AI 結果（包含信心分數）
                     try {
                         await supabaseClientInstance
                             .from('verification_reviews')
                             .update({
                                 ai_check_group1: aiGroup1Result,
+                                ai_group1_confidence: aiGroup1Confidence,
                                 ai_check_group2: aiGroup2Result,
+                                ai_group2_confidence: aiGroup2Confidence,
                                 ai_check_result: aiCheckResult,
                                 ai_checked_at: new Date().toISOString()
                             })
                             .eq('store_id', stringStoreId);
-                        console.log('✅ AI 核對結果已寫入:', aiCheckResult);
+                        console.log('✅ AI 核對結果已寫入:', aiCheckResult, '信心:', aiGroup1Confidence, aiGroup2Confidence);
                     } catch (e) {
                         console.warn('⚠️ 寫入 AI 核對結果失敗:', e.message);
                     }
@@ -6982,7 +7001,6 @@ async function submitVerification(storeId) {
                             console.log('✅ AI 核對通過，自動認證成功');
                             toast('🎉 搶先認證成功！+20 分', 'green');
                             
-                            // 首發者追加 +30
                             await supabaseClientInstance
                                 .from('claw_stores')
                                 .update({ submitter_reward_claimed: false })
@@ -6993,7 +7011,7 @@ async function submitVerification(storeId) {
                             if (regionStat) updateAchievementStat(regionStat);
                             
                         } else if (aiCheckResult === 'failed') {
-                            console.log('⚠️ AI 核對未通過，等待管理員審核');
+                            console.log('⚠️ AI 核對未通過或低信心，等待管理員審核');
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
                             console.log('⚠️ AI 核對服務不可用');
@@ -7001,7 +7019,7 @@ async function submitVerification(storeId) {
                         }
                         
                     } else if (reviewResult === 'verifier_2') {
-                        // 追加認證：不影響主認證狀態
+                        // 追加認證
                         if (aiCheckResult === 'passed') {
                             toast('🎉 追加認證成功！+10 分', 'green');
                         } else if (aiCheckResult === 'failed') {
@@ -11050,14 +11068,10 @@ async function aiCheckClawStore(photoUrl) {
             })
         });
         
-        if (!response.ok) {
-            console.warn('⚠️ AI 判定失敗:', response.status);
-            return null;
-        }
+        if (!response.ok) return null;
         
         var data = await response.json();
         var content = data.choices[0].message.content;
-        
         if (!content) return null;
         
         var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
@@ -11203,7 +11217,8 @@ async function submitIntel() {
                 supplemented_by: null,
                 device: STATE.user.device,
                 ai_verification_status: 'passed',
-                verification_required: 1
+                verification_required: 1,
+                submit_ai_confidence: aiResult.confidence_score || null
             };
             
             var insertedId = null;

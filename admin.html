@@ -2565,36 +2565,42 @@ function loadVerifications() {
                         var v = data[i];
                         var store = stores[String(v.store_id)] || { name: '未知店鋪', region: '', addr: '', ai_verification_status: 'unchecked' };
                         
-                        // 提交 AI 判定狀態
+                                                // 提交 AI 判定狀態
                         var submitAiStatus = '⚠️ 未判定';
                         var submitAiColor = 'pending';
+                        var submitAiConfidence = store.submit_ai_confidence !== undefined && store.submit_ai_confidence !== null 
+                            ? '（信心 ' + Math.round(store.submit_ai_confidence * 100) + '%）' : '';
                         if (store.ai_verification_status === 'passed') {
-                            submitAiStatus = '✅ 通過';
+                            submitAiStatus = '✅ 通過' + submitAiConfidence;
                             submitAiColor = 'confirmed';
                         } else if (store.ai_verification_status === 'failed') {
-                            submitAiStatus = '❌ 不通過';
+                            submitAiStatus = '❌ 不通過' + submitAiConfidence;
                             submitAiColor = 'suspicious';
                         }
                         
                         // 認證 AI 組1 狀態
                         var group1Status = '⚠️ 未核對';
                         var group1Color = 'pending';
+                        var group1Confidence = v.ai_group1_confidence !== undefined && v.ai_group1_confidence !== null 
+                            ? '（信心 ' + Math.round(v.ai_group1_confidence * 100) + '%）' : '';
                         if (v.ai_check_group1 === true) {
-                            group1Status = '✅ 通過';
+                            group1Status = '✅ 通過' + group1Confidence;
                             group1Color = 'confirmed';
                         } else if (v.ai_check_group1 === false) {
-                            group1Status = '❌ 不通過';
+                            group1Status = '❌ 不通過' + group1Confidence;
                             group1Color = 'suspicious';
                         }
                         
                         // 認證 AI 組2 狀態
                         var group2Status = '⚠️ 未核對';
                         var group2Color = 'pending';
+                        var group2Confidence = v.ai_group2_confidence !== undefined && v.ai_group2_confidence !== null 
+                            ? '（信心 ' + Math.round(v.ai_group2_confidence * 100) + '%）' : '';
                         if (v.ai_check_group2 === true) {
-                            group2Status = '✅ 通過';
+                            group2Status = '✅ 通過' + group2Confidence;
                             group2Color = 'confirmed';
                         } else if (v.ai_check_group2 === false) {
-                            group2Status = '❌ 不通過';
+                            group2Status = '❌ 不通過' + group2Confidence;
                             group2Color = 'suspicious';
                         }
                         
@@ -2764,10 +2770,12 @@ async function batchAiCheckUnchecked() {
                     
                     if (aiResults && aiResults.group1 && aiResults.group2) {
                         var checkResult = (aiResults.group1.is_same_store && aiResults.group2.is_same_store) ? 'passed' : 'failed';
-                        await sb.from('verification_reviews')
+                                                await sb.from('verification_reviews')
                             .update({
                                 ai_check_group1: aiResults.group1.is_same_store,
+                                ai_group1_confidence: aiResults.group1.confidence_score || null,
                                 ai_check_group2: aiResults.group2.is_same_store,
+                                ai_group2_confidence: aiResults.group2.confidence_score || null,
                                 ai_check_result: checkResult,
                                 ai_checked_at: new Date().toISOString()
                             })
