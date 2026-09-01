@@ -6856,6 +6856,9 @@ async function submitVerification(storeId) {
             }
             
             // 3. 根據 reviewResult 更新 claw_stores
+                        console.log('🕵️ reviewResult:', reviewResult);
+            console.log('🕵️ storeId:', storeId);
+            console.log('🕵️ numericStoreId:', numericStoreId);
             if (CLOUD_ON) {
                 try {
                     var updateData = {};
