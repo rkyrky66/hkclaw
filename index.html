@@ -9081,10 +9081,8 @@ var coreTasks = [
     var dailyTasks = [
         { key: 'checkin', label: '打卡', icon: '📍', points: 5, limit: 5 },
         { key: 'machine_checkin', label: '機台更新', icon: '🎰', points: 5, limit: 5 },
-        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 },
-        // 在 return 的獵人任務區塊後新增
-'<p class="text-[10px] text-white/30 mt-1">🕵️ 搶先認證 +20 分，追加認證 +10 分</p>'
-    ];
+        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 }
+      ];
     
     function buildTaskCell(task, limit) {
         var done = progress[task.key] || 0;
@@ -9172,9 +9170,10 @@ var coreTasks = [
             '</div>' +
         '</div>' +
         
-        '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 獵人任務</h3>\n' +
-        '<div class="task-grid">' + coreHtml + '</div></div>\n' +
-        rewardHtml + '\n' +
+'\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 獵人任務</h3>\n' +
+'<div class="task-grid">' + coreHtml + '</div></div>\n' +
+'<p class="text-[10px] text-white/30 mt-1">🕵️ 搶先認證 +20 分，追加認證 +10 分</p>\n' +
+rewardHtml + '\n' +
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常任務</h3>\n' +
         '<div class="task-grid">' + dailyHtml + '</div></div>\n' +
         '\n    ' + hunterTaskHtml + '\n' +
