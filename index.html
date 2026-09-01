@@ -6820,11 +6820,33 @@ async function submitVerification(storeId) {
         console.log('🕵️ storeId:', storeId);
         console.log('🕵️ verification.verifier_device:', verification.verifier_device);
         
-        if (reviewResult === 'already_complete') {
-            toast('此店鋪已認證完畢', 'gold');
-            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-            return;
-        }
+if (reviewResult === 'already_complete') {
+    // ✅ 從 verification_reviews 同步到 claw_stores
+    var reviewData = await supabaseClientInstance
+        .from('verification_reviews')
+        .select('verifier_1_device, verifier_1_name, verifier_2_device, verifier_2_name')
+        .eq('store_id', String(storeId))
+        .single();
+    
+    if (!reviewData.error && reviewData.data) {
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({
+                status: 'verified',
+                is_verified: true,
+                verification_count: 1,
+                verification_count_2: 1,
+                first_verifier_device: reviewData.data.verifier_1_device,
+                first_verifier_name: reviewData.data.verifier_1_name,
+                second_verifier_device: reviewData.data.verifier_2_device,
+                second_verifier_name: reviewData.data.verifier_2_name
+            })
+            .eq('id', numericStoreId);
+    }
+    
+    toast('此店鋪已認證完畢', 'gold');
+    return;
+}
         if (reviewResult === 'already_verified') {
             toast('你已經實證過這間店鋪了', 'gold');
             enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
