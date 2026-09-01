@@ -2507,18 +2507,28 @@ function loadVerifications() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
+    // 查詢所有 verification_reviews（不管 AI 狀態）
     sb.from('verification_reviews')
         .select('*')
-        .eq('ai_check_result', 'failed')
-        .order('ai_checked_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .then(function(result) {
             if (result.error) throw result.error;
             var data = result.data || [];
             
             if (data.length === 0) {
-                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有 AI 核對不通過的認證</p></div>';
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有認證記錄</p></div>';
                 return;
             }
+            
+            // 排序：failed → unchecked/null → passed
+            data.sort(function(a, b) {
+                var order = { 'failed': 0, 'unchecked': 1, 'passed': 2 };
+                var aStatus = a.ai_check_result || 'unchecked';
+                var bStatus = b.ai_check_result || 'unchecked';
+                var aOrder = order[aStatus] !== undefined ? order[aStatus] : 1;
+                var bOrder = order[bStatus] !== undefined ? order[bStatus] : 1;
+                return aOrder - bOrder;
+            });
             
             var storeIds = [];
             for (var i = 0; i < data.length; i++) {
@@ -2538,20 +2548,44 @@ function loadVerifications() {
                         stores[String(storeData[i].id)] = storeData[i];
                     }
                     
-                    var html = '<div style="margin-bottom:12px;"><span style="font-size:13px;color:var(--text-muted);">🔍 共 ' + data.length + ' 間店鋪 AI 核對不通過</span></div>';
+                    // 統計
+                    var failedCount = data.filter(function(v) { return v.ai_check_result === 'failed'; }).length;
+                    var uncheckedCount = data.filter(function(v) { return !v.ai_check_result || v.ai_check_result === 'unchecked'; }).length;
+                    var passedCount = data.filter(function(v) { return v.ai_check_result === 'passed'; }).length;
+                    
+                    var html = '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                        '<span style="font-size:13px;color:var(--text-muted);">🔍 認證審核</span>' +
+                        '<span class="status-badge suspicious">❌ 失敗 ' + failedCount + '</span>' +
+                        '<span class="status-badge pending">⏳ 未核對 ' + uncheckedCount + '</span>' +
+                        '<span class="status-badge confirmed">✅ 通過 ' + passedCount + '</span>' +
+                        '<button class="btn-sm warning" onclick="batchAiCheckUnchecked()" style="margin-left:auto;">🔄 補做 AI 核對</button>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">💡 排序：失敗 → 未核對 → 通過（第一間通過代表後面全部通過）</div>';
                     
                     for (var i = 0; i < data.length; i++) {
                         var v = data[i];
-                        var store = stores[String(v.store_id)] || { name: '未知店鋪', region: '', addr: '' };
+                        var store = stores[String(v.store_id)] || { name: '未知店鋪', region: '', addr: '', ai_verification_status: 'unchecked' };
                         
-                        // GPS 距離計算
+                        var aiStatus = v.ai_check_result || 'unchecked';
+                        var aiStatusBadge = '';
+                        if (aiStatus === 'passed') {
+                            aiStatusBadge = '<span class="status-badge confirmed">🤖 AI 核對通過</span>';
+                        } else if (aiStatus === 'failed') {
+                            aiStatusBadge = '<span class="status-badge suspicious">🤖 AI 核對不通過</span>';
+                        } else {
+                            aiStatusBadge = '<span class="status-badge pending">🤖 未核對</span>';
+                        }
+                        
+                        var submitAiStatus = store.ai_verification_status === 'passed' ? '✅ 通過' : 
+                                            store.ai_verification_status === 'failed' ? '❌ 不通過' : '⚠️ 未判定';
+                        
+                        // GPS 距離
                         var firstGps = v.first_submitter_gps || { lat: null, lng: null };
                         var gps1 = v.verifier_1_gps || { lat: null, lng: null };
                         var gps2 = v.verifier_2_gps || { lat: null, lng: null };
                         
                         var dist1 = null;
                         var dist2 = null;
-                        
                         if (firstGps.lat && gps1.lat) {
                             dist1 = Math.round(calculateDistance(firstGps.lat, firstGps.lng, gps1.lat, gps1.lng) * 1000);
                         }
@@ -2559,18 +2593,13 @@ function loadVerifications() {
                             dist2 = Math.round(calculateDistance(firstGps.lat, firstGps.lng, gps2.lat, gps2.lng) * 1000);
                         }
                         
-                        // 提交 AI 狀態
-                        var submitAiStatus = store.ai_verification_status === 'passed' ? '✅ 通過' : 
-                                            store.ai_verification_status === 'failed' ? '❌ 不通過' : '⚠️ 未判定';
-                        
                         html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
-                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
                                 '<strong style="font-size:16px;">🏪 ' + store.name + '</strong>' +
-                                '<span class="status-badge suspicious">🤖 AI 核對不通過</span>' +
+                                aiStatusBadge +
                             '</div>' +
                             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' +
                                 '<div>🤖 提交 AI 判定：' + submitAiStatus + '</div>' +
-                                '<div>🤖 認證 AI 核對：❌ 不通過</div>' +
                             '</div>' +
                             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">' +
                                 // 首發者
@@ -2588,7 +2617,7 @@ function loadVerifications() {
                                     (v.verifier_1_photo ? '<img src="' + v.verifier_1_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
                                     '<div class="gps">📍 ' + (gps1.lat || 'N/A') + ', ' + (gps1.lng || 'N/A') + '</div>' +
                                     (dist1 !== null ? '<div style="font-size:10px;color:var(--warning);">距離首發：' + dist1 + ' 米</div>' : '') +
-                                    '<button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + (v.verifier_1_device || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者1</button>' +
+                                    (v.verifier_1_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + (v.verifier_1_device || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者1</button>' : '') +
                                 '</div>' +
                                 // 認證者2
                                 '<div class="compare-card">' +
@@ -2609,6 +2638,126 @@ function loadVerifications() {
         .catch(function(error) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
         });
+}
+
+// 批次補做 AI 核對（未核對的舊資料）
+async function batchAiCheckUnchecked() {
+    if (!confirm('確定要為所有未核對的舊資料補做 AI 核對嗎？\n\n此操作將逐筆呼叫 AI，可能需要數分鐘。')) return;
+    
+    toast('🔄 開始補做 AI 核對...');
+    
+    try {
+        // 查詢所有未核對的 verification_reviews
+        var { data: uncheckedReviews } = await sb.from('verification_reviews')
+            .select('*')
+            .or('ai_check_result.is.null,ai_check_result.eq.unchecked');
+        
+        if (!uncheckedReviews || uncheckedReviews.length === 0) {
+            toast('✅ 沒有需要補做的記錄');
+            loadVerifications();
+            return;
+        }
+        
+        var processedCount = 0;
+        var passedCount = 0;
+        var failedCount = 0;
+        var errorCount = 0;
+        
+        for (var i = 0; i < uncheckedReviews.length; i++) {
+            var review = uncheckedReviews[i];
+            
+            // 補做提交 AI 判定
+            if (!review.submit_ai_status) {
+                var storeId = review.store_id;
+                var { data: store } = await sb.from('claw_stores')
+                    .select('photo, ai_verification_status')
+                    .eq('id', parseInt(storeId))
+                    .maybeSingle();
+                
+                if (store && store.photo && store.ai_verification_status === 'unchecked') {
+                    var submitAiResult = await aiCheckClawStore(store.photo);
+                    if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
+                        var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
+                        await sb.from('claw_stores')
+                            .update({ ai_verification_status: submitStatus })
+                            .eq('id', parseInt(storeId));
+                        await sb.from('verification_reviews')
+                            .update({ submit_ai_status: submitStatus })
+                            .eq('id', review.id);
+                    }
+                    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+                }
+            }
+            
+            // 補做認證 AI 核對
+            if (!review.ai_check_result || review.ai_check_result === 'unchecked') {
+                var firstGps = review.first_submitter_gps || { lat: 0, lng: 0 };
+                var gps1 = review.verifier_1_gps || { lat: 0, lng: 0 };
+                var gps2 = review.verifier_2_gps || { lat: 0, lng: 0 };
+                
+                var hasVerifier1 = review.verifier_1_photo && review.first_submitter_photo;
+                var hasVerifier2 = review.verifier_2_photo && review.first_submitter_photo;
+                
+                if (hasVerifier1 && hasVerifier2) {
+                    var aiResults = await runAiVerificationCheck(
+                        review.store_id,
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1,
+                        review.verifier_2_photo, gps2
+                    );
+                    
+                    if (aiResults && aiResults.group1 && aiResults.group2) {
+                        var checkResult = (aiResults.group1.is_same_store && aiResults.group2.is_same_store) ? 'passed' : 'failed';
+                        await sb.from('verification_reviews')
+                            .update({
+                                ai_check_group1: aiResults.group1.is_same_store,
+                                ai_check_group2: aiResults.group2.is_same_store,
+                                ai_check_result: checkResult,
+                                ai_checked_at: new Date().toISOString()
+                            })
+                            .eq('id', review.id);
+                        
+                        if (checkResult === 'passed') passedCount++;
+                        else failedCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } else if (hasVerifier1) {
+                    // 只有 1 位認證者
+                    var aiResult1 = await aiCompareStorePhotos(
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1
+                    );
+                    
+                    if (aiResult1 && aiResult1.is_same_store !== undefined) {
+                        var checkResult1 = aiResult1.is_same_store ? 'passed' : 'failed';
+                        await sb.from('verification_reviews')
+                            .update({
+                                ai_check_group1: aiResult1.is_same_store,
+                                ai_check_result: checkResult1,
+                                ai_checked_at: new Date().toISOString()
+                            })
+                            .eq('id', review.id);
+                        
+                        if (checkResult1 === 'passed') passedCount++;
+                        else failedCount++;
+                    } else {
+                        errorCount++;
+                    }
+                }
+                
+                await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            }
+            
+            processedCount++;
+        }
+        
+        toast('✅ 補做完成：通過 ' + passedCount + ' 間，不通過 ' + failedCount + ' 間，錯誤 ' + errorCount + ' 間');
+        loadVerifications();
+        
+    } catch (e) {
+        toast('補做失敗: ' + e.message, 'error');
+    }
 }
 
 // 退回首發者（整個店鋪刪除）
@@ -5019,7 +5168,143 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+async function getOpenRouterApiKey() {
+    try {
+        var result = await sb.from('app_settings')
+            .select('value')
+            .eq('key', 'openrouter_api_key')
+            .single();
+        if (!result.error && result.data) {
+            return result.data.value;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
 
+// AI 判定照片是否夾公仔店（後台用）
+async function aiCheckClawStore(photoUrl) {
+    try {
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) return null;
+        
+        var prompt = '判斷這張照片是否為夾公仔店（Claw Crane Shop）的門面。只回傳：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'minimax/minimax-m3',
+                max_tokens: 1000,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: photoUrl, detail: 'low' } }
+                        ]
+                    }
+                ]
+            })
+        });
+        
+        if (!response.ok) return null;
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        if (!content) return null;
+        
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        try {
+            return JSON.parse(cleanContent);
+        } catch (e) {
+            var startIdx = cleanContent.indexOf('{');
+            var endIdx = cleanContent.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                return JSON.parse(cleanContent.slice(startIdx, endIdx + 1));
+            }
+            return null;
+        }
+    } catch (e) {
+        return null;
+    }
+}
+
+// AI 核對兩張照片（後台用）
+async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
+    try {
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) return null;
+        
+        var gpsDistance = Math.round(calculateDistance(gps1.lat, gps1.lng, gps2.lat, gps2.lng));
+        var prompt = '比較兩張照片是否同一店鋪門面。只回傳：{"is_same_store": true或false, "confidence_score": 0.0到1.0}';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'minimax/minimax-m3',
+                max_tokens: 1000,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: photo1Url, detail: 'low' } },
+                            { type: 'image_url', image_url: { url: photo2Url, detail: 'low' } }
+                        ]
+                    }
+                ]
+            })
+        });
+        
+        if (!response.ok) return null;
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        if (!content) return null;
+        
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        try {
+            return JSON.parse(cleanContent);
+        } catch (e) {
+            var startIdx = cleanContent.indexOf('{');
+            var endIdx = cleanContent.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                return JSON.parse(cleanContent.slice(startIdx, endIdx + 1));
+            }
+            return null;
+        }
+    } catch (e) {
+        return null;
+    }
+}
+
+// 完整 AI 核對（後台用）
+async function runAiVerificationCheck(storeId, firstSubmitterPhoto, firstSubmitterGps, verifier1Photo, verifier1Gps, verifier2Photo, verifier2Gps) {
+    var results = { group1: null, group2: null, allPassed: false };
+    
+    if (firstSubmitterPhoto && verifier1Photo) {
+        results.group1 = await aiCompareStorePhotos(firstSubmitterPhoto, firstSubmitterGps, verifier1Photo, verifier1Gps);
+    }
+    await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+    if (firstSubmitterPhoto && verifier2Photo) {
+        results.group2 = await aiCompareStorePhotos(firstSubmitterPhoto, firstSubmitterGps, verifier2Photo, verifier2Gps);
+    }
+    
+    if (results.group1 && results.group2) {
+        results.allPassed = results.group1.is_same_store === true && results.group2.is_same_store === true;
+    } else if (results.group1 && !results.group2) {
+        results.allPassed = results.group1.is_same_store === true;
+    }
+    
+    return results;
+}
 </script>
 
 </body>
