@@ -2642,17 +2642,29 @@ function loadVerifications() {
 
 // 批次補做 AI 核對（未核對的舊資料）
 async function batchAiCheckUnchecked() {
+    console.log('🔄 1. 開始批次核對');
+    
     if (!confirm('確定要為所有未核對的舊資料補做 AI 核對嗎？\n\n此操作將逐筆呼叫 AI，可能需要數分鐘。')) return;
     
+    console.log('✅ 2. 確認通過');
     toast('🔄 開始補做 AI 核對...');
     
     try {
         // 查詢所有未核對的 verification_reviews
+        console.log('🔍 3. 查詢未核對記錄...');
+        
+        var { data: nullReviews } = await sb.from('verification_reviews')
+            .select('*')
+            .is('ai_check_result', null);
         var { data: uncheckedReviews } = await sb.from('verification_reviews')
             .select('*')
-            .or('ai_check_result.is.null,ai_check_result.eq.unchecked');
+            .eq('ai_check_result', 'unchecked');
         
-        if (!uncheckedReviews || uncheckedReviews.length === 0) {
+        var allUnchecked = (nullReviews || []).concat(uncheckedReviews || []);
+        
+        console.log('🔍 4. 查詢完成，需要處理:', allUnchecked.length, '筆');
+        
+        if (allUnchecked.length === 0) {
             toast('✅ 沒有需要補做的記錄');
             loadVerifications();
             return;
@@ -2663,11 +2675,13 @@ async function batchAiCheckUnchecked() {
         var failedCount = 0;
         var errorCount = 0;
         
-        for (var i = 0; i < uncheckedReviews.length; i++) {
-            var review = uncheckedReviews[i];
+        for (var i = 0; i < allUnchecked.length; i++) {
+            var review = allUnchecked[i];
+            console.log('🔄 5.' + (i + 1) + ' 處理 store_id:', review.store_id);
             
             // 補做提交 AI 判定
             if (!review.submit_ai_status) {
+                console.log('   📸 補做提交 AI 判定...');
                 var storeId = review.store_id;
                 var { data: store } = await sb.from('claw_stores')
                     .select('photo, ai_verification_status')
@@ -2676,6 +2690,8 @@ async function batchAiCheckUnchecked() {
                 
                 if (store && store.photo && store.ai_verification_status === 'unchecked') {
                     var submitAiResult = await aiCheckClawStore(store.photo);
+                    console.log('   提交 AI 結果:', submitAiResult);
+                    
                     if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
                         var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
                         await sb.from('claw_stores')
@@ -2684,6 +2700,7 @@ async function batchAiCheckUnchecked() {
                         await sb.from('verification_reviews')
                             .update({ submit_ai_status: submitStatus })
                             .eq('id', review.id);
+                        console.log('   ✅ 提交 AI 已寫入:', submitStatus);
                     }
                     await new Promise(function(resolve) { setTimeout(resolve, 2000); });
                 }
@@ -2691,6 +2708,8 @@ async function batchAiCheckUnchecked() {
             
             // 補做認證 AI 核對
             if (!review.ai_check_result || review.ai_check_result === 'unchecked') {
+                console.log('   🔍 補做認證 AI 核對...');
+                
                 var firstGps = review.first_submitter_gps || { lat: 0, lng: 0 };
                 var gps1 = review.verifier_1_gps || { lat: 0, lng: 0 };
                 var gps2 = review.verifier_2_gps || { lat: 0, lng: 0 };
@@ -2699,12 +2718,16 @@ async function batchAiCheckUnchecked() {
                 var hasVerifier2 = review.verifier_2_photo && review.first_submitter_photo;
                 
                 if (hasVerifier1 && hasVerifier2) {
+                    // 有 2 位認證者
+                    console.log('   有 2 位認證者，執行完整核對...');
                     var aiResults = await runAiVerificationCheck(
                         review.store_id,
                         review.first_submitter_photo, firstGps,
                         review.verifier_1_photo, gps1,
                         review.verifier_2_photo, gps2
                     );
+                    
+                    console.log('   AI 核對結果:', aiResults);
                     
                     if (aiResults && aiResults.group1 && aiResults.group2) {
                         var checkResult = (aiResults.group1.is_same_store && aiResults.group2.is_same_store) ? 'passed' : 'failed';
@@ -2717,17 +2740,22 @@ async function batchAiCheckUnchecked() {
                             })
                             .eq('id', review.id);
                         
+                        console.log('   ✅ 已寫入:', checkResult);
                         if (checkResult === 'passed') passedCount++;
                         else failedCount++;
                     } else {
+                        console.log('   ⚠️ AI 沒回應');
                         errorCount++;
                     }
                 } else if (hasVerifier1) {
                     // 只有 1 位認證者
+                    console.log('   只有 1 位認證者，執行單組核對...');
                     var aiResult1 = await aiCompareStorePhotos(
                         review.first_submitter_photo, firstGps,
                         review.verifier_1_photo, gps1
                     );
+                    
+                    console.log('   AI 結果:', aiResult1);
                     
                     if (aiResult1 && aiResult1.is_same_store !== undefined) {
                         var checkResult1 = aiResult1.is_same_store ? 'passed' : 'failed';
@@ -2739,23 +2767,31 @@ async function batchAiCheckUnchecked() {
                             })
                             .eq('id', review.id);
                         
+                        console.log('   ✅ 已寫入:', checkResult1);
                         if (checkResult1 === 'passed') passedCount++;
                         else failedCount++;
                     } else {
+                        console.log('   ⚠️ AI 沒回應');
                         errorCount++;
                     }
+                } else {
+                    console.log('   ⚠️ 缺少照片，跳過');
+                    errorCount++;
                 }
                 
                 await new Promise(function(resolve) { setTimeout(resolve, 2000); });
             }
             
             processedCount++;
+            console.log('   📊 進度:', processedCount + '/' + allUnchecked.length);
         }
         
+        console.log('🎉 6. 全部完成。通過:', passedCount, '不通過:', failedCount, '錯誤:', errorCount);
         toast('✅ 補做完成：通過 ' + passedCount + ' 間，不通過 ' + failedCount + ' 間，錯誤 ' + errorCount + ' 間');
         loadVerifications();
         
     } catch (e) {
+        console.error('❌ 批次失敗:', e);
         toast('補做失敗: ' + e.message, 'error');
     }
 }
