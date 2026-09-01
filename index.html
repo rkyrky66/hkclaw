@@ -11044,7 +11044,7 @@ async function aiCheckClawStore(photoUrl) {
             return null;
         }
         
-        var prompt = '判斷這張照片是否為夾公仔店（Claw Crane Shop）的門面。只回傳：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
+        var prompt = '你是一個資深的商業街景與店面影像識別專家。任務：請判斷這張照片的主體店面是否為「夾公仔店（Claw Crane Shop）」。請注意以下邊界規則：1. 香港許多夾公仔店屬於無人自助店，常會與「24小時自助提貨櫃」或「其他行業的自提點（如電單車用品自提）」分租同一個狹窄店面。2. 只要店面範圍內有出現「夾公仔機 / 娃娃機（機台內有抓爪、亮燈、裝有公仔玩偶）」作為主要陳列，不論店面多麼狹窄、或是否複合了其他自提立牌，皆應判定為 true。請嚴格依據以下 JSON 格式回傳，不要包含任何其他文字或 Markdown 標記：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
         
         var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',

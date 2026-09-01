@@ -2673,9 +2673,10 @@ function loadVerifications() {
                                 (r.verifier_2_device ? '<span class="status-badge ' + group2Color + '">🔍 組2：' + group2Status + '</span>' : '') +
                             '</div>' +
                             (r.manual_pass === true ? '<div style="font-size:11px;color:var(--success);margin-bottom:8px;">🧑 人工核對通過（' + (r.manual_passed_by || '管理員') + '）</div>' : '') +
-                            '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-                                (r.manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassVerification(\'' + s.id + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')">✅ 人工通過</button>' : '') +
-                            '</div>' +
+                            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">' +
+    '<button class="btn-sm warning" onclick="singleAiCheck(\'' + s.id + '\')">🔄 單獨 AI 核對</button>' +
+    (r.manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassVerification(\'' + s.id + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')">✅ 人工通過</button>' : '') +
+'</div>' +
                             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">' +
                                 '<div class="compare-card">' +
                                     '<div class="label">📌 首發者</div>' +
@@ -2759,6 +2760,128 @@ async function manualPassVerification(storeId, storeName) {
         
     } catch (e) {
         toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 單獨對某店鋪執行 AI 核對
+async function singleAiCheck(storeId) {
+    if (!confirm('確定要對此店鋪重新執行 AI 核對嗎？\n\n此操作將重新執行提交 AI 判定和認證 AI 核對。')) return;
+    
+    toast('🔄 開始 AI 核對...');
+    
+    try {
+        var numericStoreId = parseInt(storeId);
+        var stringStoreId = String(storeId);
+        
+        // 1. 查詢店鋪資料
+        var { data: store } = await sb.from('claw_stores')
+            .select('id, name, photo, ai_verification_status')
+            .eq('id', numericStoreId)
+            .single();
+        
+        if (!store) {
+            toast('找不到店鋪', 'error');
+            return;
+        }
+        
+        // 2. 補做提交 AI 判定
+        if (store.photo) {
+            console.log('📸 提交 AI 判定...');
+            var submitAiResult = null;
+            for (var attempt = 0; attempt < 3; attempt++) {
+                submitAiResult = await aiCheckClawStore(store.photo);
+                if (submitAiResult !== null) break;
+                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+            }
+            
+            if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
+                var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
+                await sb.from('claw_stores')
+                    .update({
+                        ai_verification_status: submitStatus,
+                        submit_ai_confidence: submitAiResult.confidence_score || null
+                    })
+                    .eq('id', numericStoreId);
+                console.log('✅ 提交 AI:', submitStatus, submitAiResult.confidence_score);
+            }
+            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+        }
+        
+        // 3. 查詢認證記錄
+        var { data: review } = await sb.from('verification_reviews')
+            .select('*')
+            .eq('store_id', stringStoreId)
+            .maybeSingle();
+        
+        if (review && review.first_submitter_photo) {
+            var firstGps = review.first_submitter_gps || { lat: 0, lng: 0 };
+            var gps1 = review.verifier_1_gps || { lat: 0, lng: 0 };
+            var gps2 = review.verifier_2_gps || { lat: 0, lng: 0 };
+            
+            var hasVerifier1 = review.verifier_1_photo && review.first_submitter_photo;
+            var hasVerifier2 = review.verifier_2_photo && review.first_submitter_photo;
+            
+            if (hasVerifier1 && hasVerifier2) {
+                console.log('🔍 組1 + 組2 核對...');
+                var aiResults = null;
+                for (var attempt2 = 0; attempt2 < 3; attempt2++) {
+                    aiResults = await runAiVerificationCheck(
+                        stringStoreId,
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1,
+                        review.verifier_2_photo, gps2
+                    );
+                    if (aiResults && aiResults.group1 && aiResults.group2) break;
+                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                }
+                
+                if (aiResults && aiResults.group1 && aiResults.group2) {
+                    var checkResult = (aiResults.group1.is_same_store && aiResults.group2.is_same_store) ? 'passed' : 'failed';
+                    await sb.from('verification_reviews')
+                        .update({
+                            ai_check_group1: aiResults.group1.is_same_store,
+                            ai_group1_confidence: aiResults.group1.confidence_score || null,
+                            ai_check_group2: aiResults.group2.is_same_store,
+                            ai_group2_confidence: aiResults.group2.confidence_score || null,
+                            ai_check_result: checkResult,
+                            ai_checked_at: new Date().toISOString()
+                        })
+                        .eq('id', review.id);
+                    console.log('✅ 認證 AI:', checkResult);
+                }
+            } else if (hasVerifier1) {
+                console.log('🔍 組1 核對...');
+                var aiResult1 = null;
+                for (var attempt3 = 0; attempt3 < 3; attempt3++) {
+                    aiResult1 = await aiCompareStorePhotos(
+                        review.first_submitter_photo, firstGps,
+                        review.verifier_1_photo, gps1
+                    );
+                    if (aiResult1 !== null) break;
+                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                }
+                
+                if (aiResult1 && aiResult1.is_same_store !== undefined) {
+                    var checkResult1 = aiResult1.is_same_store ? 'passed' : 'failed';
+                    await sb.from('verification_reviews')
+                        .update({
+                            ai_check_group1: aiResult1.is_same_store,
+                            ai_group1_confidence: aiResult1.confidence_score || null,
+                            ai_check_result: checkResult1,
+                            ai_checked_at: new Date().toISOString()
+                        })
+                        .eq('id', review.id);
+                    console.log('✅ 認證 AI:', checkResult1);
+                }
+            }
+        }
+        
+        toast('✅ AI 核對完成');
+        loadVerifications();
+        
+    } catch (e) {
+        console.error('❌ AI 核對失敗:', e);
+        toast('AI 核對失敗: ' + e.message, 'error');
     }
 }
 
@@ -5382,7 +5505,7 @@ async function aiCheckClawStore(photoUrl) {
         var apiKey = await getOpenRouterApiKey();
         if (!apiKey) return null;
         
-        var prompt = '判斷這張照片是否為夾公仔店（Claw Crane Shop）的門面。只回傳：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
+        var prompt = '你是一個資深的商業街景與店面影像識別專家。任務：請判斷這張照片的主體店面是否為「夾公仔店（Claw Crane Shop）」。請注意以下邊界規則：1. 香港許多夾公仔店屬於無人自助店，常會與「24小時自助提貨櫃」或「其他行業的自提點（如電單車用品自提）」分租同一個狹窄店面。2. 只要店面範圍內有出現「夾公仔機 / 娃娃機（機台內有抓爪、亮燈、裝有公仔玩偶）」作為主要陳列，不論店面多麼狹窄、或是否複合了其他自提立牌，皆應判定為 true。請嚴格依據以下 JSON 格式回傳，不要包含任何其他文字或 Markdown 標記：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
         
         var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -5433,7 +5556,18 @@ async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
         if (!apiKey) return null;
         
         var gpsDistance = Math.round(calculateDistance(gps1.lat, gps1.lng, gps2.lat, gps2.lng));
-        var prompt = '比較兩張照片是否同一店鋪門面。只回傳：{"is_same_store": true或false, "confidence_score": 0.0到1.0}';
+        var prompt = '你是一個資深的街景與商業店面比對專家。請比對照片1與照片2是否為「同一個店鋪門面（包含緊鄰的複合式分租店面）」。\n\n' +
+'已知空間數據：\n' +
+'- 照片1 GPS：' + gps1.lat + ', ' + gps1.lng + '\n' +
+'- 照片2 GPS：' + gps2.lat + ', ' + gps2.lng + '\n' +
+'- 兩張照片實測距離：' + gpsDistance + ' 米（此距離已由系統確認小於50米，代表處於同一個商圈或同一棟大廈邊界內）。\n\n' +
+'比對核心邏輯：\n' +
+'1. 請優先比對照片中「無法移動的建築結構特徵」，例如：柱子位置、天花板燈具型式、左右兩側的固定裝潢、地磚花紋、或者是港式商場常見的梯級結構（如照片中特有的不銹鋼防滑樓梯階級）。\n' +
+'2. 由於很多自助店（如夾公仔店）會更換招牌、或是與其他店鋪（如電單車用品、自提櫃）共享狹窄門口，若「建築背景結構完全一致」，僅是門口擺放的移動式機台、易拉架、海報或招牌文字有變，仍應視為同一個店鋪門面位置（即同一檔位）。\n' +
+'3. 50米內可能存在隔壁鄰居，請仔細分辨是「同一個檔位」還是「隔壁不同的店」。\n\n' +
+'請嚴格依據以下 JSON 格式回傳，不要包含任何其他文字、Markdown 標記或說明：\n' +
+'{"is_same_store": true或false, "confidence_score": 0.0到1.0}';
+
         
         var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
