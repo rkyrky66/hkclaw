@@ -2507,7 +2507,6 @@ function loadVerifications() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
-    // 查詢所有 verification_reviews（不管 AI 狀態）
     sb.from('verification_reviews')
         .select('*')
         .order('created_at', { ascending: false })
@@ -2566,6 +2565,40 @@ function loadVerifications() {
                         var v = data[i];
                         var store = stores[String(v.store_id)] || { name: '未知店鋪', region: '', addr: '', ai_verification_status: 'unchecked' };
                         
+                        // 提交 AI 判定狀態
+                        var submitAiStatus = '⚠️ 未判定';
+                        var submitAiColor = 'pending';
+                        if (store.ai_verification_status === 'passed') {
+                            submitAiStatus = '✅ 通過';
+                            submitAiColor = 'confirmed';
+                        } else if (store.ai_verification_status === 'failed') {
+                            submitAiStatus = '❌ 不通過';
+                            submitAiColor = 'suspicious';
+                        }
+                        
+                        // 認證 AI 組1 狀態
+                        var group1Status = '⚠️ 未核對';
+                        var group1Color = 'pending';
+                        if (v.ai_check_group1 === true) {
+                            group1Status = '✅ 通過';
+                            group1Color = 'confirmed';
+                        } else if (v.ai_check_group1 === false) {
+                            group1Status = '❌ 不通過';
+                            group1Color = 'suspicious';
+                        }
+                        
+                        // 認證 AI 組2 狀態
+                        var group2Status = '⚠️ 未核對';
+                        var group2Color = 'pending';
+                        if (v.ai_check_group2 === true) {
+                            group2Status = '✅ 通過';
+                            group2Color = 'confirmed';
+                        } else if (v.ai_check_group2 === false) {
+                            group2Status = '❌ 不通過';
+                            group2Color = 'suspicious';
+                        }
+                        
+                        // 整體 AI 核對結果
                         var aiStatus = v.ai_check_result || 'unchecked';
                         var aiStatusBadge = '';
                         if (aiStatus === 'passed') {
@@ -2575,9 +2608,6 @@ function loadVerifications() {
                         } else {
                             aiStatusBadge = '<span class="status-badge pending">🤖 未核對</span>';
                         }
-                        
-                        var submitAiStatus = store.ai_verification_status === 'passed' ? '✅ 通過' : 
-                                            store.ai_verification_status === 'failed' ? '❌ 不通過' : '⚠️ 未判定';
                         
                         // GPS 距離
                         var firstGps = v.first_submitter_gps || { lat: null, lng: null };
@@ -2598,8 +2628,11 @@ function loadVerifications() {
                                 '<strong style="font-size:16px;">🏪 ' + store.name + '</strong>' +
                                 aiStatusBadge +
                             '</div>' +
-                            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' +
-                                '<div>🤖 提交 AI 判定：' + submitAiStatus + '</div>' +
+                            // AI 核對三個結果
+                            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' +
+                                '<span class="status-badge ' + submitAiColor + '">📸 提交AI：' + submitAiStatus + '</span>' +
+                                '<span class="status-badge ' + group1Color + '">🔍 組1：' + group1Status + '</span>' +
+                                (v.verifier_2_device ? '<span class="status-badge ' + group2Color + '">🔍 組2：' + group2Status + '</span>' : '') +
                             '</div>' +
                             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">' +
                                 // 首發者
