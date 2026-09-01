@@ -2507,165 +2507,177 @@ function loadVerifications() {
     var container = document.getElementById('tab-content');
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
     
-    sb.from('verification_reviews')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .then(function(result) {
-            if (result.error) throw result.error;
-            var data = result.data || [];
+    // 查詢所有 claw_stores + LEFT JOIN verification_reviews
+    sb.from('claw_stores')
+        .select('id, name, region, addr, photo, lat, lng, ai_verification_status, submit_ai_confidence, status, first_verifier_device, second_verifier_device')
+        .order('id', { ascending: false })
+        .then(function(storeResult) {
+            if (storeResult.error) throw storeResult.error;
+            var stores = storeResult.data || [];
             
-            if (data.length === 0) {
-                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有認證記錄</p></div>';
+            if (stores.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有店鋪</p></div>';
                 return;
             }
             
-            // 排序：failed → unchecked/null → passed
-            data.sort(function(a, b) {
-                var order = { 'failed': 0, 'unchecked': 1, 'passed': 2 };
-                var aStatus = a.ai_check_result || 'unchecked';
-                var bStatus = b.ai_check_result || 'unchecked';
-                var aOrder = order[aStatus] !== undefined ? order[aStatus] : 1;
-                var bOrder = order[bStatus] !== undefined ? order[bStatus] : 1;
-                return aOrder - bOrder;
-            });
-            
-            var storeIds = [];
-            for (var i = 0; i < data.length; i++) {
-                var sid = parseInt(data[i].store_id);
-                if (!isNaN(sid) && storeIds.indexOf(sid) === -1) {
-                    storeIds.push(sid);
-                }
-            }
-            
-            return sb.from('claw_stores')
-                .select('id, name, region, addr, ai_verification_status')
-                .in('id', storeIds)
-                .then(function(storeResult) {
-                    var stores = {};
-                    var storeData = storeResult.data || [];
-                    for (var i = 0; i < storeData.length; i++) {
-                        stores[String(storeData[i].id)] = storeData[i];
+            // 查詢 verification_reviews
+            return sb.from('verification_reviews')
+                .select('*')
+                .then(function(reviewResult) {
+                    var reviews = {};
+                    var reviewData = reviewResult.data || [];
+                    for (var i = 0; i < reviewData.length; i++) {
+                        reviews[reviewData[i].store_id] = reviewData[i];
                     }
                     
                     // 統計
-                    var failedCount = data.filter(function(v) { return v.ai_check_result === 'failed'; }).length;
-                    var uncheckedCount = data.filter(function(v) { return !v.ai_check_result || v.ai_check_result === 'unchecked'; }).length;
-                    var passedCount = data.filter(function(v) { return v.ai_check_result === 'passed'; }).length;
+                    var failedCount = 0;
+                    var uncheckedCount = 0;
+                    var passedCount = 0;
+                    var manualCount = 0;
+                    var noReviewCount = 0;
+                    
+                    for (var i = 0; i < stores.length; i++) {
+                        var s = stores[i];
+                        var r = reviews[String(s.id)];
+                        if (!r) {
+                            noReviewCount++;
+                        } else if (r.manual_pass === true) {
+                            manualCount++;
+                        } else if (r.ai_check_result === 'failed') {
+                            failedCount++;
+                        } else if (r.ai_check_result === 'passed') {
+                            passedCount++;
+                        } else {
+                            uncheckedCount++;
+                        }
+                    }
                     
                     var html = '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
                         '<span style="font-size:13px;color:var(--text-muted);">🔍 認證審核</span>' +
                         '<span class="status-badge suspicious">❌ 失敗 ' + failedCount + '</span>' +
                         '<span class="status-badge pending">⏳ 未核對 ' + uncheckedCount + '</span>' +
-                        '<span class="status-badge confirmed">✅ 通過 ' + passedCount + '</span>' +
+                        '<span class="status-badge confirmed">✅ AI 通過 ' + passedCount + '</span>' +
+                        '<span class="status-badge confirmed">🧑 人工通過 ' + manualCount + '</span>' +
+                        '<span class="status-badge pending">📝 無認證 ' + noReviewCount + '</span>' +
                         '<button class="btn-sm warning" onclick="batchAiCheckUnchecked()" style="margin-left:auto;">🔄 補做 AI 核對</button>' +
-                    '</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">💡 排序：失敗 → 未核對 → 通過（第一間通過代表後面全部通過）</div>';
+                    '</div>';
                     
-                    for (var i = 0; i < data.length; i++) {
-                        var v = data[i];
-                        var store = stores[String(v.store_id)] || { name: '未知店鋪', region: '', addr: '', ai_verification_status: 'unchecked' };
+                    // 排序：failed → unchecked → 無認證 → 人工通過 → passed
+                    stores.sort(function(a, b) {
+                        function getOrder(s) {
+                            var r = reviews[String(s.id)];
+                            if (!r) return 2;
+                            if (r.manual_pass === true) return 3;
+                            if (r.ai_check_result === 'failed') return 0;
+                            if (r.ai_check_result === 'passed') return 4;
+                            return 1;
+                        }
+                        return getOrder(a) - getOrder(b);
+                    });
+                    
+                    for (var i = 0; i < stores.length; i++) {
+                        var s = stores[i];
+                        var r = reviews[String(s.id)] || {};
                         
-                                                // 提交 AI 判定狀態
+                        var firstGps = { lat: s.lat, lng: s.lng };
+                        var gps1 = r.verifier_1_gps || { lat: null, lng: null };
+                        var gps2 = r.verifier_2_gps || { lat: null, lng: null };
+                        
+                        var dist1 = null;
+                        var dist2 = null;
+                        if (s.lat && gps1.lat) {
+                            dist1 = Math.round(calculateDistance(s.lat, s.lng, gps1.lat, gps1.lng) * 1000);
+                        }
+                        if (s.lat && gps2.lat) {
+                            dist2 = Math.round(calculateDistance(s.lat, s.lng, gps2.lat, gps2.lng) * 1000);
+                        }
+                        
+                        // AI 狀態
                         var submitAiStatus = '⚠️ 未判定';
                         var submitAiColor = 'pending';
-                        var submitAiConfidence = store.submit_ai_confidence !== undefined && store.submit_ai_confidence !== null 
-                            ? '（信心 ' + Math.round(store.submit_ai_confidence * 100) + '%）' : '';
-                        if (store.ai_verification_status === 'passed') {
+                        var submitAiConfidence = s.submit_ai_confidence !== undefined && s.submit_ai_confidence !== null 
+                            ? '（信心 ' + Math.round(s.submit_ai_confidence * 100) + '%）' : '';
+                        if (s.ai_verification_status === 'passed') {
                             submitAiStatus = '✅ 通過' + submitAiConfidence;
                             submitAiColor = 'confirmed';
-                        } else if (store.ai_verification_status === 'failed') {
+                        } else if (s.ai_verification_status === 'failed') {
                             submitAiStatus = '❌ 不通過' + submitAiConfidence;
                             submitAiColor = 'suspicious';
                         }
                         
-                        // 認證 AI 組1 狀態
                         var group1Status = '⚠️ 未核對';
                         var group1Color = 'pending';
-                        var group1Confidence = v.ai_group1_confidence !== undefined && v.ai_group1_confidence !== null 
-                            ? '（信心 ' + Math.round(v.ai_group1_confidence * 100) + '%）' : '';
-                        if (v.ai_check_group1 === true) {
+                        var group1Confidence = r.ai_group1_confidence !== undefined && r.ai_group1_confidence !== null 
+                            ? '（信心 ' + Math.round(r.ai_group1_confidence * 100) + '%）' : '';
+                        if (r.ai_check_group1 === true) {
                             group1Status = '✅ 通過' + group1Confidence;
                             group1Color = 'confirmed';
-                        } else if (v.ai_check_group1 === false) {
+                        } else if (r.ai_check_group1 === false) {
                             group1Status = '❌ 不通過' + group1Confidence;
                             group1Color = 'suspicious';
                         }
                         
-                        // 認證 AI 組2 狀態
                         var group2Status = '⚠️ 未核對';
                         var group2Color = 'pending';
-                        var group2Confidence = v.ai_group2_confidence !== undefined && v.ai_group2_confidence !== null 
-                            ? '（信心 ' + Math.round(v.ai_group2_confidence * 100) + '%）' : '';
-                        if (v.ai_check_group2 === true) {
+                        var group2Confidence = r.ai_group2_confidence !== undefined && r.ai_group2_confidence !== null 
+                            ? '（信心 ' + Math.round(r.ai_group2_confidence * 100) + '%）' : '';
+                        if (r.ai_check_group2 === true) {
                             group2Status = '✅ 通過' + group2Confidence;
                             group2Color = 'confirmed';
-                        } else if (v.ai_check_group2 === false) {
+                        } else if (r.ai_check_group2 === false) {
                             group2Status = '❌ 不通過' + group2Confidence;
                             group2Color = 'suspicious';
                         }
                         
-                        // 整體 AI 核對結果
-                        var aiStatus = v.ai_check_result || 'unchecked';
-                        var aiStatusBadge = '';
-                        if (aiStatus === 'passed') {
-                            aiStatusBadge = '<span class="status-badge confirmed">🤖 AI 核對通過</span>';
-                        } else if (aiStatus === 'failed') {
-                            aiStatusBadge = '<span class="status-badge suspicious">🤖 AI 核對不通過</span>';
-                        } else {
-                            aiStatusBadge = '<span class="status-badge pending">🤖 未核對</span>';
-                        }
-                        
-                        // GPS 距離
-                        var firstGps = v.first_submitter_gps || { lat: null, lng: null };
-                        var gps1 = v.verifier_1_gps || { lat: null, lng: null };
-                        var gps2 = v.verifier_2_gps || { lat: null, lng: null };
-                        
-                        var dist1 = null;
-                        var dist2 = null;
-                        if (firstGps.lat && gps1.lat) {
-                            dist1 = Math.round(calculateDistance(firstGps.lat, firstGps.lng, gps1.lat, gps1.lng) * 1000);
-                        }
-                        if (firstGps.lat && gps2.lat) {
-                            dist2 = Math.round(calculateDistance(firstGps.lat, firstGps.lng, gps2.lat, gps2.lng) * 1000);
+                        // 縮圖
+                        function createThumb(photoUrl, label) {
+                            if (!photoUrl) return '<div style="width:80px;height:80px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;color:var(--text-muted);font-size:11px;">' + label + '</div>';
+                            return '<img src="' + photoUrl + '" onclick="openImageLightbox(\'' + photoUrl + '\')" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;" alt="' + label + '" />';
                         }
                         
                         html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg-card);">' +
                             '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
-                                '<strong style="font-size:16px;">🏪 ' + store.name + '</strong>' +
-                                aiStatusBadge +
+                                '<strong style="font-size:16px;">🏪 ' + (s.name || '未知') + '</strong>' +
+                                (r.manual_pass === true ? '<span class="status-badge confirmed">🧑 人工核對通過</span>' : 
+                                (r.ai_check_result === 'passed' ? '<span class="status-badge confirmed">🤖 AI 核對通過</span>' : 
+                                '<span class="status-badge pending">⏳ 待核對</span>')) +
                             '</div>' +
-                            // AI 核對三個結果
                             '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' +
                                 '<span class="status-badge ' + submitAiColor + '">📸 提交AI：' + submitAiStatus + '</span>' +
                                 '<span class="status-badge ' + group1Color + '">🔍 組1：' + group1Status + '</span>' +
-                                (v.verifier_2_device ? '<span class="status-badge ' + group2Color + '">🔍 組2：' + group2Status + '</span>' : '') +
+                                (r.verifier_2_device ? '<span class="status-badge ' + group2Color + '">🔍 組2：' + group2Status + '</span>' : '') +
+                            '</div>' +
+                            (r.manual_pass === true ? '<div style="font-size:11px;color:var(--success);margin-bottom:8px;">🧑 人工核對通過（' + (r.manual_passed_by || '管理員') + '）</div>' : '') +
+                            '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+                                (r.manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassVerification(\'' + s.id + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')">✅ 人工通過</button>' : '') +
                             '</div>' +
                             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">' +
                                 // 首發者
                                 '<div class="compare-card">' +
                                     '<div class="label">📌 首發者</div>' +
-                                    '<div style="font-size:11px;color:var(--text-muted);">' + (v.first_submitter_device || '未知') + '</div>' +
-                                    (v.first_submitter_photo ? '<img src="' + v.first_submitter_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
-                                    '<div class="gps">📍 ' + (firstGps.lat || 'N/A') + ', ' + (firstGps.lng || 'N/A') + '</div>' +
-                                    '<button class="btn-sm danger" onclick="revokeSubmitter(\'' + v.store_id + '\', \'' + (v.first_submitter_device || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回首發者</button>' +
+                                    '<div style="font-size:11px;color:var(--text-muted);">' + (r.first_submitter_device || (s.submitted_by_device || '未知')) + '</div>' +
+                                    createThumb(s.photo, '無照片') +
+                                    '<div class="gps">📍 ' + (s.lat || 'N/A') + ', ' + (s.lng || 'N/A') + '</div>' +
+                                    '<button class="btn-sm danger" onclick="revokeSubmitter(\'' + s.id + '\', \'' + (r.first_submitter_device || s.submitted_by_device || '') + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回首發者</button>' +
                                 '</div>' +
                                 // 認證者1
                                 '<div class="compare-card">' +
                                     '<div class="label">🔍 認證者1</div>' +
-                                    '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_1_device || '未知') + '</div>' +
-                                    (v.verifier_1_photo ? '<img src="' + v.verifier_1_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無照片</div>') +
-                                    '<div class="gps">📍 ' + (gps1.lat || 'N/A') + ', ' + (gps1.lng || 'N/A') + '</div>' +
-                                    (dist1 !== null ? '<div style="font-size:10px;color:var(--warning);">距離首發：' + dist1 + ' 米</div>' : '') +
-                                    (v.verifier_1_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + (v.verifier_1_device || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者1</button>' : '') +
+                                    '<div style="font-size:11px;color:var(--text-muted);">' + (r.verifier_1_device || '無') + '</div>' +
+                                    createThumb(r.verifier_1_photo, '無認證') +
+                                    (gps1.lat ? '<div class="gps">📍 ' + gps1.lat + ', ' + gps1.lng + '</div>' : '') +
+                                    (dist1 !== null ? '<div style="font-size:10px;color:var(--warning);">距離：' + dist1 + ' 米</div>' : '') +
+                                    (r.verifier_1_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + s.id + '\', \'' + (r.verifier_1_device || '') + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者1</button>' : '') +
                                 '</div>' +
                                 // 認證者2
                                 '<div class="compare-card">' +
                                     '<div class="label">🔍 認證者2</div>' +
-                                    '<div style="font-size:11px;color:var(--text-muted);">' + (v.verifier_2_device || '無') + '</div>' +
-                                    (v.verifier_2_photo ? '<img src="' + v.verifier_2_photo + '" class="photo" />' : '<div style="height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">無認證者2</div>') +
+                                    '<div style="font-size:11px;color:var(--text-muted);">' + (r.verifier_2_device || '無') + '</div>' +
+                                    createThumb(r.verifier_2_photo, '無認證') +
                                     (gps2.lat ? '<div class="gps">📍 ' + gps2.lat + ', ' + gps2.lng + '</div>' : '') +
-                                    (dist2 !== null ? '<div style="font-size:10px;color:var(--warning);">距離首發：' + dist2 + ' 米</div>' : '') +
-                                    (v.verifier_2_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + v.store_id + '\', \'' + (v.verifier_2_device || '') + '\', \'' + store.name.replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者2</button>' : '') +
+                                    (dist2 !== null ? '<div style="font-size:10px;color:var(--warning);">距離：' + dist2 + ' 米</div>' : '') +
+                                    (r.verifier_2_device ? '<button class="btn-sm danger" onclick="revokeVerification(\'' + s.id + '\', \'' + (r.verifier_2_device || '') + '\', \'' + (s.name || '').replace(/'/g, "\\'") + '\')" style="margin-top:6px;font-size:10px;">🗑️ 退回認證者2</button>' : '') +
                                 '</div>' +
                             '</div>' +
                         '</div>';
@@ -2677,6 +2689,54 @@ function loadVerifications() {
         .catch(function(error) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
         });
+}
+
+// 人工通過（等同 AI 核對通過）
+async function manualPassVerification(storeId, storeName) {
+    if (!confirm('確定人工通過店鋪「' + storeName + '」嗎？\n\n此操作等同 AI 核對通過，店鋪將變為已認證。')) return;
+    
+    try {
+        var numericStoreId = parseInt(storeId);
+        
+        // 1. 更新 claw_stores
+        await sb.from('claw_stores')
+            .update({
+                status: 'verified',
+                is_verified: true,
+                submitter_reward_claimed: false  // 觸發首發者追加 +30
+            })
+            .eq('id', numericStoreId);
+        
+        // 2. 更新 verification_reviews（如有）
+        await sb.from('verification_reviews')
+            .update({
+                manual_pass: true,
+                manual_passed_at: new Date().toISOString(),
+                manual_passed_by: currentUser ? currentUser.display_name : 'admin',
+                ai_check_result: 'passed',  // 等同 AI 通過
+                ai_checked_at: new Date().toISOString(),
+                admin_status: 'reviewed'
+            })
+            .eq('store_id', String(storeId));
+        
+        // 3. 記錄操作
+        await sb.from('admin_actions')
+            .insert({
+                store_id: String(storeId),
+                action_type: 'manual_pass_verification',
+                target_type: 'store',
+                target_id: String(storeId),
+                reason: '人工核對通過',
+                performed_by: currentUser ? currentUser.display_name : 'admin',
+                metadata: { store_name: storeName }
+            });
+        
+        toast('✅ 人工通過成功，等同 AI 核對通過');
+        loadVerifications();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
 }
 
 // 批次補做 AI 核對（未核對的舊資料）
@@ -2718,34 +2778,47 @@ async function batchAiCheckUnchecked() {
             var review = allUnchecked[i];
             console.log('🔄 5.' + (i + 1) + ' 處理 store_id:', review.store_id);
             
-            // 補做提交 AI 判定
-            if (!review.submit_ai_status) {
-                console.log('   📸 補做提交 AI 判定...');
-                var storeId = review.store_id;
-                var { data: store } = await sb.from('claw_stores')
-                    .select('photo, ai_verification_status')
+            // ✅ 補做提交 AI 判定（用 claw_stores.ai_verification_status 判斷）
+            var storeId = review.store_id;
+            var store = null;
+            try {
+                var storeQuery = await sb.from('claw_stores')
+                    .select('id, photo, ai_verification_status')
                     .eq('id', parseInt(storeId))
                     .maybeSingle();
-                
-                if (store && store.photo && store.ai_verification_status === 'unchecked') {
-                    var submitAiResult = await aiCheckClawStore(store.photo);
-                    console.log('   提交 AI 結果:', submitAiResult);
-                    
-                    if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
-                        var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
-                        await sb.from('claw_stores')
-                            .update({ ai_verification_status: submitStatus })
-                            .eq('id', parseInt(storeId));
-                        await sb.from('verification_reviews')
-                            .update({ submit_ai_status: submitStatus })
-                            .eq('id', review.id);
-                        console.log('   ✅ 提交 AI 已寫入:', submitStatus);
-                    }
-                    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
-                }
+                store = storeQuery.data;
+            } catch (e) {
+                console.warn('   查詢店鋪失敗:', e.message);
             }
             
-            // 補做認證 AI 核對
+            if (!store) {
+                console.log('   ⚠️ 店鋪不存在，跳過');
+                errorCount++;
+                processedCount++;
+                continue;
+            }
+            
+            if (store.photo && (!store.ai_verification_status || store.ai_verification_status === 'unchecked')) {
+                console.log('   📸 補做提交 AI 判定...');
+                var submitAiResult = await aiCheckClawStore(store.photo);
+                console.log('   提交 AI 結果:', submitAiResult);
+                
+                if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
+                    var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
+                    await sb.from('claw_stores')
+                        .update({ 
+                            ai_verification_status: submitStatus,
+                            submit_ai_confidence: submitAiResult.confidence_score || null
+                        })
+                        .eq('id', parseInt(storeId));
+                    console.log('   ✅ 提交 AI 已寫入:', submitStatus);
+                }
+                await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            } else {
+                console.log('   ⏭️ 提交 AI 已有結果或無照片，跳過');
+            }
+            
+            // ✅ 補做認證 AI 核對
             if (!review.ai_check_result || review.ai_check_result === 'unchecked') {
                 console.log('   🔍 補做認證 AI 核對...');
                 
@@ -2757,7 +2830,6 @@ async function batchAiCheckUnchecked() {
                 var hasVerifier2 = review.verifier_2_photo && review.first_submitter_photo;
                 
                 if (hasVerifier1 && hasVerifier2) {
-                    // 有 2 位認證者
                     console.log('   有 2 位認證者，執行完整核對...');
                     var aiResults = await runAiVerificationCheck(
                         review.store_id,
@@ -2770,7 +2842,7 @@ async function batchAiCheckUnchecked() {
                     
                     if (aiResults && aiResults.group1 && aiResults.group2) {
                         var checkResult = (aiResults.group1.is_same_store && aiResults.group2.is_same_store) ? 'passed' : 'failed';
-                                                await sb.from('verification_reviews')
+                        await sb.from('verification_reviews')
                             .update({
                                 ai_check_group1: aiResults.group1.is_same_store,
                                 ai_group1_confidence: aiResults.group1.confidence_score || null,
@@ -2789,7 +2861,6 @@ async function batchAiCheckUnchecked() {
                         errorCount++;
                     }
                 } else if (hasVerifier1) {
-                    // 只有 1 位認證者
                     console.log('   只有 1 位認證者，執行單組核對...');
                     var aiResult1 = await aiCompareStorePhotos(
                         review.first_submitter_photo, firstGps,
@@ -2803,6 +2874,7 @@ async function batchAiCheckUnchecked() {
                         await sb.from('verification_reviews')
                             .update({
                                 ai_check_group1: aiResult1.is_same_store,
+                                ai_group1_confidence: aiResult1.confidence_score || null,
                                 ai_check_result: checkResult1,
                                 ai_checked_at: new Date().toISOString()
                             })
@@ -5382,6 +5454,15 @@ async function runAiVerificationCheck(storeId, firstSubmitterPhoto, firstSubmitt
     
     return results;
 }
+
+function openImageLightbox(src) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    overlay.innerHTML = '<img src="' + src + '" style="max-width:95%;max-height:95vh;object-fit:contain;" />';
+    overlay.onclick = function() { overlay.remove(); };
+    document.body.appendChild(overlay);
+}
+
 </script>
 
 </body>
