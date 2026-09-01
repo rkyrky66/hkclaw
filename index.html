@@ -3724,6 +3724,14 @@ hour24: s.hour24 !== undefined && s.hour24 !== null ? s.hour24 : null,
         submitted_by_device: s.submitted_by_device || null,
         verification_count: s.verification_count || 0,
         verification_count_2: s.verification_count_2 || 0,
+        // ✅ 新增以下欄位
+        first_verifier_device: s.first_verifier_device || null,
+        first_verifier_name: s.first_verifier_name || null,
+        first_verified_at: s.first_verified_at || null,
+        second_verifier_device: s.second_verifier_device || null,
+        second_verifier_name: s.second_verifier_name || null,
+        second_verified_at: s.second_verified_at || null,
+        ai_verification_status: s.ai_verification_status || 'unchecked',
         show_first_photo: s.show_first_photo !== false,
 show_verifier_1_photo: s.show_verifier_1_photo === true,
 show_verifier_2_photo: s.show_verifier_2_photo === true,
@@ -4686,7 +4694,11 @@ marker.on('click', function(e) {
     var isVerified = s.verified === "verified";
     var bgColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
-    var displayName = '';
+    var isNewStore = !s.first_verifier_device && s.ai_verification_status === 'passed';
+    var newBadge = isNewStore ? '🔥 ' : '';
+    
+    // 然後 displayName 改為
+    var displayName = newBadge + name;
 var charCount = 0;
 for (var i = 0; i < s.name.length; i++) {
     var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
@@ -4899,10 +4911,14 @@ var renderStoreItem = function(s, index) {
     
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
-    if (!isVerified) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 ' + ((s.verification_count || 0) + (s.verification_count_2 || 0)) + '/2</span>';
+        if (!isVerified) {
+        var isFirstVerifier = !s.first_verifier_device;
+        var verifyButtonText = isFirstVerifier ? '🔥 搶先認證 +20分' : '追加認證 +10分';
+        var verifyButtonColor = isFirstVerifier ? '#FFB800' : '#3B82F6';
+        
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + verifyButtonColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + verifyButtonText + '</span>';
     } else {
-        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">認證 ✅</span>';
+        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;">認證 ✅</span>';
     }
     
     if (!hasSupplemented) {
@@ -5300,7 +5316,22 @@ function buildStoreContent(s, _a) {
     var isVerified = s.status === "verified" || s.verified === "verified";
     var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
     var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + totalVerifications + '/2)</span>';
-    
+        // 認證者列表
+    var verifiersHtml = '';
+    var contributors = [];
+    if (s.submitted_by_device) {
+        contributors.push('👤 提交者：' + (s.submitted_by_device === STATE.user.device ? '你' : s.submitted_by_device));
+    }
+    if (s.first_verifier_device) {
+        contributors.push('👤 認證者1：' + (s.first_verifier_device === STATE.user.device ? '你' : (s.first_verifier_name || s.first_verifier_device)));
+    }
+    if (s.second_verifier_device) {
+        contributors.push('👤 認證者2：' + (s.second_verifier_device === STATE.user.device ? '你' : (s.second_verifier_name || s.second_verifier_device)));
+    }
+    if (s.supplemented_by) {
+        contributors.push('👤 補充者：' + (s.supplemented_by === STATE.user.device ? '你' : s.supplemented_by));
+    }
+    verifiersHtml = contributors.length > 0 ? '<div class="mt-2 text-[11px] text-white/40">' + contributors.join('<br>') + '</div>' : '';
     // 獲取貢獻標記資訊
     var markerInfo = getMarkerLevelInfo(s.id);
     var userContribution = getUserContributionForStore(s);
@@ -6830,24 +6861,27 @@ async function submitVerification(storeId) {
                 try {
                     var updateData = {};
                     
-                    if (reviewResult === 'verifier_1') {
-                        // 第一位認證者
+                                        if (reviewResult === 'verifier_1') {
                         updateData = {
                             verification_count: 1,
                             verification_count_2: 0,
                             status: 'pending',
-                            is_verified: false
+                            is_verified: false,
+                            first_verifier_device: verification.verifier_device,
+                            first_verifier_name: STATE.user.name || STATE.user.display_name || '',
+                            first_verified_at: new Date().toISOString()
                         };
                     } else if (reviewResult === 'verifier_2') {
-    // 第二位認證者提交
-    // 暫時不直接通過，等 AI 核對
-    updateData = {
-        verification_count: 1,
-        verification_count_2: 1,
-        status: 'pending',  // ✅ 暫時 pending
-        is_verified: false
-    };
-}
+                        updateData = {
+                            verification_count: 1,
+                            verification_count_2: 1,
+                            status: 'pending',
+                            is_verified: false,
+                            second_verifier_device: verification.verifier_device,
+                            second_verifier_name: STATE.user.name || STATE.user.display_name || '',
+                            second_verified_at: new Date().toISOString()
+                        };
+                    }
                     // 🕵️ 除錯 log
 console.log('🕵️ updateData:', JSON.stringify(updateData));
 console.log('🕵️ updateData keys:', Object.keys(updateData).length);
@@ -11044,207 +11078,282 @@ function enableSubmitButton(btn, successText, btnId) {
         btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
     }
 }
+
+// ============================================================
+// AI 判定提交的新店是否為夾公仔店
+// ============================================================
+async function aiCheckClawStore(photoUrl) {
+    try {
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) {
+            console.warn('⚠️ 無法取得 OpenRouter API Key');
+            return null;
+        }
+        
+        var prompt = '判斷這張照片是否為夾公仔店（Claw Crane Shop）的門面。只回傳：{"is_claw_store": true或false, "confidence_score": 0.0到1.0}';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: AI_MODEL,
+                max_tokens: 1000,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: photoUrl, detail: 'low' } }
+                        ]
+                    }
+                ]
+            })
+        });
+        
+        if (!response.ok) {
+            console.warn('⚠️ AI 判定失敗:', response.status);
+            return null;
+        }
+        
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        
+        if (!content) return null;
+        
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        
+        try {
+            return JSON.parse(cleanContent);
+        } catch (e) {
+            var startIdx = cleanContent.indexOf('{');
+            var endIdx = cleanContent.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                return JSON.parse(cleanContent.slice(startIdx, endIdx + 1));
+            }
+            return null;
+        }
+    } catch (e) {
+        console.warn('⚠️ AI 判定失敗:', e.message);
+        return null;
+    }
+}
+
 // ============================================================
 // 提交店鋪 (含雲端同步 + 防重鎖 + GPS 鎖定檢查)
 // ============================================================
 async function submitIntel() {
-    // 🔒 防重鎖
     if (!acquireSubmitLock('submitIntel')) return;
     if (!requireLogin('提交店鋪')) return;
     if (isUserBanned()) {
-    showBannedMessage();
-    return;
-}
-    // 禁用按鈕
+        showBannedMessage();
+        return;
+    }
+    
     var submitBtn = disableSubmitButton('nt-submit-btn', '⏳ 提交中...');
     
     try {
-        if (!await checkDailySubmitLimit()) { 
-            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-            return; 
+        if (!await checkDailySubmitLimit()) {
+            enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
+            return;
         }
-        if (!isFormComplete()) { 
-            toast('請完成所有必填欄位', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-            return; 
+        if (!isFormComplete()) {
+            toast('請完成所有必填欄位', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
+            return;
         }
         
         var name = document.getElementById('nt-name')?.value.trim();
-        if (!name) { 
-            toast('請輸入店名', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-            return; 
-        }
-        
         var photoBlob = window._cam?.nt;
-        if (!photoBlob) { 
-            toast('請先拍攝店鋪照片', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-            return; 
+        
+        if (!photoBlob) {
+            toast('請先拍攝店鋪照片', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
+            return;
         }
         
-        // ✅ 檢查 GPS 是否已鎖定
-        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
-            toast('請先拍照以鎖定 GPS 位置', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-            return; 
+        if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) {
+            toast('請先拍照以鎖定 GPS 位置', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
+            return;
         }
         
         var addr = '';
         if (selectedType === 'mall' && selectedMall && selectedFloor) {
-    var mallAddr = '';
-    
-    if (MALLS_CACHE) {
-        var regionKey2 = '';
-        Object.keys(REGIONS).forEach(function(key) {
-            var group = REGIONS[key];
-            if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
-                regionKey2 = key;
+            var mallAddr = '';
+            if (MALLS_CACHE) {
+                var regionKey2 = '';
+                Object.keys(REGIONS).forEach(function(key) {
+                    var group = REGIONS[key];
+                    if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) {
+                        regionKey2 = key;
+                    }
+                });
+                if (regionKey2 && MALLS_CACHE[regionKey2]) {
+                    var mallInfo = MALLS_CACHE[regionKey2].find(function(m) { 
+                        return m.name === selectedMall && m.district === selectedRegion; 
+                    });
+                    if (mallInfo && mallInfo.address) mallAddr = mallInfo.address;
+                }
             }
-        });
-        
-        if (regionKey2 && MALLS_CACHE[regionKey2]) {
-            var mallInfo = MALLS_CACHE[regionKey2].find(function(m) { 
-                return m.name === selectedMall && m.district === selectedRegion; 
-            });
-            if (mallInfo && mallInfo.address) {
-                mallAddr = mallInfo.address;
-            }
-        }
-    }
-    
-    addr = selectedRegion;
-    if (mallAddr) {
-        addr += ' ' + mallAddr;
-    }
-    addr += ' ' + selectedMall + ' ' + selectedFloor + '樓';
-} else if (selectedType === 'street') {
+            addr = selectedRegion;
+            if (mallAddr) addr += ' ' + mallAddr;
+            addr += ' ' + selectedMall + ' ' + selectedFloor + '樓';
+        } else if (selectedType === 'street') {
             addr = document.getElementById('nt-addr')?.value.trim() || '';
         }
         
+        // 上傳照片
         var photoUrl = '';
         if (CLOUD_ON) {
             try {
                 var file = new File([photoBlob], "store_" + Date.now() + ".jpg", { type: 'image/jpeg' });
                 photoUrl = await uploadImage(file, 'stores');
-            } catch (e) { 
-                toast('圖片上傳失敗', 'pink'); 
-                enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-                return; 
+            } catch (e) {
+                toast('圖片上傳失敗', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
+                return;
             }
         } else {
             photoUrl = window._camPreview?.nt || '';
         }
         
-        // 處理商場
-        if (selectedType === 'mall' && selectedMall && CLOUD_ON) {
-            var existsInCache = false;
-            if (MALLS_CACHE) {
-                var regionKey = '';
-                if (selectedRegion === '港島區') regionKey = 'hk';
-                else if (selectedRegion === '九龍區') regionKey = 'kl';
-                else if (selectedRegion === '新界區') regionKey = 'nt';
-                else {
-                    Object.keys(REGIONS).forEach(function(key) {
-                        var group = REGIONS[key];
-                        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey = key;
-                    });
-                }
-                if (regionKey && MALLS_CACHE[regionKey]) {
-                    existsInCache = MALLS_CACHE[regionKey].some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
-                }
-                if (!regionKey) {
-                    existsInCache = Object.values(MALLS_CACHE).flat().some(function(m) { return m.name === selectedMall && m.district === selectedRegion; });
-                }
-            }
-            var existsInStores = STORES.some(function(s) { return s.mall === selectedMall && s.region === selectedRegion; });
-            if (!existsInCache && !existsInStores) {
-                var regionKey2 = '';
-                if (selectedRegion === '港島區') regionKey2 = 'hk';
-                else if (selectedRegion === '九龍區') regionKey2 = 'kl';
-                else if (selectedRegion === '新界區') regionKey2 = 'nt';
-                else {
-                    Object.keys(REGIONS).forEach(function(key) {
-                        var group = REGIONS[key];
-                        if (group.hot.includes(selectedRegion) || group.more.includes(selectedRegion)) regionKey2 = key;
-                    });
-                }
-                if (!regionKey2) regionKey2 = 'kl';
-                var newMall = {
-                    name: selectedMall,
-                    region: selectedRegion === '港島區' ? '港島區' : selectedRegion === '九龍區' ? '九龍區' : '新界區',
-                    district: selectedRegion,
-                    address: addr || '',
-                    lat: _finalGpsLat || gpsLat || 0,
-                    lng: _finalGpsLng || gpsLng || 0,
-                    created_at: new Date().toISOString()
-                };
-                if (!MALLS_CACHE) MALLS_CACHE = { hk: [], kl: [], nt: [] };
-                MALLS_CACHE[regionKey2].push(newMall);
-                try {
-                    await fetch(SUPABASE_URL + "/rest/v1/malls", {
-    method: 'POST',
-    headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-    body: JSON.stringify([newMall])
-});
-                } catch (e) {
-                    console.warn('⚠️ 商場插入失敗（不影響主流程）:', e.message);
-                }
-            }
+        // ✅ 本地先顯示成功
+        toast('📤 已提交，AI 審核中...', 'gold');
+        closeModal();
+        
+        // ✅ AI 判定（背景執行，最多重試 5 次）
+        var aiResult = null;
+        var aiAttempts = 0;
+        var MAX_AI_ATTEMPTS = 5;
+        
+        while (aiAttempts < MAX_AI_ATTEMPTS) {
+            aiAttempts++;
+            aiResult = await aiCheckClawStore(photoUrl);
+            if (aiResult !== null) break;
+            
+            // 等待 2 秒再重試
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
         }
         
-        // 構建插入資料
-        var newStore = {
-            name: name,
-            region: selectedRegion,
-            addr: addr,
-            status: 'pending',
-            size: null,
-            token: false,
-            hour24: false,
-            staff: false,
-            machines: [],
-            photo: photoUrl,
-            lat: _finalGpsLat,
-            lng: _finalGpsLng,
-            mall: selectedType === 'mall' ? selectedMall : '',
-            floor: selectedType === 'mall' ? selectedFloor : '',
-            submitted_by: (STATE.user.user_id && isValidUUID(STATE.user.user_id)) ? STATE.user.user_id : null,
-            submitted_by_device: STATE.user.device,
-            verification_count: 0,
-            is_verified: false,
-            has_staff: null,
-            has_e_coin: null,
-            supplement_count: 0,
-            supplemented_by: null,
-            device: STATE.user.device
-        };
-        
-        // 先插入雲端
-        var insertedId = null;
-// 如果用戶選了自訂樓層，寫入 custom_floors
-if (window._isCustomFloor && selectedFloor) {
-    try {
-        await fetch(SUPABASE_URL + "/rest/v1/custom_floors", {
-            method: 'POST',
-            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-            body: JSON.stringify([{
-                store_id: String(insertedId || ''),
-                floor_value: selectedFloor,
-                submitted_by: STATE.user.device,
+        if (aiResult && aiResult.is_claw_store === true) {
+            // ✅ AI 判定成功 → 寫入雲端 + 真 +20 分
+            var newStore = {
+                name: name,
+                region: selectedRegion,
+                addr: addr,
                 status: 'pending',
-                created_at: new Date().toISOString()
-            }])
-        });
-        console.log('✅ 自訂樓層已記錄');
-    } catch (e) {
-        console.warn('⚠️ 自訂樓層記錄失敗:', e.message);
-    }
-}
-
-        if (CLOUD_ON) {
-            try {
-                var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
+                size: null,
+                token: false,
+                hour24: false,
+                staff: false,
+                machines: [],
+                photo: photoUrl,
+                lat: _finalGpsLat,
+                lng: _finalGpsLng,
+                mall: selectedType === 'mall' ? selectedMall : '',
+                floor: selectedType === 'mall' ? selectedFloor : '',
+                submitted_by: (STATE.user.user_id && isValidUUID(STATE.user.user_id)) ? STATE.user.user_id : null,
+                submitted_by_device: STATE.user.device,
+                verification_count: 0,
+                verification_count_2: 0,
+                is_verified: false,
+                has_staff: null,
+                has_e_coin: null,
+                supplement_count: 0,
+                supplemented_by: null,
+                device: STATE.user.device,
+                ai_verification_status: 'passed',
+                verification_required: 1
+            };
+            
+            var insertedId = null;
+            if (CLOUD_ON) {
+                try {
+                    var insertResponse = await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify([newStore])
+                    });
+                    
+                    if (!insertResponse.ok) {
+                        toast('雲端寫入失敗，請重試', 'pink');
+                        return;
+                    }
+                    
+                    var queryResponse = await fetch(
+                        SUPABASE_URL + "/rest/v1/claw_stores?select=id&name=eq." + encodeURIComponent(name) + "&submitted_by_device=eq." + encodeURIComponent(STATE.user.device) + "&order=created_at.desc&limit=1",
+                        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
+                    );
+                    if (queryResponse.ok) {
+                        var queryData = await queryResponse.json();
+                        if (queryData && queryData.length > 0) {
+                            insertedId = String(queryData[0].id);
+                            newStore.id = insertedId;
+                        }
+                    }
+                } catch (e) {
+                    toast('雲端寫入失敗', 'pink');
+                    return;
+                }
+            } else {
+                insertedId = 'local_' + Date.now() + '_' + uid();
+                newStore.id = insertedId;
+            }
+            
+            STORES.push(newStore);
+            save();
+            
+            await addPoints(20, '提交店鋪情報');
+            await recordTaskCompletion('submit_store');
+            await recordRegionContribution('submit_store', selectedRegion, insertedId);
+            updateStreak();
+            
+            toast('✅ 提交成功 +20 分', 'green');
+            
+            if (CURRENT === 'map') {
+                updateMapMarkers();
+                updateMapList();
+            }
+            
+        } else if (aiResult && aiResult.is_claw_store === false) {
+            // ❌ AI 判定失敗 → 通知用戶
+            toast('❌ 提交不符合要求，已退回（照片不是夾公仔店）', 'pink');
+            
+            // 通知用戶
+            if (STATE.user.is_bound && STATE.user.user_id) {
+                addNotification('store_rejected', '你提交的店鋪「' + name + '」不符合要求，已退回');
+            }
+            
+        } else {
+            // ⚠️ AI 沒回應 → 丟到後台處理
+            toast('📤 已提交，等待管理員審核', 'gold');
+            
+            // 寫入雲端（狀態 = unchecked）
+            var newStore = {
+                name: name,
+                region: selectedRegion,
+                addr: addr,
+                status: 'pending',
+                photo: photoUrl,
+                lat: _finalGpsLat,
+                lng: _finalGpsLng,
+                mall: selectedType === 'mall' ? selectedMall : '',
+                floor: selectedType === 'mall' ? selectedFloor : '',
+                submitted_by_device: STATE.user.device,
+                ai_verification_status: 'unchecked',
+                verification_required: 2
+            };
+            
+            if (CLOUD_ON) {
+                await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
                     method: 'POST',
                     headers: {
                         'apikey': SUPABASE_KEY,
@@ -11254,136 +11363,17 @@ if (window._isCustomFloor && selectedFloor) {
                     },
                     body: JSON.stringify([newStore])
                 });
-                
-                if (!insertResponse.ok) {
-                    var errorText = await insertResponse.text();
-                    console.error('❌ 插入失敗，狀態碼:', insertResponse.status, '回應:', errorText);
-                    throw new Error('HTTP ' + insertResponse.status + ': ' + errorText);
-                }
-                
-                console.log('✅ 店鋪已插入雲端');
-                
-                var queryResponse = await fetch(
-                    SUPABASE_URL + "/rest/v1/claw_stores?select=id&name=eq." + encodeURIComponent(name) + "&submitted_by_device=eq." + encodeURIComponent(STATE.user.device) + "&order=created_at.desc&limit=1",
-                    {
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': 'Bearer ' + SUPABASE_KEY
-                        }
-                    }
-                );
-                
-                if (queryResponse.ok) {
-                    var queryData = await queryResponse.json();
-                    if (queryData && queryData.length > 0) {
-                        insertedId = String(queryData[0].id);
-                        newStore.id = insertedId;
-                        console.log('✅ 獲取插入的店鋪 ID:', insertedId);
-                    }
-                }
-            } catch (e) {
-                console.error('❌ 雲端插入失敗:', e.message);
-                toast('⚠️ 雲端同步失敗，請檢查網路後重試', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交（+10 積分）');
-                return;
             }
-        } else {
-            insertedId = 'local_' + Date.now() + '_' + uid();
-            newStore.id = insertedId;
+            
+            await addPoints(20, '提交店鋪情報');
+            await recordTaskCompletion('submit_store');
         }
         
-        // 添加到本地 STORES
-        STORES.push(newStore);
-        
-        if (selectedRegion) {
-            var regionStat = getRegionStat(selectedRegion);
-            if (regionStat) setTimeout(function() { return updateAchievementStat(regionStat); }, 200);
-        }
-        updateStreak();
-        
-        STATE._submitCount = (STATE._submitCount || 0) + 1;
-        save();
-        
-        if (CLOUD_ON) {
-            try {
-                var today = new Date().toISOString().slice(0, 10);
-                var userId = STATE.user.user_id || STATE.user.device;
-                
-                var checkResponse = await fetch(
-                    `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
-                    { headers: getSupabaseHeaders() }
-                );
-                var existingLimits = await checkResponse.json();
-                
-                if (existingLimits && existingLimits.length > 0) {
-                    await fetch(
-                        `${SUPABASE_URL}/rest/v1/user_daily_limits?user_id=eq.${userId}&date=eq.${today}`,
-                        {
-                            method: 'PATCH',
-                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                            body: JSON.stringify({
-                                submit_count: STATE._submitCount,
-                                updated_at: new Date().toISOString()
-                            })
-                        }
-                    );
-                } else {
-                    await fetch(`${SUPABASE_URL}/rest/v1/user_daily_limits`, {
-                        method: 'POST',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([{
-                            user_id: userId,
-                            date: today,
-                            submit_count: STATE._submitCount,
-                            report_count: 0,
-                            created_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString()
-                        }])
-                    });
-                }
-                console.log('✅ 提交計數已同步到雲端');
-            } catch (e) {
-                console.warn('⚠️ 提交計數雲端同步失敗:', e.message);
-            }
-        }
-        
-        // 記錄任務進度
-        await recordTaskCompletion('submit_store');
-        await recordRegionContribution('submit_store', selectedRegion, insertedId);
-        // 記錄貢獻
-        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id && insertedId) {
-            try {
-                var numericStoreIdForContribution = parseInt(insertedId);
-                if (!isNaN(numericStoreIdForContribution)) {
-                    await fetch(
-                        SUPABASE_URL + "/rest/v1/user_contributions",
-                        {
-                            method: 'POST',
-                            headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                            body: JSON.stringify([{
-                                user_id: STATE.user.user_id,
-                                device_id: STATE.user.device,
-                                store_id: numericStoreIdForContribution,
-                                contribution_type: 'submit',
-                                contribution_value: 1,
-                                created_at: new Date().toISOString()
-                            }])
-                        }
-                    );
-                    console.log('✅ 貢獻記錄已同步');
-                }
-            } catch (e) {
-                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
-            }
-        }
-        
-        toast('✅ 店鋪提交成功！獲得 15 積分', 'green');
-        await addPoints(15, '提交店鋪情報');
-        closeModal();
     } finally {
         releaseSubmitLock('submitIntel');
     }
 }
+
 
 // ============================================================
 // 導航與視圖切換
