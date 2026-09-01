@@ -6738,7 +6738,7 @@ async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
     isSubmittingVerification = true;
     if (!requireLogin('實證店鋪')) {
-        isSubmittingVerification = false;  // ← 失敗時重置
+        isSubmittingVerification = false;
         return;
     }
     
@@ -6748,7 +6748,7 @@ async function submitVerification(storeId) {
         var s = STORES.find(function(x) { return x.id === storeId; });
         if (!s) { 
             toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+            enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
             return; 
         }
         
@@ -6757,13 +6757,13 @@ async function submitVerification(storeId) {
             var photoBlob = window._cam?.vf;
             if (!photoBlob) { 
                 toast('請先拍攝店鋪照片', 'pink'); 
-                enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                 return; 
             }
             
             if (!_finalGpsLocked || !_finalGpsLat || !_finalGpsLng) { 
                 toast('請先拍照以鎖定 GPS 位置', 'pink'); 
-                enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                 return; 
             }
             
@@ -6776,7 +6776,7 @@ async function submitVerification(storeId) {
                 var limitMeters = Math.round(limitDistance * 1000);
                 if (distance > limitDistance) {
                     toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內實證', 'pink');
-                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                     return;
                 }
                 toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMeters + ' 米範圍內', 'green');
@@ -6789,14 +6789,13 @@ async function submitVerification(storeId) {
                     photoUrl = await uploadImage(file, 'verifications');
                 } catch (e) { 
                     toast('圖片上傳失敗', 'pink'); 
-                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                     return; 
                 }
             }
             
             var stringStoreId = String(storeId);
             var numericStoreId = parseInt(storeId);
-
             var verification = {
                 store_id: stringStoreId,
                 verifier_device: STATE.user.device,
@@ -6809,83 +6808,72 @@ async function submitVerification(storeId) {
                 created_at: new Date().toISOString()
             };
             
-            // 1. 寫 verification_reviews（判斷第一/第二位）
+            // 1. 寫 verification_reviews
             var reviewResult = null;
             if (CLOUD_ON) {
-    try {
-        reviewResult = await upsertVerificationReview(storeId, verification);
-        
-        // 🕵️ 除錯 log
-        console.log('🕵️ reviewResult:', reviewResult);
-        console.log('🕵️ storeId:', storeId);
-        console.log('🕵️ verification.verifier_device:', verification.verifier_device);
-        
-if (reviewResult === 'already_complete') {
-    // ✅ 從 verification_reviews 同步到 claw_stores
-    var reviewData = await supabaseClientInstance
-        .from('verification_reviews')
-        .select('verifier_1_device, verifier_1_name, verifier_2_device, verifier_2_name')
-        .eq('store_id', String(storeId))
-        .single();
-    
-    if (!reviewData.error && reviewData.data) {
-        await supabaseClientInstance
-            .from('claw_stores')
-            .update({
-                status: 'verified',
-                is_verified: true,
-                verification_count: 1,
-                verification_count_2: 1,
-                first_verifier_device: reviewData.data.verifier_1_device,
-                first_verifier_name: reviewData.data.verifier_1_name,
-                second_verifier_device: reviewData.data.verifier_2_device,
-                second_verifier_name: reviewData.data.verifier_2_name
-            })
-            .eq('id', numericStoreId);
-    }
-    
-    toast('此店鋪已認證完畢', 'gold');
-    return;
-}
-        if (reviewResult === 'already_verified') {
-            toast('你已經實證過這間店鋪了', 'gold');
-            enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-            return;
-        }
-    } catch (e) {
-        console.warn('⚠️ verification_reviews 寫入失敗:', e.message);
-        toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
-        enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-        return;
-    }
-}
+                try {
+                    reviewResult = await upsertVerificationReview(storeId, verification);
+                    
+                    console.log('🕵️ reviewResult:', reviewResult);
+                    console.log('🕵️ storeId:', storeId);
+                    
+                    if (reviewResult === 'already_complete') {
+                        // 已認證完畢，同步 claw_stores
+                        var syncResult = await supabaseClientInstance
+                            .from('verification_reviews')
+                            .select('verifier_1_device, verifier_1_name, verifier_2_device, verifier_2_name')
+                            .eq('store_id', stringStoreId)
+                            .single();
+                        
+                        if (!syncResult.error && syncResult.data) {
+                            await supabaseClientInstance
+                                .from('claw_stores')
+                                .update({
+                                    status: 'verified',
+                                    is_verified: true,
+                                    first_verifier_device: syncResult.data.verifier_1_device,
+                                    first_verifier_name: syncResult.data.verifier_1_name,
+                                    second_verifier_device: syncResult.data.verifier_2_device,
+                                    second_verifier_name: syncResult.data.verifier_2_name
+                                })
+                                .eq('id', numericStoreId);
+                        }
+                        
+                        toast('此店鋪已認證完畢', 'gold');
+                        enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
+                        return;
+                    }
+                    if (reviewResult === 'already_verified') {
+                        toast('你已經實證過這間店鋪了', 'gold');
+                        enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ verification_reviews 寫入失敗:', e.message);
+                    toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
+                    return;
+                }
+            }
             
             // 2. 寫 store_verifications
             if (CLOUD_ON) {
                 try {
                     var insertVerificationResult = await supabaseClientInstance
                         .from('store_verifications')
-                        .insert(verification, { count: 'exact' });
-                    
+                        .insert(verification);
                     if (insertVerificationResult.error) throw insertVerificationResult.error;
-                    console.log('✅ 實證已同步到雲端');
                 } catch (e) {
                     console.warn('⚠️ store_verifications 寫入失敗:', e.message);
-                    toast('⚠️ 實證記錄失敗，請稍後重試', 'pink');
-                    enableSubmitButton(submitBtn, '✅ 提交實證（+15 積分）');
-                    return;
                 }
             }
             
-            // 3. 根據 reviewResult 更新 claw_stores
-                        console.log('🕵️ reviewResult:', reviewResult);
-            console.log('🕵️ storeId:', storeId);
-            console.log('🕵️ numericStoreId:', numericStoreId);
+            // 3. 更新 claw_stores
             if (CLOUD_ON) {
                 try {
                     var updateData = {};
                     
-                                        if (reviewResult === 'verifier_1') {
+                    if (reviewResult === 'verifier_1') {
                         updateData = {
                             verification_count: 1,
                             verification_count_2: 0,
@@ -6897,18 +6885,15 @@ if (reviewResult === 'already_complete') {
                         };
                     } else if (reviewResult === 'verifier_2') {
                         updateData = {
-                            verification_count: 1,
                             verification_count_2: 1,
-                            status: 'pending',
-                            is_verified: false,
                             second_verifier_device: verification.verifier_device,
                             second_verifier_name: STATE.user.name || STATE.user.display_name || '',
                             second_verified_at: new Date().toISOString()
                         };
                     }
-                    // 🕵️ 除錯 log
-console.log('🕵️ updateData:', JSON.stringify(updateData));
-console.log('🕵️ updateData keys:', Object.keys(updateData).length);
+                    
+                    console.log('🕵️ updateData:', JSON.stringify(updateData));
+                    
                     if (Object.keys(updateData).length > 0) {
                         var updateStoreResult = await supabaseClientInstance
                             .from('claw_stores')
@@ -6923,8 +6908,8 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                 }
             }
             
-            // 如果 reviewResult === 'verifier_2'，觸發 AI 核對
-            if (reviewResult === 'verifier_2') {
+            // 4. 觸發 AI 核對
+            if (reviewResult === 'verifier_1' || reviewResult === 'verifier_2') {
                 var firstSubmitterPhoto = s.photo || '';
                 var firstSubmitterGps = { lat: s.lat || 0, lng: s.lng || 0 };
                 
@@ -6933,7 +6918,7 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                     var reviewResult2 = await supabaseClientInstance
                         .from('verification_reviews')
                         .select('verifier_1_photo, verifier_1_gps, verifier_2_photo, verifier_2_gps')
-                        .eq('store_id', String(storeId))
+                        .eq('store_id', stringStoreId)
                         .single();
                     if (!reviewResult2.error && reviewResult2.data) {
                         reviewData = reviewResult2.data;
@@ -6943,18 +6928,13 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                 }
                 
                 if (reviewData) {
-                    var verifier2Photo = reviewData.verifier_2_photo || verification.photo_url || '';
-                    var verifier2Gps = reviewData.verifier_2_gps || { lat: verification.lat || 0, lng: verification.lng || 0 };
-                    
-                    // 執行 AI 核對
                     var aiResults = await runAiVerificationCheck(
                         storeId,
                         firstSubmitterPhoto, firstSubmitterGps,
                         reviewData.verifier_1_photo || '', reviewData.verifier_1_gps || { lat: 0, lng: 0 },
-                        verifier2Photo, verifier2Gps
+                        reviewData.verifier_2_photo || '', reviewData.verifier_2_gps || { lat: 0, lng: 0 }
                     );
                     
-                    // 判斷三種結果
                     var aiCheckResult = 'unchecked';
                     var aiGroup1Result = null;
                     var aiGroup2Result = null;
@@ -6970,7 +6950,7 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                         }
                     }
                     
-                    // 寫入 AI 結果到 verification_reviews
+                    // 寫入 AI 結果
                     try {
                         await supabaseClientInstance
                             .from('verification_reviews')
@@ -6980,122 +6960,88 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
                                 ai_check_result: aiCheckResult,
                                 ai_checked_at: new Date().toISOString()
                             })
-                            .eq('store_id', String(storeId));
+                            .eq('store_id', stringStoreId);
                         console.log('✅ AI 核對結果已寫入:', aiCheckResult);
                     } catch (e) {
                         console.warn('⚠️ 寫入 AI 核對結果失敗:', e.message);
                     }
                     
                     // 根據結果處理
-                    if (aiCheckResult === 'passed') {
-                        // AI 核對通過 → 自動通過認證
-                        await supabaseClientInstance
-                            .from('claw_stores')
-                            .update({
-                                status: 'verified',
-                                is_verified: true
-                            })
-                            .eq('id', numericStoreId);
-                        
-                        console.log('✅ AI 核對通過，自動認證成功');
-                        toast('🎉 AI 核對通過，自動認證成功！', 'green');
-                        
-                        if (CLOUD_ON) {
+                    if (reviewResult === 'verifier_1') {
+                        // 搶先認證
+                        if (aiCheckResult === 'passed') {
+                            await supabaseClientInstance
+                                .from('claw_stores')
+                                .update({
+                                    status: 'verified',
+                                    is_verified: true
+                                })
+                                .eq('id', numericStoreId);
+                            
+                            console.log('✅ AI 核對通過，自動認證成功');
+                            toast('🎉 搶先認證成功！+20 分', 'green');
+                            
+                            // 首發者追加 +30
                             await supabaseClientInstance
                                 .from('claw_stores')
                                 .update({ submitter_reward_claimed: false })
                                 .eq('id', numericStoreId);
+                            
+                            updateAchievementStat('store_complete');
+                            var regionStat = getRegionStat(s.region);
+                            if (regionStat) updateAchievementStat(regionStat);
+                            
+                        } else if (aiCheckResult === 'failed') {
+                            console.log('⚠️ AI 核對未通過，等待管理員審核');
+                            toast('📤 已提交，等待管理員審核', 'gold');
+                        } else {
+                            console.log('⚠️ AI 核對服務不可用');
+                            toast('📤 已提交，等待管理員審核', 'gold');
                         }
                         
-                        updateAchievementStat('store_complete');
-                        var regionStat = getRegionStat(updatedStore ? updatedStore.region : s.region);
-                        if (regionStat) updateAchievementStat(regionStat);
-                        
-                    } else if (aiCheckResult === 'failed') {
-                        // AI 判定不通過 → 管理員審核
-                        console.log('⚠️ AI 核對未通過，等待管理員審核');
-                        toast('📤 已提交，AI 核對未通過，等待管理員審核', 'gold');
-                        
-                    } else {
-                        // AI 未執行 → 管理員審核
-                        console.log('⚠️ AI 核對服務不可用，等待管理員審核');
-                        toast('📤 已提交，等待管理員審核', 'gold');
+                    } else if (reviewResult === 'verifier_2') {
+                        // 追加認證：不影響主認證狀態
+                        if (aiCheckResult === 'passed') {
+                            toast('🎉 追加認證成功！+10 分', 'green');
+                        } else if (aiCheckResult === 'failed') {
+                            toast('📤 已提交，等待管理員審核', 'gold');
+                        } else {
+                            toast('📤 已提交，等待管理員審核', 'gold');
+                        }
                     }
-                } else {
-                    // 無法讀取認證者資料
-                    console.warn('⚠️ 無法讀取認證者資料，跳過 AI 核對');
-                    toast('📤 已提交，等待管理員審核', 'gold');
                 }
             }
-            // 4. 更新本地
+            
+            // 5. 更新本地
             STATE.verifications = STATE.verifications || {};
             STATE.verifications[s.id] = true;
             save();
             
-            // 5. 重新載入雲端資料
+            // 6. 重新載入
             if (CLOUD_ON) {
                 try {
                     await loadCloud();
-                    console.log('✅ 已重新載入最新店鋪資料');
                 } catch (e) {
                     console.warn('⚠️ 重新載入失敗:', e.message);
                 }
             }
             
-            // 6. 從最新資料判斷狀態
-            var updatedStore = STORES.find(function(x) { return x.id === storeId; });
-            if (updatedStore) {
-                var totalVerifications = (updatedStore.verification_count || 0) + (updatedStore.verification_count_2 || 0);
-                if (totalVerifications >= 2) {
-    toast('🎉 ' + updatedStore.name + ' 已通過實證！', 'green');
-    updateAchievementStat('store_complete');
-    var regionStat = getRegionStat(updatedStore.region);
-    if (regionStat) updateAchievementStat(regionStat);
-    
-    // ✅ 標記提交者可領取獎勵（不直接給認證者加分）
-    if (CLOUD_ON) {
-        try {
-            await supabaseClientInstance
-                .from('claw_stores')
-                .update({ submitter_reward_claimed: false })
-                .eq('id', numericStoreId);
-            console.log('✅ 已標記提交者可領取 +35 獎勵');
-        } catch (e) {
-            console.warn('⚠️ 標記獎勵失敗:', e.message);
-        }
-    }
-} else {
-    toast('✅ 實證提交成功！目前 ' + totalVerifications + '/2 人實證', 'green');
-}
+            // 7. 加分
+            if (reviewResult === 'verifier_1') {
+                await addPoints(20, '搶先認證');
+            } else if (reviewResult === 'verifier_2') {
+                await addPoints(10, '追加認證');
             }
             
             await recordTaskCompletion('verify_store');
-            
-            if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-                try {
-                    await supabaseClientInstance
-                        .from('user_contributions')
-                        .insert({
-                            user_id: STATE.user.user_id,
-                            device_id: STATE.user.device,
-                            store_id: numericStoreId,
-                            contribution_type: 'verify',
-                            contribution_value: 1,
-                            created_at: new Date().toISOString()
-                        }, { count: 'exact' });
-                } catch (e) {
-                    console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
-                }
-            }
-            
-            await addPoints(15, '店鋪實證');
-            updateAchievementStat('verify_store');
             updateStreak();
-            
             await recordRegionContribution('verify_store', s.region, storeId);
             
             closeModal();
-            openStore(storeId);
+            if (CURRENT === 'map') {
+                updateMapMarkers();
+                updateMapList();
+            }
             
         } else {
             // ========== 店鋪有問題模式（檢舉） ==========
@@ -7163,55 +7109,19 @@ console.log('🕵️ updateData keys:', Object.keys(updateData).length);
             
             if (CLOUD_ON) {
                 try {
-                    var reportResponse = await fetch(SUPABASE_URL + "/rest/v1/reports", {
-                        method: 'POST',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([reportData])
-                    });
-                    
-                    if (!reportResponse.ok) {
-                        throw new Error('HTTP ' + reportResponse.status);
-                    }
-                } catch (e) {
-                    console.warn('⚠️ 檢舉雲端同步失敗:', e.message);
-                    if (!STATE._offlineReports) STATE._offlineReports = [];
-                    STATE._offlineReports.push(reportData);
-                }
-            } else {
-                if (!STATE._offlineReports) STATE._offlineReports = [];
-                STATE._offlineReports.push(reportData);
-            }
-            
-            if (CLOUD_ON) {
-                try {
                     await supabaseClientInstance
-                        .from('claw_stores')
-                        .update({
-                            is_suspicious: true,
-                            suspicious_reason: category,
-                            suspicious_at: new Date().toISOString()
-                        })
-                        .eq('id', parseInt(storeId));
+                        .from('reports')
+                        .insert(reportData);
                 } catch (e) {
-                    console.warn('⚠️ 標記可疑失敗:', e.message);
+                    console.warn('⚠️ 檢舉寫入失敗:', e.message);
                 }
             }
             
-            s.is_suspicious = true;
-            s.suspicious_reason = category;
-            save();
-            
-            updateAchievementStat('report_submitted');
-            addXP(5, '提交檢舉');
-            updateStreak();
-            
-            await recordRegionContribution('report', s.region, storeId);
-            
-            toast('✅ 檢舉已提交，感謝你的回報！', 'green');
+            toast('✅ 檢舉已提交', 'green');
             closeModal();
         }
     } finally {
-      isSubmittingVerification = false;
+        isSubmittingVerification = false;
         releaseSubmitLock('submitVerification');
     }
 }
