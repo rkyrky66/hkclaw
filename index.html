@@ -4695,10 +4695,9 @@ marker.on('click', function(e) {
     var bgColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
     var isNewStore = !s.first_verifier_device && s.ai_verification_status === 'passed';
-    var newBadge = isNewStore ? '🔥 ' : '';
-    
-    // 然後 displayName 改為
-    var displayName = newBadge + name;
+var newBadge = isNewStore ? '🔥 ' : '';
+
+var displayName = newBadge;
 var charCount = 0;
 for (var i = 0; i < s.name.length; i++) {
     var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
@@ -4706,7 +4705,7 @@ for (var i = 0; i < s.name.length; i++) {
     if (charCount > 14) break;
     displayName += s.name[i];
 }
-if (displayName.length < s.name.length) displayName += '..';
+if (displayName.replace('🔥 ', '').length < s.name.length) displayName += '..';
     
     // ✅ 計算用戶貢獻
     var contribution = getUserContributionForStore(s);
@@ -4913,7 +4912,7 @@ var renderStoreItem = function(s, index) {
     
         if (!isVerified) {
         var isFirstVerifier = !s.first_verifier_device;
-        var verifyButtonText = isFirstVerifier ? '🔥 搶先認證 +20分' : '追加認證 +10分';
+        var verifyButtonText = isFirstVerifier ? '🔥 搶先認證' : '追加認證';
         var verifyButtonColor = isFirstVerifier ? '#FFB800' : '#3B82F6';
         
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + verifyButtonColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + verifyButtonText + '</span>';
@@ -9118,17 +9117,19 @@ function viewTask() {
     }
     
     // 核心任務（3 段）
-    var coreTasks = [
-        { key: 'submit_store', label: '提交', icon: '🏪', points: 15 },
-        { key: 'verify_store', label: '認證', icon: '🕵️', points: 15 },
-        { key: 'supplement', label: '補充', icon: '📝', points: 15 }
-    ];
+var coreTasks = [
+    { key: 'submit_store', label: '提交', icon: '🏪', points: 20 },
+    { key: 'verify_store', label: '認證', icon: '🕵️', points: 20 },
+    { key: 'supplement', label: '補充', icon: '📝', points: 15 }
+];
     
     // 日常任務（5 段或 3 段）
     var dailyTasks = [
         { key: 'checkin', label: '打卡', icon: '📍', points: 5, limit: 5 },
         { key: 'machine_checkin', label: '機台更新', icon: '🎰', points: 5, limit: 5 },
-        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 }
+        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 },
+        // 在 return 的獵人任務區塊後新增
+'<p class="text-[10px] text-white/30 mt-1">🕵️ 搶先認證 +20 分，追加認證 +10 分</p>'
     ];
     
     function buildTaskCell(task, limit) {
@@ -9188,7 +9189,7 @@ function viewTask() {
       if (claimableStores.length > 0) {
           var firstClaimable = claimableStores[0];
           rewardHtml = '<div class="mt-3 rounded-xl border border-neongreen/30 bg-neongreen/5 p-3">' +
-              '<p class="text-xs text-white/60">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 35 分！</p>' +
+              '<p class="text-xs text-white/60">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 30 分！</p>' +
               '<button onclick="claimSubmitterReward(\'' + firstClaimable.id + '\')" class="mt-2 w-full rounded-xl bg-neongreen py-2.5 text-sm font-black text-black glow-green">🎉 點此領取：35 積分</button>' +
           '</div>';
       } else {
@@ -11146,7 +11147,7 @@ async function aiCheckClawStore(photoUrl) {
 // ============================================================
 async function submitIntel() {
     if (!acquireSubmitLock('submitIntel')) return;
-    if (!requireLogin('提交店鋪')) return;
+
     if (isUserBanned()) {
         showBannedMessage();
         return;
