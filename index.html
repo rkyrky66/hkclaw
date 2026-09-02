@@ -12039,6 +12039,12 @@ async function submitIntel() {
             
             STORES.push(newStore);
                         // ✅ 寫入自訂樓層記錄
+                                    console.log('🕵️ insertedId:', insertedId);
+            console.log('🕵️ _isCustomFloor:', window._isCustomFloor);
+            console.log('🕵️ selectedFloor:', selectedFloor);
+            
+            // ✅ 寫入自訂樓層記錄
+            if (window._isCustomFloor && selectedFloor && insertedId) {
             if (window._isCustomFloor && selectedFloor && insertedId) {
                 try {
                     await supabaseClientInstance
