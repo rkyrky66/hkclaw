@@ -6081,17 +6081,20 @@ function loadRegionCheck() {
                 return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="regionCheckFilter=\'' + filter + '\';loadRegionCheck()">' + label + ' (' + count + ')</button>';
             }
             
-            var html = '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
-                '<span style="font-size:13px;color:var(--text-muted);">📍 地區檢查</span>' +
-                '<button class="btn-sm warning" onclick="checkAllStoresRegion()">🔍 檢查未檢查</button>' +
-'<button class="btn-sm warning" onclick="recheckAbnormalStoresRegion()">🔄 重新檢查異常</button>' + +
-            '</div>' +
-            '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
-                buildRegionFilterBtn('all', '全部', stores.length) +
-                buildRegionFilterBtn('abnormal', '❌ 異常', abnormalCount) +
-                buildRegionFilterBtn('normal', '✅ 正常', normalCount) +
-                buildRegionFilterBtn('unchecked', '⏳ 未檢查', uncheckedCount) +
-            '</div>';
+            // ✅ 外層容器：上下排列
+            var html = '<div style="display:flex;flex-direction:column;width:100%;">' +
+                '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                    '<span style="font-size:13px;color:var(--text-muted);">📍 地區檢查</span>' +
+                    '<button class="btn-sm warning" onclick="checkAllStoresRegion()">🔍 檢查未檢查</button>' +
+                    '<button class="btn-sm warning" onclick="recheckAbnormalStoresRegion()">🔄 重新檢查異常</button>' +
+                '</div>' +
+                '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+                    buildRegionFilterBtn('all', '全部', stores.length) +
+                    buildRegionFilterBtn('abnormal', '❌ 異常', abnormalCount) +
+                    buildRegionFilterBtn('normal', '✅ 正常', normalCount) +
+                    buildRegionFilterBtn('unchecked', '⏳ 未檢查', uncheckedCount) +
+                '</div>' +
+                '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;width:100%;">';
             
             // 篩選
             var filtered = stores;
@@ -6103,13 +6106,10 @@ function loadRegionCheck() {
                 filtered = stores.filter(function(s) { return !s.region_check_status || s.region_check_status === 'unchecked'; });
             }
             
-            html += '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;">';
-            
             for (var i = 0; i < filtered.length; i++) {
                 var s = filtered[i];
                 
                 var statusBadge = '';
-                var resultText = '';
                 
                 if (s.region_manual_pass === true) {
                     statusBadge = '<span class="status-badge confirmed">✅ 人工通過</span>';
@@ -6123,22 +6123,23 @@ function loadRegionCheck() {
                 
                 var hasRange = REGION_GPS_RANGE[s.region] ? true : false;
                 var rangeText = hasRange ? '' : '（無範圍資料）';
-                                    var abnormalReason = '';
-                    if (s.region_check_result === 'abnormal' && s.region_manual_pass !== true) {
-                        var range = REGION_GPS_RANGE[s.region];
-                        if (range) {
-                            abnormalReason = '<div style="font-size:11px;color:var(--danger);margin-top:4px;">❌ GPS 不在 ' + s.region + ' 範圍（lat: ' + range.lat_min + '~' + range.lat_max + ', lng: ' + range.lng_min + '~' + range.lng_max + '）</div>';
-                        }
-                    }
                 
-                html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--bg-card);">' +
+                var abnormalReason = '';
+                if (s.region_check_result === 'abnormal' && s.region_manual_pass !== true) {
+                    var range = REGION_GPS_RANGE[s.region];
+                    if (range) {
+                        abnormalReason = '<div style="font-size:11px;color:var(--danger);margin-top:4px;">❌ GPS 不在 ' + s.region + ' 範圍（lat: ' + range.lat_min + '~' + range.lat_max + ', lng: ' + range.lng_min + '~' + range.lng_max + '）</div>';
+                    }
+                }
+                
+                html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--bg-card);width:100%;">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
                         '<strong>#' + s.id + ' ' + (s.name || '未知') + '</strong>' +
                         statusBadge +
                     '</div>' +
                     '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
                         '<div>📍 聲稱地區：' + (s.region || '未設定') + rangeText + '</div>' +
-                                                '<div>🗺️ GPS：' + (s.lat ? s.lat.toFixed(6) : 'N/A') + ', ' + (s.lng ? s.lng.toFixed(6) : 'N/A') + '</div>' +
+                        '<div>🗺️ GPS：' + (s.lat ? s.lat.toFixed(6) : 'N/A') + ', ' + (s.lng ? s.lng.toFixed(6) : 'N/A') + '</div>' +
                         abnormalReason +
                     '</div>' +
                     '<div style="display:flex;gap:8px;">' +
@@ -6148,14 +6149,14 @@ function loadRegionCheck() {
                 '</div>';
             }
             
-            html += '</div>';
+            html += '</div></div>';  // 滑動區 + 外層容器結束
+            
             container.innerHTML = html;
         })
         .catch(function(error) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
         });
 }
-
 // 一鍵檢查所有未檢查的店鋪
 async function checkAllStoresRegion() {
     console.log('🔍 1. 開始檢查所有未檢查的店鋪...');
