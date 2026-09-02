@@ -1486,22 +1486,24 @@ async function openStoreEditModal(storeId) {
     
     var verifier1Photo = review ? (review.verifier_1_photo || '') : '';
     var verifier2Photo = review ? (review.verifier_2_photo || '') : '';
+    
     // 查詢該店鋪的投票數
-var voteCounts = {};
-try {
-    var votesResult = await sb.from('store_field_votes')
-        .select('field_name, answer')
-        .eq('store_id', String(storeId));
-    if (!votesResult.error) {
-        (votesResult.data || []).forEach(function(v) {
-            var key = v.field_name + '_' + v.answer;
-            if (!voteCounts[key]) voteCounts[key] = 0;
-            voteCounts[key]++;
-        });
+    var voteCounts = {};
+    try {
+        var votesResult = await sb.from('store_field_votes')
+            .select('field_name, answer')
+            .eq('store_id', String(storeId));
+        if (!votesResult.error) {
+            (votesResult.data || []).forEach(function(v) {
+                var key = v.field_name + '_' + v.answer;
+                if (!voteCounts[key]) voteCounts[key] = 0;
+                voteCounts[key]++;
+            });
+        }
+    } catch (e) {
+        console.warn('⚠️ 載入投票數失敗:', e.message);
     }
-} catch (e) {
-    console.warn('⚠️ 載入投票數失敗:', e.message);
-}
+    
     var modalHtml = 
         '<div style="max-height:70vh;overflow-y:auto;">' +
             '<div class="section-header">📋 基本資料</div>' +
@@ -1513,46 +1515,6 @@ try {
             '</div>' +
             '<div style="margin-top:12px;"><label style="font-size:12px;color:var(--text-muted);">地址</label>' +
             '<input id="edit-addr" value="' + (store.addr || '') + '" class="form-input" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;" /></div>' +
-            
-            '<div class="section-header">📏 規模/場務/兌幣</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
-                '<div><label style="font-size:12px;color:var(--text-muted);">規模</label>' +
-                '<select id="edit-size" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
-                    '<option value="" ' + (!store.size ? 'selected' : '') + '>未填</option>' +
-                    '<option value="small" ' + (store.size === 'small' ? 'selected' : '') + '>小型 (S)</option>' +
-                    '<option value="medium" ' + (store.size === 'medium' ? 'selected' : '') + '>中型 (M)</option>' +
-                    '<option value="large" ' + (store.size === 'large' ? 'selected' : '') + '>大型 (L)</option>' +
-                '</select></div>' +
-                '<div><label style="font-size:12px;color:var(--text-muted);">場務</label>' +
-                '<select id="edit-staff" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
-                    '<option value="" ' + (store.has_staff === null || store.has_staff === undefined ? 'selected' : '') + '>未填</option>' +
-                    '<option value="true" ' + (store.has_staff === true ? 'selected' : '') + '>有 (V)</option>' +
-                    '<option value="false" ' + (store.has_staff === false ? 'selected' : '') + '>無 (X)</option>' +
-                '</select></div>' +
-                '<div><label style="font-size:12px;color:var(--text-muted);">兌幣</label>' +
-                '<select id="edit-coin" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
-                    '<option value="" ' + (store.has_e_coin === null || store.has_e_coin === undefined ? 'selected' : '') + '>未填</option>' +
-                    '<option value="true" ' + (store.has_e_coin === true ? 'selected' : '') + '>有 (V)</option>' +
-                    '<option value="false" ' + (store.has_e_coin === false ? 'selected' : '') + '>無 (X)</option>' +
-                '</select></div>' +
-            '</div>' +
-            
-            '<div class="section-header">🔑 狀態</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-                '<div><label style="font-size:12px;color:var(--text-muted);">管理員狀態</label>' +
-                '<select id="edit-admin-status" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
-                    '<option value="pending" ' + (store.admin_overall_status === 'pending' || !store.admin_overall_status ? 'selected' : '') + '>pending</option>' +
-                    '<option value="reviewed" ' + (store.admin_overall_status === 'reviewed' ? 'selected' : '') + '>reviewed</option>' +
-                    '<option value="confirmed" ' + (store.admin_overall_status === 'confirmed' ? 'selected' : '') + '>confirmed</option>' +
-                    '<option value="suspicious" ' + (store.admin_overall_status === 'suspicious' ? 'selected' : '') + '>suspicious</option>' +
-                    '<option value="hidden" ' + (store.admin_overall_status === 'hidden' ? 'selected' : '') + '>hidden</option>' +
-                '</select></div>' +
-                '<div><label style="font-size:12px;color:var(--text-muted);">認證狀態</label>' +
-                '<select id="edit-verify-status" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);margin-top:4px;">' +
-                    '<option value="pending" ' + (store.status === 'pending' ? 'selected' : '') + '>pending</option>' +
-                    '<option value="verified" ' + (store.status === 'verified' ? 'selected' : '') + '>verified</option>' +
-                '</select></div>' +
-            '</div>' +
             
             '<div class="section-header">📷 照片顯示（主網店鋪頁面）</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' +
@@ -1573,50 +1535,50 @@ try {
                     '補充照 ' + (store.supplement_photo ? '✅' : '（無照片）') +
                 '</label>' +
             '</div>' +
-            // 在 modalHtml 的字串中，照片顯示區塊之後加入：
-'<div class="section-header">📊 投票數編輯（直接修改投票數）</div>' +
-'<div style="display:flex;flex-direction:column;gap:12px;">' +
-    // 規模
-    '<div><label style="font-size:12px;color:var(--text-muted);">📏 規模投票數</label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px;">' +
-        '<div><label style="font-size:10px;">小型</label><input type="number" id="edit-vote-size-small" value="' + (voteCounts['size_small'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">中型</label><input type="number" id="edit-vote-size-medium" value="' + (voteCounts['size_medium'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">大型</label><input type="number" id="edit-vote-size-large" value="' + (voteCounts['size_large'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-    '</div></div>' +
-    // 場務
-    '<div><label style="font-size:12px;color:var(--text-muted);">👤 場務投票數</label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
-        '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-staff-true" value="' + (voteCounts['has_staff_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-staff-false" value="' + (voteCounts['has_staff_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-    '</div></div>' +
-    // 兌幣
-    '<div><label style="font-size:12px;color:var(--text-muted);">💳 兌幣投票數</label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
-        '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-coin-true" value="' + (voteCounts['has_e_coin_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-coin-false" value="' + (voteCounts['has_e_coin_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-    '</div></div>' +
-    // 24小時
-    '<div><label style="font-size:12px;color:var(--text-muted);">🕐 24小時投票數</label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
-        '<div><label style="font-size:10px;">是</label><input type="number" id="edit-vote-hour24-true" value="' + (voteCounts['hour24_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">否</label><input type="number" id="edit-vote-hour24-false" value="' + (voteCounts['hour24_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-    '</div></div>' +
-    // 代幣
-    '<div><label style="font-size:12px;color:var(--text-muted);">🎟️ 代幣投票數</label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
-        '<div><label style="font-size:10px;">需要</label><input type="number" id="edit-vote-token-true" value="' + (voteCounts['token_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-        '<div><label style="font-size:10px;">不需要</label><input type="number" id="edit-vote-token-false" value="' + (voteCounts['token_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
-    '</div></div>' +
-'</div>' +
+            
+            '<div class="section-header">📊 投票數編輯（直接修改投票數）</div>' +
+            '<div style="display:flex;flex-direction:column;gap:12px;">' +
+                // 規模
+                '<div><label style="font-size:12px;color:var(--text-muted);">📏 規模投票數</label>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px;">' +
+                    '<div><label style="font-size:10px;">小型</label><input type="number" id="edit-vote-size-small" value="' + (voteCounts['size_small'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">中型</label><input type="number" id="edit-vote-size-medium" value="' + (voteCounts['size_medium'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">大型</label><input type="number" id="edit-vote-size-large" value="' + (voteCounts['size_large'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                '</div></div>' +
+                // 場務
+                '<div><label style="font-size:12px;color:var(--text-muted);">👤 場務投票數</label>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+                    '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-staff-true" value="' + (voteCounts['has_staff_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-staff-false" value="' + (voteCounts['has_staff_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                '</div></div>' +
+                // 兌幣
+                '<div><label style="font-size:12px;color:var(--text-muted);">💳 兌幣投票數</label>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+                    '<div><label style="font-size:10px;">有</label><input type="number" id="edit-vote-coin-true" value="' + (voteCounts['has_e_coin_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">無</label><input type="number" id="edit-vote-coin-false" value="' + (voteCounts['has_e_coin_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                '</div></div>' +
+                // 24小時
+                '<div><label style="font-size:12px;color:var(--text-muted);">🕐 24小時投票數</label>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+                    '<div><label style="font-size:10px;">是</label><input type="number" id="edit-vote-hour24-true" value="' + (voteCounts['hour24_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">否</label><input type="number" id="edit-vote-hour24-false" value="' + (voteCounts['hour24_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                '</div></div>' +
+                // 代幣
+                '<div><label style="font-size:12px;color:var(--text-muted);">🎟️ 代幣投票數</label>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">' +
+                    '<div><label style="font-size:10px;">需要</label><input type="number" id="edit-vote-token-true" value="' + (voteCounts['token_true'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                    '<div><label style="font-size:10px;">不需要</label><input type="number" id="edit-vote-token-false" value="' + (voteCounts['token_false'] || 0) + '" min="0" style="width:100%;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);" /></div>' +
+                '</div></div>' +
+            '</div>' +
         '</div>';
     
     openModal('✏️ 編輯店鋪 #' + store.id, modalHtml, '💾 保存修改');
     
-    // 設定保存回調
     modalCallback = function() {
         saveStoreEdit(storeId);
     };
 }
+
 // ============================================================
 // 保存店鋪編輯
 // ============================================================
@@ -1625,12 +1587,9 @@ async function saveStoreEdit(storeId) {
         name: document.getElementById('edit-name')?.value || '',
         region: document.getElementById('edit-region')?.value || '',
         addr: document.getElementById('edit-addr')?.value || '',
-        size: document.getElementById('edit-size')?.value || null,
+                size: document.getElementById('edit-size')?.value || null,
         has_staff: document.getElementById('edit-staff')?.value === 'true' ? true : document.getElementById('edit-staff')?.value === 'false' ? false : null,
         has_e_coin: document.getElementById('edit-coin')?.value === 'true' ? true : document.getElementById('edit-coin')?.value === 'false' ? false : null,
-        admin_overall_status: document.getElementById('edit-admin-status')?.value || 'pending',
-        status: document.getElementById('edit-verify-status')?.value || 'pending',
-        is_verified: document.getElementById('edit-verify-status')?.value === 'verified',
         show_first_photo: document.getElementById('edit-show-first')?.checked !== false,
         show_verifier_1_photo: document.getElementById('edit-show-v1')?.checked === true,
         show_verifier_2_photo: document.getElementById('edit-show-v2')?.checked === true,
