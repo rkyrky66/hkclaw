@@ -677,6 +677,9 @@
 <li class="nav-item" data-tab="gps-correction" onclick="switchTab('gps-correction')">
     <i class="fas fa-map-marker-alt"></i><span>GPS 校正</span>
 </li>
+<li class="nav-item" data-tab="machine-verifications" onclick="switchTab('machine-verifications')">
+    <i class="fas fa-gamepad"></i><span>機台審核</span>
+</li>
 <li class="nav-item" data-tab="address-submissions" onclick="switchTab('address-submissions')">
     <i class="fas fa-map-marker-alt"></i><span>地址審核</span>
 </li>
@@ -1175,6 +1178,7 @@ dashboard: '儀表板',
     'store-management': '📋 店鋪管理',
     'gps-correction': '📍 GPS 校正',
     verifications: '認證審核',
+    'machine-verifications': '🎰 機台審核',
     flagged: '⚠️ 存疑清單',
     users: '用戶管理',
     audit: '審計日誌',
@@ -1193,6 +1197,7 @@ dashboard: '儀表板',
     'store-management': loadStoreManagement,
     'gps-correction': loadGpsCorrection,
     verifications: loadVerifications,
+    'machine-verifications': loadMachineVerifications,
     flagged: loadFlagged,
     users: loadUsers,
     audit: loadAudit,
@@ -5594,6 +5599,41 @@ async function aiCheckClawStore(photoUrl) {
     }
 }
 
+async function aiCheckClawMachine(photoUrl) {
+    try {
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) return null;
+        
+        var prompt = '你是一位夾公仔機（Claw Crane Machine）的照片辨識專家。請判斷這張照片是否拍攝到夾公仔機台。回傳 JSON：{"is_claw_machine": true或false, "confidence_score": 0.0到1.0}';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'minimax/minimax-m3',
+                max_tokens: 200,
+                messages: [
+                    { role: 'user', content: [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: photoUrl, detail: 'low' } }
+                    ]}
+                ]
+            })
+        });
+        
+        if (!response.ok) return null;
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        if (!content) return null;
+        
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        try { return JSON.parse(cleanContent); } catch (e) { return null; }
+    } catch (e) { return null; }
+}
+
 // AI 核對兩張照片（後台用）
 async function aiCompareStorePhotos(photo1Url, gps1, photo2Url, gps2) {
     try {
@@ -5684,6 +5724,195 @@ function openImageLightbox(src) {
     overlay.innerHTML = '<img src="' + src + '" style="max-width:95%;max-height:95vh;object-fit:contain;" />';
     overlay.onclick = function() { overlay.remove(); };
     document.body.appendChild(overlay);
+}
+
+// 機台審核
+var machineVerificationFilter = 'all';
+
+function loadMachineVerifications() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('claw_machines')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var machines = result.data || [];
+            
+            if (machines.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>🎉 沒有機台提交</p></div>';
+                return;
+            }
+            
+            // 查詢店鋪名稱
+            var storeIds = [];
+            for (var i = 0; i < machines.length; i++) {
+                if (storeIds.indexOf(machines[i].store_id) === -1) {
+                    storeIds.push(machines[i].store_id);
+                }
+            }
+            
+            return sb.from('claw_stores')
+                .select('id, name')
+                .in('id', storeIds)
+                .then(function(storeResult) {
+                    var stores = {};
+                    (storeResult.data || []).forEach(function(s) {
+                        stores[s.id] = s.name;
+                    });
+                    
+                    // 排序：failed → unchecked → passed
+                    machines.sort(function(a, b) {
+                        var order = { 'failed': 0, 'unchecked': 1, 'passed': 2 };
+                        var aOrder = order[a.ai_check_result] !== undefined ? order[a.ai_check_result] : 1;
+                        var bOrder = order[b.ai_check_result] !== undefined ? order[b.ai_check_result] : 1;
+                        return aOrder - bOrder;
+                    });
+                    
+                    // 篩選
+                    var filtered = machines;
+                    if (machineVerificationFilter !== 'all') {
+                        filtered = machines.filter(function(m) {
+                            return (m.ai_check_result || 'unchecked') === machineVerificationFilter;
+                        });
+                    }
+                    
+                    function buildMachineFilterBtn(filter, label) {
+                        var isActive = machineVerificationFilter === filter;
+                        var count = machines.filter(function(m) { return (m.ai_check_result || 'unchecked') === filter; }).length;
+                        return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="machineVerificationFilter=\'' + filter + '\';loadMachineVerifications()">' + label + ' (' + count + ')</button>';
+                    }
+                    
+                    var html = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+                        buildMachineFilterBtn('all', '全部') +
+                        buildMachineFilterBtn('failed', '❌ 失敗') +
+                        buildMachineFilterBtn('unchecked', '⏳ 未核對') +
+                        buildMachineFilterBtn('passed', '✅ 通過') +
+                    '</div>' +
+                    '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;">';
+                    
+                    for (var i = 0; i < filtered.length; i++) {
+                        var m = filtered[i];
+                        var storeName = stores[m.store_id] || '未知店鋪';
+                        
+                        var aiStatus = m.ai_check_result || 'unchecked';
+                        var aiBadge = aiStatus === 'passed' ? '<span class="status-badge confirmed">✅ AI 通過</span>' :
+                                     aiStatus === 'failed' ? '<span class="status-badge suspicious">❌ AI 失敗</span>' :
+                                     '<span class="status-badge pending">⏳ 未核對</span>';
+                        
+                        var aiConfidence = m.ai_confidence !== null && m.ai_confidence !== undefined 
+                            ? '（信心 ' + Math.round(m.ai_confidence * 100) + '%）' : '';
+                        
+                        html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--bg-card);">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+                                '<strong>🏪 ' + storeName + '</strong>' +
+                                aiBadge +
+                            '</div>' +
+                            '<div style="display:flex;gap:12px;margin-bottom:8px;">' +
+                                (m.photo ? '<img src="' + m.photo + '" onclick="openImageLightbox(\'' + m.photo + '\')" style="width:150px;height:150px;object-fit:cover;border-radius:8px;cursor:pointer;" />' : '<div style="width:150px;height:150px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">無照片</div>') +
+                                '<div style="flex:1;">' +
+                                    '<div style="font-size:12px;color:var(--text-secondary);">🤖 AI 判定：' + aiStatus + aiConfidence + '</div>' +
+                                    '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👤 提交者：' + (m.submitted_by || '未知') + '</div>' +
+                                    '<div style="font-size:12px;color:var(--text-muted);">🏷️ 台性：' + (m.feats || []).join(', ') + '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div style="display:flex;gap:8px;">' +
+                                '<button class="btn-sm warning" onclick="singleAiCheckMachine(\'' + m.id + '\')">🔄 單獨 AI 核對</button>' +
+                                (m.manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassMachine(\'' + m.id + '\')">✅ 人工通過</button>' : '<span class="status-badge confirmed">🧑 人工通過</span>') +
+                                '<button class="btn-sm danger" onclick="revokeMachine(\'' + m.id + '\')">🗑️ 退回</button>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    
+                    html += '</div>';
+                    container.innerHTML = html;
+                });
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+// 單獨 AI 核對機台
+async function singleAiCheckMachine(machineId) {
+    if (!confirm('確定重新 AI 核對此機台嗎？')) return;
+    
+    try {
+        var { data: machine } = await sb.from('claw_machines').select('*').eq('id', machineId).single();
+        if (!machine || !machine.photo) { toast('找不到機台或無照片', 'error'); return; }
+        
+        var aiResult = null;
+        for (var i = 0; i < 3; i++) {
+            aiResult = await aiCheckClawMachine(machine.photo);
+            if (aiResult !== null) break;
+            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+        }
+        
+        if (aiResult && aiResult.is_claw_machine !== undefined) {
+            var result = aiResult.is_claw_machine ? 'passed' : 'failed';
+            await sb.from('claw_machines')
+                .update({
+                    ai_check_result: result,
+                    ai_confidence: aiResult.confidence_score || null,
+                    ai_checked_at: new Date().toISOString()
+                })
+                .eq('id', machineId);
+            toast('✅ AI 核對完成: ' + result);
+        } else {
+            toast('⚠️ AI 沒回應', 'error');
+        }
+        loadMachineVerifications();
+    } catch (e) {
+        toast('失敗: ' + e.message, 'error');
+    }
+}
+
+// 人工通過機台
+async function manualPassMachine(machineId) {
+    if (!confirm('確定人工通過此機台嗎？')) return;
+    
+    try {
+        await sb.from('claw_machines')
+            .update({
+                manual_pass: true,
+                manual_passed_at: new Date().toISOString(),
+                manual_passed_by: currentUser ? currentUser.display_name : 'admin',
+                ai_check_result: 'passed'
+            })
+            .eq('id', machineId);
+        toast('✅ 已人工通過');
+        loadMachineVerifications();
+    } catch (e) {
+        toast('失敗: ' + e.message, 'error');
+    }
+}
+
+// 退回機台
+async function revokeMachine(machineId) {
+    if (!confirm('確定退回此機台提交嗎？')) return;
+    
+    try {
+        var { data: machine } = await sb.from('claw_machines').select('store_id').eq('id', machineId).single();
+        
+        await sb.from('claw_machines').delete().eq('id', machineId);
+        
+        // 同步更新 claw_stores.machines
+        if (machine && machine.store_id) {
+            var { data: store } = await sb.from('claw_stores').select('machines').eq('id', machine.store_id).single();
+            if (store && store.machines) {
+                var updatedMachines = store.machines.filter(function(m) {
+                    return m.id !== machineId;
+                });
+                await sb.from('claw_stores').update({ machines: updatedMachines }).eq('id', machine.store_id);
+            }
+        }
+        
+        toast('✅ 已退回');
+        loadMachineVerifications();
+    } catch (e) {
+        toast('失敗: ' + e.message, 'error');
+    }
 }
 
 </script>

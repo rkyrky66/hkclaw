@@ -10519,182 +10519,240 @@ function selectSingleTag(btn, containerId) {
 // 機台上架 (含防重鎖)
 // ============================================================
 async function submitMachine(sid) {
-    // 🔒 防重鎖
     if (!acquireSubmitLock('submitMachine')) return;
     if (!requireLogin('上架機台')) return;
     if (isUserBanned()) {
-    showBannedMessage();
-    return;
-}
+        showBannedMessage();
+        return;
+    }
+    
     var submitBtn = disableSubmitButton('mf-submit-btn', '⏳ 提交中...');
     
     try {
-        var photoBlob = window._cam?.mf;
-        if (!photoBlob) { 
-            toast("請先拍照", "pink"); 
-            enableSubmitButton(submitBtn, '✅ 提交機台情報');
-            return; 
-        }
-        
-        if (!gpsLat || !gpsLng) {
-            toast('📍 請先點擊「開啟相機拍照」以獲取位置', 'pink');
-            enableSubmitButton(submitBtn, '✅ 提交機台情報');
-            return;
-        }
-        
-        var photoUrl = window._camPreview?.mf || '';
-        if (CLOUD_ON) {
-            try {
-                var file = new File([photoBlob], Date.now() + ".jpg", { type: 'image/jpeg' });
-                photoUrl = await uploadImage(file, 'machines');
-            } catch (e) { 
-                toast('圖片上傳失敗', 'pink'); 
-                enableSubmitButton(submitBtn, '✅ 提交機台情報');
-                return; 
-            }
-        }
-        
         var s = STORES.find(function(x) { return x.id === sid; });
         if (!s) { 
             toast('找不到該店鋪', 'pink'); 
-            enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            enableSubmitButton(submitBtn, '✅ 提交機台');
             return; 
         }
+        
+        // 檢查照片
+        var multiPhotos = window._camMulti?.['mf'] || [];
+        if (multiPhotos.length === 0) {
+            toast('請先拍照', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交機台');
+            return;
+        }
+        
+        // 檢查 GPS
+        if (!gpsLat || !gpsLng) {
+            toast('📍 請先拍照以獲取位置', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交機台');
+            return;
+        }
+        
+        // GPS 距離驗證
+        var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+        var limitDistance = isMallStore ? 0.25 : 0.1;
+        
         if (s.lat && s.lng) {
-            var isMallStoreMachine = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-            var limitDistanceMachine = isMallStoreMachine ? 0.25 : 0.1;
-            var limitMetersMachine = Math.round(limitDistanceMachine * 1000);
-            
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
-            var distanceMetersMachine = Math.round(distance * 1000);
-            if (distance > limitDistanceMachine) {
-                toast('⚠️ 你距離該店鋪 ' + distanceMetersMachine + ' 米，請在 ' + limitMetersMachine + ' 米內上架機台', 'pink');
-                enableSubmitButton(submitBtn, '✅ 提交機台情報');
+            var distanceMeters = Math.round(distance * 1000);
+            var limitMeters = Math.round(limitDistance * 1000);
+            if (distance > limitDistance) {
+                toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMeters + ' 米內上架機台', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交機台');
                 return;
             }
         }
         
-        var feats = document.querySelectorAll('#mf-feats .chip-active-green');
-        var featsArray = [];
-        feats.forEach(function(b) { return featsArray.push(b.dataset.tag); });
-        // 機台大小
-var sizesArray = [];
-document.querySelectorAll('#mf-sizes .chip-active-green').forEach(function(b) { sizesArray.push(b.dataset.tag); });
-
-// 貨品
-var goodsArray = [];
-document.querySelectorAll('#mf-goods .chip-active-green').forEach(function(b) { goodsArray.push(b.dataset.tag); });
-        if (!featsArray.length) { 
-            toast("請至少選一個台性標籤", "pink"); 
-            enableSubmitButton(submitBtn, '✅ 提交機台情報');
-            return; 
+        // 機號
+        var machineNo = document.getElementById('mf-machine-no')?.value.trim() || '';
+        
+        // 機型
+        var size = window._mfSelections.size;
+        if (!size) {
+            toast('請選擇機型', 'pink');
+            enableSubmitButton(submitBtn, '✅ 提交機台');
+            return;
         }
         
-        var playsArray = [];
-        document.querySelectorAll('#mf-plays .chip-active-green').forEach(function(b) { return playsArray.push(b.dataset.tag); });
+        // 收集選擇資料
+        var machineData = {
+            size: size,
+            no: machineNo,
+            slots: []
+        };
         
-        // 只添加一次機台
-        var newMachine = { 
-    id: sid + "_u" + uid(), 
-    no: "新" + (s.machines.length + 1), 
-    feats: featsArray,
-    sizes: sizesArray,
-    goods: goodsArray,
-    plays: playsArray, 
-    updated: now(), 
-    photo: photoUrl 
-};
-        s.machines.unshift(newMachine);
-        // ✅ 同步 claw_stores.machines 快取
-if (CLOUD_ON) {
-    try {
-        await supabaseClientInstance
-            .from('claw_stores')
-            .update({ machines: s.machines })
-            .eq('id', parseInt(sid));
-        console.log('✅ claw_stores.machines 已同步');
-    } catch (e) {
-        console.warn('⚠️ machines 同步失敗:', e.message);
-    }
-}
-        if (CLOUD_ON) {
-            try {
-                var numericMachineStoreId = parseInt(sid);
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/claw_machines",
-                    {
-                        method: 'POST',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([{
-                            store_id: numericMachineStoreId,
-                            feats: featsArray,
-                            plays: playsArray,
-                            prize: '台主自報',
-                            photo: photoUrl,
-                            created_at: new Date().toISOString()
-                        }])
-                    }
-                );
-                console.log('✅ 機台已同步到雲端');
-            } catch (e) {
-                console.warn('⚠️ 機台雲端同步失敗:', e.message);
+        if (size === 'mini') {
+            // 迷你機：四格
+            for (var i = 0; i < 4; i++) {
+                var corner = window._mfSelections.mini[i];
+                if (corner.feat && corner.brand) {
+                    machineData.slots.push({
+                        position: i,
+                        feat: corner.feat,
+                        brand_id: corner.brand,
+                        plays: corner.plays
+                    });
+                }
             }
-        }
-        
-        // 通知收藏者
-        var followers = STATE.favStores.filter(function(storeId) { return storeId === sid; });
-        if (followers.length > 0) {
-            if (!STATE.notifications) STATE.notifications = [];
-            STATE.notifications.unshift({ 
-                id: 'n' + Date.now(), 
-                type: 'machine_update', 
-                store_id: sid, 
-                store_name: s.name, 
-                message: '📢 ' + s.name + ' 有新的機台上架！', 
-                read: false, 
-                created_at: now() 
+            
+            if (machineData.slots.length === 0) {
+                toast('迷你機至少填一格', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交機台');
+                return;
+            }
+        } else {
+            // 標準/大機：單格
+            var single = window._mfSelections.single;
+            if (!single.feat || !single.brand) {
+                toast('請選擇台性和品牌', 'pink');
+                enableSubmitButton(submitBtn, '✅ 提交機台');
+                return;
+            }
+            
+            machineData.slots.push({
+                position: 0,
+                feat: single.feat,
+                brand_id: single.brand,
+                plays: single.plays
             });
-            save();
-            toast('📢 已通知 ' + followers.length + ' 位收藏者', 'gold');
         }
         
-        toast("機台已上架", "green");
-        
-        // 記錄任務進度 (機台打卡)
-        await recordTaskCompletion('machine_checkin');
-        
-        // 記錄貢獻 (機台共享)
-        if (CLOUD_ON && STATE.user.is_bound && STATE.user.user_id) {
-            try {
-                var numericMachineStoreIdForContribution = parseInt(sid);
-                await fetch(
-                    SUPABASE_URL + "/rest/v1/user_contributions",
-                    {
-                        method: 'POST',
-                        headers: getSupabaseHeaders({ 'Prefer': 'return=minimal' }),
-                        body: JSON.stringify([{
-                            user_id: STATE.user.user_id,
-                            device_id: STATE.user.device,
-                            store_id: numericMachineStoreIdForContribution,
-                            contribution_type: 'machine',
-                            contribution_value: 1,
-                            created_at: new Date().toISOString()
-                        }])
-                    }
-                );
-                console.log('✅ 貢獻記錄已同步');
-            } catch (e) {
-                console.warn('⚠️ 貢獻記錄同步失敗:', e.message);
+        // 上傳照片（最多 2 張）
+        var photoUrls = [];
+        for (var pi = 0; pi < multiPhotos.length; pi++) {
+            var photoBlob = multiPhotos[pi].blob;
+            if (CLOUD_ON) {
+                try {
+                    var file = new File([photoBlob], "machine_" + Date.now() + "_" + pi + ".jpg", { type: 'image/jpeg' });
+                    var url = await uploadImage(file, 'machines');
+                    photoUrls.push(url);
+                } catch (e) {
+                    toast('第 ' + (pi + 1) + ' 張照片上傳失敗', 'pink');
+                    enableSubmitButton(submitBtn, '✅ 提交機台');
+                    return;
+                }
+            } else {
+                photoUrls.push(multiPhotos[pi].dataUrl);
             }
         }
         
-        save();
+        // 本地顯示提交中
+        toast('📤 已提交，AI 審核中...', 'gold');
         closeModal();
-        openStore(sid);
+        
+        // AI 判定第一張照片
+        var aiResult = null;
+        for (var aiAttempt = 0; aiAttempt < 5; aiAttempt++) {
+            aiResult = await aiCheckClawMachine(photoUrls[0]);
+            if (aiResult !== null) break;
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+        }
+        
+        if (aiResult && aiResult.is_claw_machine === true) {
+            // ✅ AI 通過 → 寫入
+            var newMachine = {
+                id: sid + "_u" + uid(),
+                no: machineNo || ("新" + (s.machines.length + 1)),
+                size: size,
+                slots: machineData.slots,
+                photos: photoUrls,
+                photo: photoUrls[0],
+                updated: now(),
+                submitted_by: STATE.user.device,
+                ai_check_result: 'passed',
+                ai_confidence: aiResult.confidence_score || null
+            };
+            
+            s.machines.unshift(newMachine);
+            
+            if (CLOUD_ON) {
+                await supabaseClientInstance
+                    .from('claw_stores')
+                    .update({ machines: s.machines })
+                    .eq('id', parseInt(sid));
+                
+                await supabaseClientInstance
+                    .from('claw_machines')
+                    .insert({
+                        store_id: parseInt(sid),
+                        machine_no: machineNo,
+                        size: size,
+                        slots: machineData.slots,
+                        photos: photoUrls,
+                        photo: photoUrls[0],
+                        submitted_by: STATE.user.device,
+                        ai_check_result: 'passed',
+                        ai_confidence: aiResult.confidence_score || null,
+                        ai_checked_at: new Date().toISOString(),
+                        created_at: new Date().toISOString()
+                    });
+            }
+            
+            save();
+            await addPoints(10, '機台更新');
+            await recordTaskCompletion('machine_checkin');
+            toast('✅ 機台更新成功 +10 分', 'green');
+            
+            if (CURRENT === 'map') {
+                updateMapMarkers();
+                updateMapList();
+            }
+            
+        } else if (aiResult && aiResult.is_claw_machine === false) {
+            // ❌ AI 失敗
+            toast('❌ 照片不是夾公仔機台，已退回', 'pink');
+            
+        } else {
+            // ⚠️ AI 沒回應 → 後台處理
+            var uncheckedMachine = {
+                id: sid + "_u" + uid(),
+                no: machineNo || ("新" + (s.machines.length + 1)),
+                size: size,
+                slots: machineData.slots,
+                photos: photoUrls,
+                photo: photoUrls[0],
+                updated: now(),
+                submitted_by: STATE.user.device,
+                ai_check_result: 'unchecked'
+            };
+            
+            s.machines.unshift(uncheckedMachine);
+            
+            if (CLOUD_ON) {
+                await supabaseClientInstance
+                    .from('claw_stores')
+                    .update({ machines: s.machines })
+                    .eq('id', parseInt(sid));
+                
+                await supabaseClientInstance
+                    .from('claw_machines')
+                    .insert({
+                        store_id: parseInt(sid),
+                        machine_no: machineNo,
+                        size: size,
+                        slots: machineData.slots,
+                        photos: photoUrls,
+                        photo: photoUrls[0],
+                        submitted_by: STATE.user.device,
+                        ai_check_result: 'unchecked',
+                        created_at: new Date().toISOString()
+                    });
+            }
+            
+            save();
+            await addPoints(10, '機台更新');
+            await recordTaskCompletion('machine_checkin');
+            toast('📤 已提交，等待管理員審核', 'gold');
+        }
+        
     } finally {
         releaseSubmitLock('submitMachine');
     }
 }
+
 // ============================================================
 // 📍 店鋪打卡功能
 // ============================================================
