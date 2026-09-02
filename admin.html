@@ -2847,6 +2847,19 @@ async function singleAiCheck(storeId) {
                             ai_checked_at: new Date().toISOString()
                         })
                         .eq('id', review.id);
+                    
+                    // ✅ 如果通過，同步更新 claw_stores
+                    if (checkResult === 'passed') {
+                        await sb.from('claw_stores')
+                            .update({
+                                status: 'verified',
+                                is_verified: true,
+                                submitter_reward_claimed: false
+                            })
+                            .eq('id', numericStoreId);
+                        console.log('✅ claw_stores 已更新為 verified');
+                    }
+                    
                     console.log('✅ 認證 AI:', checkResult);
                 }
             } else if (hasVerifier1) {
@@ -2871,6 +2884,19 @@ async function singleAiCheck(storeId) {
                             ai_checked_at: new Date().toISOString()
                         })
                         .eq('id', review.id);
+                    
+                    // ✅ 如果通過，同步更新 claw_stores
+                    if (checkResult1 === 'passed') {
+                        await sb.from('claw_stores')
+                            .update({
+                                status: 'verified',
+                                is_verified: true,
+                                submitter_reward_claimed: false
+                            })
+                            .eq('id', numericStoreId);
+                        console.log('✅ claw_stores 已更新為 verified');
+                    }
+                    
                     console.log('✅ 認證 AI:', checkResult1);
                 }
             }
@@ -2895,7 +2921,6 @@ async function batchAiCheckUnchecked() {
     toast('🔄 開始補做 AI 核對...');
     
     try {
-        // ✅ 查詢所有店鋪（包含提交 AI 未判定的）
         console.log('🔍 3. 查詢需要補做的店鋪...');
         
         var { data: stores } = await sb.from('claw_stores')
@@ -2915,7 +2940,6 @@ async function batchAiCheckUnchecked() {
         
         var allReviews = (nullReviews || []).concat(uncheckedReviews || []).concat(lowConfidenceReviews || []);
         
-        // 去重
         var uniqueReviews = [];
         var seenIds = {};
         for (var i = 0; i < allReviews.length; i++) {
@@ -2946,18 +2970,17 @@ async function batchAiCheckUnchecked() {
             var store = storeList[si];
             console.log('📸 補做提交 AI：store_id:', store.id, store.name);
             
-                            if (store.photo) {
-                    // ✅ 重試 3 次 + 每次間隔 3 秒
-                    var submitAiResult = null;
-                    for (var submitAttempt = 0; submitAttempt < 3; submitAttempt++) {
-                        submitAiResult = await aiCheckClawStore(store.photo);
-                        if (submitAiResult !== null) break;
-                        console.log('   ⚠️ 重試第 ' + (submitAttempt + 1) + ' 次...');
-                        await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                    }
-                    console.log('   提交 AI 結果:', submitAiResult);
-                    
-                    if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
+            if (store.photo) {
+                var submitAiResult = null;
+                for (var submitAttempt = 0; submitAttempt < 3; submitAttempt++) {
+                    submitAiResult = await aiCheckClawStore(store.photo);
+                    if (submitAiResult !== null) break;
+                    console.log('   ⚠️ 重試第 ' + (submitAttempt + 1) + ' 次...');
+                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                }
+                console.log('   提交 AI 結果:', submitAiResult);
+                
+                if (submitAiResult && submitAiResult.is_claw_store !== undefined) {
                     var submitStatus = submitAiResult.is_claw_store ? 'passed' : 'failed';
                     await sb.from('claw_stores')
                         .update({ 
@@ -2987,7 +3010,6 @@ async function batchAiCheckUnchecked() {
             
             if (hasVerifier1 && hasVerifier2) {
                 console.log('   有 2 位認證者，執行完整核對...');
-                // ✅ 重試 3 次
                 var aiResults = null;
                 for (var attempt = 0; attempt < 3; attempt++) {
                     aiResults = await runAiVerificationCheck(
@@ -3016,6 +3038,18 @@ async function batchAiCheckUnchecked() {
                         })
                         .eq('id', review.id);
                     
+                    // ✅ 如果通過，同步更新 claw_stores
+                    if (checkResult === 'passed') {
+                        await sb.from('claw_stores')
+                            .update({
+                                status: 'verified',
+                                is_verified: true,
+                                submitter_reward_claimed: false
+                            })
+                            .eq('id', parseInt(review.store_id));
+                        console.log('   ✅ claw_stores 已更新為 verified');
+                    }
+                    
                     console.log('   ✅ 已寫入:', checkResult);
                     if (checkResult === 'passed') passedCount++;
                     else failedCount++;
@@ -3023,9 +3057,8 @@ async function batchAiCheckUnchecked() {
                     console.log('   ⚠️ AI 沒回應');
                     errorCount++;
                 }
-                        } else if (hasVerifier1) {
+            } else if (hasVerifier1) {
                 console.log('   只有 1 位認證者，執行單組核對...');
-                // ✅ 重試 3 次
                 var aiResult1 = null;
                 for (var attempt1 = 0; attempt1 < 3; attempt1++) {
                     aiResult1 = await aiCompareStorePhotos(
@@ -3049,6 +3082,18 @@ async function batchAiCheckUnchecked() {
                             ai_checked_at: new Date().toISOString()
                         })
                         .eq('id', review.id);
+                    
+                    // ✅ 如果通過，同步更新 claw_stores
+                    if (checkResult1 === 'passed') {
+                        await sb.from('claw_stores')
+                            .update({
+                                status: 'verified',
+                                is_verified: true,
+                                submitter_reward_claimed: false
+                            })
+                            .eq('id', parseInt(review.store_id));
+                        console.log('   ✅ claw_stores 已更新為 verified');
+                    }
                     
                     console.log('   ✅ 已寫入:', checkResult1);
                     if (checkResult1 === 'passed') passedCount++;

@@ -3693,7 +3693,7 @@ async function loadCloud() {
     }
     
     STORES = stores.map(function(s) {
-      var isVerified = s.status === "verified" || s.verified === "verified";
+          var isVerified = !!(s.first_verifier_device);
       
       // ✅ 判斷用戶是否已認證此店鋪
       var userVerified = !!userVerifiedStoreIds[String(s.id)];
@@ -4692,7 +4692,7 @@ marker.on('click', function(e) {
   
     // 地鋪圖釘：黃色(未認證)/綠色(已認證)，顯示店名(最多4字)
   standaloneStores.forEach(function(s) {
-    var isVerified = s.verified === "verified";
+        var isVerified = !!(s.first_verifier_device);
     var bgColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
     var isNewStore = !s.first_verifier_device && s.ai_verification_status === 'passed';
@@ -4894,8 +4894,11 @@ function renderMapStoreListWithData(inBounds) {
     return dist.toFixed(1) + "km";
   };
 
-var renderStoreItem = function(s, index) {
-    var isVerified = s.status === "verified" || s.verified === "verified";
+  var renderStoreItem = function(s, index) {
+    var hasFirstVerifier = !!(s.first_verifier_device);
+    var hasSecondVerifier = !!(s.second_verifier_device);
+    var isVerified = hasFirstVerifier;
+    
     var nameColor = isVerified ? '#00CC66' : '#FFB800';
     var btnColor = isVerified ? '#00FF88' : '#FFD700';
     
@@ -4911,31 +4914,26 @@ var renderStoreItem = function(s, index) {
     
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
-        if (!isVerified) {
-    var hasFirstVerifier = !!s.first_verifier_device;
-    var hasSecondVerifier = !!s.second_verifier_device;
-    
-    if (hasFirstVerifier && hasSecondVerifier) {
-        // 已有 2 位認證者
-        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
+    // 認證按鈕（三態：無認證/1次認證/2次認證）
+    if (!hasFirstVerifier) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🔥 認證</span>';
+    } else if (!hasSecondVerifier) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #3B82F6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">追加認證</span>';
     } else {
-        var verifyButtonText = !hasFirstVerifier ? '🔥 認證' : '追加認證';
-        var verifyButtonColor = !hasFirstVerifier ? '#FFB800' : '#3B82F6';
-        
-        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + verifyButtonColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + verifyButtonText + '</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
     }
-} else {
-    buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
-}
     
+    // 補充按鈕
     if (!hasSupplemented) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
     } else {
         buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完成補充\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">補充 ✅</span>';
     }
     
+    // 打卡按鈕
     buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
     
+    // 戰績按鈕
     buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasPosted ? '戰績 ✅' : '戰績 📢') + '</span>';
     
     buttonsHtml += '</div>';
@@ -4951,7 +4949,7 @@ var renderStoreItem = function(s, index) {
         '</div>\n' +
     '</button>';
 };
-  
+ 
 var renderMallGroup = function(group) {
     var distText = '未開啟GPS定位';
     if (userLocation && group.stores[0].lat && group.stores[0].lng) {
@@ -5320,7 +5318,7 @@ function buildStoreContent(s, _a) {
     }
     var isInMall = s.mall && s.mall.trim() !== '';
     var mallInfo = isInMall ? '<span class="text-[10px] text-white/30 ml-2">' + s.mall + '</span>' : '';
-    var isVerified = s.status === "verified" || s.verified === "verified";
+        var isVerified = !!(s.first_verifier_device);
     var totalVerifications = (s.verification_count || 0) + (s.verification_count_2 || 0);
     var statusBadge = isVerified ? '<span class="text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="text-[10px] text-yellow-400">⏳ 審核中 (' + totalVerifications + '/2)</span>';
         // 認證者列表
@@ -7255,61 +7253,474 @@ function openSupplementForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
   
-  // 重置地區選擇
+  // 重置狀態
   window._supplementDistrict = '';
   window._supplementStreet = '';
   window._supplementBuildingNo = '';
   window._supplementCurrentTab = 'kl';
+  window._supplementPart2Locked = true;
+  window._supplementCoinChoice = '';
+  window._supplementSelections = {};
+  window._cam = window._cam || {};
+  window._camPreview = window._camPreview || {};
+  window._cam['sp'] = null;
+  window._camPreview['sp'] = null;
+  
+  // 檢查 GPS 距離，判斷第二部分是否鎖定
+  var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+  var limitDistance = isMallStore ? 0.25 : 0.1;
+  var gpsUnlocked = false;
+  
+  if (gpsLat && gpsLng && s.lat && s.lng) {
+    var dist = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+    gpsUnlocked = dist <= limitDistance;
+    window._supplementPart2Locked = !gpsUnlocked;
+  }
   
   openModal(`
     <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
-      <h2 class="font-black text-gold neon-gold">📝 補充地址</h2>
+      <h2 class="font-black text-gold neon-gold">📝 補充資料</h2>
       <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
     </div>
-    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4" style="-webkit-overflow-scrolling:touch;">
+      
+      <!-- 第一部分：地址 -->
       <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-        <p class="text-sm font-bold text-gold">${s.name}</p>
-        <p class="text-xs text-white/40">${s.region} · ${s.addr || '未填地址'}</p>
-        <p class="text-xs text-white/30 mt-1">補充地址可獲得 <span class="text-neongreen font-bold">+15 積分</span></p>
-      </div>
-      
-      <div>
-        <label class="text-xs font-bold text-gold">📍 地區 <span class="text-neonpink">（必填）</span></label>
-        <div class="mt-2 flex gap-2">
-          ${Object.keys(REGIONS).map(function(key) {
-            return '<button onclick="selectSupplementDistrictTab(\'' + key + '\')" id="sup-tab-' + key + '" class="flex-1 rounded-xl border py-2 text-sm font-black transition-all ' + (key === 'kl' ? 'border-gold bg-gold/20 text-gold' : 'border-white/20 text-white/45') + '">' + REGIONS[key].icon + ' ' + REGIONS[key].label + '</button>';
-          }).join('')}
+        <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）</p>
+        <div class="mt-3 flex gap-2 items-center">
+          <select id="sp-district" onchange="onSupplementDistrictChange(this.value)" class="rounded-lg border border-gold/40 bg-zinc-900 px-2 py-2.5 text-sm text-white focus:outline-none focus:border-gold" style="max-width:100px;flex-shrink:0;">
+            <option value="">地區</option>
+          </select>
+          <input id="sp-street" placeholder="街道" autocomplete="off" 
+            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+            oninput="onSupplementStreetInput(this.value)" />
+          <input id="sp-building-no" placeholder="街號" 
+            class="rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+            style="width:60px;flex-shrink:0;" />
         </div>
-        <div id="supplement-district-buttons" class="mt-2 flex flex-wrap gap-1.5"></div>
-        <div id="supplement-district-selected" class="hidden mt-2 text-sm text-gold">✅ 已選：<span id="supplement-district-display"></span></div>
+        <div id="sp-address-preview" class="mt-2 text-xs text-white/50">預覽：<span id="sp-address-preview-text"></span></div>
+        <div id="sp-street-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-32 overflow-y-auto"></div>
       </div>
       
-      <div>
-        <label class="text-xs font-bold text-gold">📍 街道 <span class="text-neonpink">（必填，輸入時自動搜尋）</span></label>
-        <input id="supplement-street" placeholder="例如：西洋菜南街" autocomplete="off" 
-          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
-          oninput="onSupplementStreetInput(this.value)" />
-        <div id="supplement-street-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>
+      <!-- 第二部分：店鋪資料 -->
+      <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-neongreen/30 bg-neongreen/5' : 'border-white/10 bg-white/5 opacity-50'}">
+        <p class="text-xs font-bold ${gpsUnlocked ? 'text-neongreen' : 'text-white/30'}">🎰 第二部分：店鋪資料（+20 分）</p>
+        ${gpsUnlocked ? `
+          <div class="mt-3 space-y-3">
+            <div>
+              <label class="text-xs text-gold">兌幣機狀態</label>
+              <div class="mt-1.5 flex gap-2">
+                <button onclick="selectSupplementCoin('has_ecoin')" data-coin="has_ecoin" class="sp-coin-btn flex-1 rounded-xl border border-white/20 py-2 text-xs font-bold text-white/45">有電子支付</button>
+                <button onclick="selectSupplementCoin('no_ecoin')" data-coin="no_ecoin" class="sp-coin-btn flex-1 rounded-xl border border-white/20 py-2 text-xs font-bold text-white/45">無電子支付</button>
+                <button onclick="selectSupplementCoin('no_machine')" data-coin="no_machine" class="sp-coin-btn flex-1 rounded-xl border border-white/20 py-2 text-xs font-bold text-white/45">無兌幣機</button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-gold">規模</label>
+              <div class="mt-1.5 flex gap-2">
+                <button onclick="selectSupplementField('size','small')" data-field="size" data-value="small" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">10台以下</button>
+                <button onclick="selectSupplementField('size','medium')" data-field="size" data-value="medium" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">10-30台</button>
+                <button onclick="selectSupplementField('size','large')" data-field="size" data-value="large" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">30台以上</button>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <label class="text-xs text-gold">場務</label>
+                <div class="mt-1.5 flex gap-2">
+                  <button onclick="selectSupplementField('has_staff','true')" data-field="has_staff" data-value="true" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">有</button>
+                  <button onclick="selectSupplementField('has_staff','false')" data-field="has_staff" data-value="false" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">無</button>
+                </div>
+              </div>
+              <div class="flex-1">
+                <label class="text-xs text-gold">24小時</label>
+                <div class="mt-1.5 flex gap-2">
+                  <button onclick="selectSupplementField('hour24','true')" data-field="hour24" data-value="true" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">是</button>
+                  <button onclick="selectSupplementField('hour24','false')" data-field="hour24" data-value="false" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">否</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-gold">遊戲幣</label>
+              <div class="mt-1.5 flex gap-2">
+                <button onclick="selectSupplementField('token','5dollar')" data-field="token" data-value="5dollar" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">5元</button>
+                <button onclick="selectSupplementField('token','token')" data-field="token" data-value="token" class="sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45">代幣</button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-gold">📷 拍兌幣機照片</label>
+              <div id="sp-camera-container" class="mt-1.5 rounded-xl border-2 border-dashed border-gold/60 bg-zinc-900 p-3 text-center">
+                <button onclick="openCamera('sp')" class="w-full rounded-lg bg-gold/90 py-2.5 text-sm font-black text-black">📸 拍照</button>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <p class="mt-2 text-xs text-white/30 text-center">⚠️ 要到現場才能填寫</p>
+        `}
       </div>
-      
-      <div>
-        <label class="text-xs font-bold text-gold">📍 街號 <span class="text-neonpink">（必填）</span></label>
-        <input id="supplement-building-no" placeholder="例如：2A、33、41-45" 
-          class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" />
-      </div>
-      
-      <div id="supplement-result" class="hidden"></div>
     </div>
-    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
-      <button onclick="submitSupplementAddress('${s.id}')" id="supplement-submit-btn" 
-        class="w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green">
-        🔍 提交驗證地址
-      </button>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10 flex gap-2">
+      <button onclick="submitSupplementPart1('${s.id}')" id="sp-submit-part1" class="flex-1 rounded-2xl bg-gold py-3 text-sm font-black text-black">提交地址 +15分</button>
+      <button onclick="submitSupplementPart2('${s.id}')" id="sp-submit-part2" class="flex-1 rounded-2xl bg-neongreen py-3 text-sm font-black text-black" ${gpsUnlocked ? '' : 'disabled style="opacity:0.3;cursor:not-allowed;"'}>提交資料 +20分</button>
     </div>
   `);
   
-  // 初始化地區按鈕
-  renderSupplementDistrictButtons();
+  renderSupplementDistricts();
+}
+
+// 渲染地區選單
+function renderSupplementDistricts() {
+  var select = document.getElementById('sp-district');
+  if (!select) return;
+  
+  var html = '<option value="">地區</option>';
+  for (var key in REGIONS) {
+    var group = REGIONS[key];
+    var regions = group.hot.concat(group.more);
+    regions.forEach(function(r) {
+      html += '<option value="' + r + '"' + (window._supplementDistrict === r ? ' selected' : '') + '>' + r + '</option>';
+    });
+  }
+  select.innerHTML = html;
+}
+
+// 地區變更
+function onSupplementDistrictChange(value) {
+  window._supplementDistrict = value;
+  updateSupplementAddressPreview();
+}
+
+// 街道輸入
+var _spStreetTimer = null;
+function onSupplementStreetInput(value) {
+  window._supplementStreet = value.trim();
+  clearTimeout(_spStreetTimer);
+  _spStreetTimer = setTimeout(function() {
+    autocompleteSupplementStreet(window._supplementStreet);
+  }, 500);
+  updateSupplementAddressPreview();
+}
+
+// 街道 AutoComplete
+async function autocompleteSupplementStreet(query) {
+  var container = document.getElementById('sp-street-suggestions');
+  if (!container) return;
+  
+  if (!query || query.length < 1) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  try {
+    var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + (window._supplementDistrict ? window._supplementDistrict + ' ' : '') + query);
+    var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+    var alsData = await alsRes.json();
+    
+    var streets = [];
+    if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+      for (var i = 0; i < alsData.SuggestedAddress.length; i++) {
+        var chiStreet = alsData.SuggestedAddress[i].Address.PremisesAddress.ChiPremisesAddress;
+        if (chiStreet && chiStreet.ChiStreet && chiStreet.ChiStreet.StreetName) {
+          var streetName = chiStreet.ChiStreet.StreetName;
+          if (streets.indexOf(streetName) === -1) streets.push(streetName);
+        }
+      }
+    }
+    
+    if (streets.length > 0) {
+      container.innerHTML = streets.map(function(st) {
+        return '<button onclick="selectSupplementStreet(\'' + st.replace(/'/g, "\\'") + '\')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0">' + st + '</button>';
+      }).join('');
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+    }
+  } catch (e) {
+    container.classList.add('hidden');
+  }
+}
+
+// 選擇街道
+function selectSupplementStreet(street) {
+  window._supplementStreet = street;
+  var input = document.getElementById('sp-street');
+  if (input) input.value = street;
+  var container = document.getElementById('sp-street-suggestions');
+  if (container) container.classList.add('hidden');
+  updateSupplementAddressPreview();
+}
+
+// 更新地址預覽
+function updateSupplementAddressPreview() {
+  var previewText = document.getElementById('sp-address-preview-text');
+  if (!previewText) return;
+  
+  var parts = [];
+  if (window._supplementDistrict) parts.push(window._supplementDistrict);
+  if (window._supplementStreet) parts.push(window._supplementStreet);
+  var buildingNo = document.getElementById('sp-building-no')?.value.trim();
+  if (buildingNo) parts.push(buildingNo);
+  
+  previewText.textContent = parts.join(' ');
+}
+
+// 街號輸入
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'sp-building-no') {
+    updateSupplementAddressPreview();
+  }
+});
+
+// 選擇兌幣機狀態
+function selectSupplementCoin(choice) {
+  window._supplementCoinChoice = choice;
+  document.querySelectorAll('.sp-coin-btn').forEach(function(btn) {
+    if (btn.dataset.coin === choice) {
+      btn.className = 'sp-coin-btn flex-1 rounded-xl border border-gold bg-gold/20 py-2 text-xs font-bold text-gold';
+    } else {
+      btn.className = 'sp-coin-btn flex-1 rounded-xl border border-white/20 py-2 text-xs font-bold text-white/45';
+    }
+  });
+}
+
+// 選擇欄位
+function selectSupplementField(fieldName, value) {
+  window._supplementSelections[fieldName] = value;
+  document.querySelectorAll('.sp-field-btn[data-field="' + fieldName + '"]').forEach(function(btn) {
+    if (btn.dataset.value === value) {
+      btn.className = 'sp-field-btn flex-1 rounded-lg border border-gold bg-gold/20 py-1.5 text-[10px] text-gold';
+    } else {
+      btn.className = 'sp-field-btn flex-1 rounded-lg border border-white/20 py-1.5 text-[10px] text-white/45';
+    }
+  });
+}
+
+// AI 核對兌幣機照片
+async function aiCheckCoinMachine(photoUrl) {
+    try {
+        var apiKey = await getOpenRouterApiKey();
+        if (!apiKey) return null;
+        
+        var prompt = '判斷這張照片的兌幣機狀態。回傳：{"coin_type": "has_ecoin"或"no_ecoin"或"panorama"或"invalid", "confidence_score": 0.0到1.0}。has_ecoin=有電子支付功能的兌幣機，no_ecoin=只有現金的兌幣機，panorama=店鋪全景（無兌幣機），invalid=無關照片';
+        
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: AI_MODEL,
+                max_tokens: 500,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: photoUrl, detail: 'low' } }
+                        ]
+                    }
+                ]
+            })
+        });
+        
+        if (!response.ok) return null;
+        var data = await response.json();
+        var content = data.choices[0].message.content;
+        if (!content) return null;
+        
+        var cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        try {
+            return JSON.parse(cleanContent);
+        } catch (e) {
+            var startIdx = cleanContent.indexOf('{');
+            var endIdx = cleanContent.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1) {
+                return JSON.parse(cleanContent.slice(startIdx, endIdx + 1));
+            }
+            return null;
+        }
+    } catch (e) {
+        return null;
+    }
+}
+
+// 提交第一部分（地址）
+async function submitSupplementPart1(storeId) {
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) return;
+    
+    var district = window._supplementDistrict;
+    var street = window._supplementStreet;
+    var buildingNo = document.getElementById('sp-building-no')?.value.trim();
+    
+    if (!district || !street || !buildingNo) {
+        toast('請完成地區、街道、街號', 'pink');
+        return;
+    }
+    
+    var fullAddress = district + ' ' + street + ' ' + buildingNo;
+    
+    // 用 ALS 驗證
+    var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + fullAddress);
+    var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
+    var alsData = await alsRes.json();
+    
+    var geocodedLat = null;
+    var geocodedLng = null;
+    
+    if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
+        var geo = alsData.SuggestedAddress[0].Address.PremisesAddress.GeospatialInformation;
+        geocodedLat = parseFloat(geo.Latitude);
+        geocodedLng = parseFloat(geo.Longitude);
+    }
+    
+    var distanceMeters = null;
+    if (geocodedLat && s.lat && s.lng) {
+        distanceMeters = Math.round(calculateDistance(s.lat, s.lng, geocodedLat, geocodedLng) * 1000);
+    }
+    
+    if (distanceMeters !== null && distanceMeters < 100) {
+        // 驗證通過
+        s.addr = fullAddress;
+        if (CLOUD_ON) {
+            await supabaseClientInstance.from('claw_stores').update({ addr: fullAddress }).eq('id', parseInt(storeId));
+        }
+        save();
+        await addPoints(15, '補充地址');
+        await recordTaskCompletion('supplement');
+        await recordRegionContribution('supplement', s.region, storeId);
+        toast('✅ 地址驗證通過 +15 分', 'green');
+        
+        if (CURRENT === 'map') {
+            updateMapList();
+            updateMapMarkers();
+        }
+    } else {
+        // 驗證失敗，提交審核
+        if (CLOUD_ON) {
+            await supabaseClientInstance.from('address_submissions').insert({
+                store_id: String(storeId),
+                submitted_address: fullAddress,
+                submitted_by: STATE.user.device,
+                user_id: STATE.user.user_id || null,
+                geocoded_lat: geocodedLat,
+                geocoded_lng: geocodedLng,
+                store_lat: s.lat || null,
+                store_lng: s.lng || null,
+                distance_meters: distanceMeters,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            });
+        }
+        toast('📤 已提交管理員審核', 'gold');
+    }
+    
+    closeModal();
+}
+
+// 提交第二部分（店鋪資料）
+async function submitSupplementPart2(storeId) {
+    var s = STORES.find(function(x) { return x.id === storeId; });
+    if (!s) return;
+    
+    if (window._supplementPart2Locked) {
+        toast('⚠️ 要到現場才能填寫', 'gold');
+        return;
+    }
+    
+    // 檢查 GPS
+    var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
+    var limitDistance = isMallStore ? 0.25 : 0.1;
+    if (s.lat && s.lng && gpsLat && gpsLng) {
+        var dist = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
+        if (dist > limitDistance) {
+            toast('⚠️ 距離太遠，請到現場填寫', 'pink');
+            return;
+        }
+    }
+    
+    // 檢查必填
+    if (!window._supplementCoinChoice) {
+        toast('請選擇兌幣機狀態', 'pink');
+        return;
+    }
+    if (!window._supplementSelections.size) {
+        toast('請選擇規模', 'pink');
+        return;
+    }
+    if (!window._supplementSelections.has_staff) {
+        toast('請選擇場務', 'pink');
+        return;
+    }
+    if (!window._supplementSelections.hour24) {
+        toast('請選擇24小時', 'pink');
+        return;
+    }
+    if (!window._supplementSelections.token) {
+        toast('請選擇遊戲幣', 'pink');
+        return;
+    }
+    
+    var photoBlob = window._cam?.sp;
+    if (!photoBlob) {
+        toast('請拍兌幣機照片', 'pink');
+        return;
+    }
+    
+    // 上傳照片
+    var photoUrl = window._camPreview?.sp || '';
+    if (CLOUD_ON) {
+        var file = new File([photoBlob], "coin_" + Date.now() + ".jpg", { type: 'image/jpeg' });
+        photoUrl = await uploadImage(file, 'supplements');
+    }
+    
+    // AI 核對
+    var aiResult = null;
+    for (var i = 0; i < 3; i++) {
+        aiResult = await aiCheckCoinMachine(photoUrl);
+        if (aiResult !== null) break;
+        await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+    }
+    
+    var aiCoinType = aiResult ? aiResult.coin_type : 'invalid';
+    
+    // 一致性驗證
+    var consistent = false;
+    if (window._supplementCoinChoice === 'has_ecoin' && aiCoinType === 'has_ecoin') {
+        consistent = true;
+    } else if (window._supplementCoinChoice === 'no_ecoin' && aiCoinType === 'no_ecoin') {
+        consistent = true;
+    } else if (window._supplementCoinChoice === 'no_machine' && aiCoinType === 'panorama') {
+        consistent = true;
+    }
+    
+    if (!consistent) {
+        toast('❌ AI 核對不一致，請確認照片和選擇是否正確', 'pink');
+        return;
+    }
+    
+    // 寫入投票
+    var votePromises = [];
+    for (var key in window._supplementSelections) {
+        votePromises.push(castFieldVote(storeId, key, window._supplementSelections[key]));
+    }
+    await Promise.all(votePromises);
+    
+    // 更新店鋪
+    if (CLOUD_ON) {
+        await supabaseClientInstance.from('claw_stores')
+            .update({
+                supplement_photo: photoUrl,
+                supplemented_by: STATE.user.device,
+                supplement_count: (s.supplement_count || 0) + 1
+            })
+            .eq('id', parseInt(storeId));
+    }
+    
+    await addPoints(20, '補充店鋪資料');
+    await recordTaskCompletion('supplement');
+    toast('✅ 店鋪資料補充成功 +20 分', 'green');
+    closeModal();
 }
 
 // 選擇地區 Tab
@@ -8064,7 +8475,7 @@ async function submitPlayerPost() {
         
         if (store.lat && store.lng) {
             var isMallStorePost = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
-            var limitDistancePost = isMallStorePost ? 0.4 : 0.25;
+            var limitDistancePost = isMallStorePost ? 0.25 : 0.1;
             var limitMetersPost = Math.round(limitDistancePost * 1000);
             
             var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
@@ -8247,7 +8658,7 @@ async function submitOwnerPost() {
         
               if (store.lat && store.lng) {
             var isMallStoreOwner = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
-            var limitDistanceOwner = isMallStoreOwner ? 0.4 : 0.25;
+            var limitDistanceOwner = isMallStoreOwner ? 0.25 : 0.1;
             var limitMetersOwner = Math.round(limitDistanceOwner * 1000);
             
             var distance = calculateDistance(store.lat, store.lng, gpsLat, gpsLng);
@@ -8946,7 +9357,7 @@ var formatDist = function(s) {
 };
   
   function renderStoreCard(s) {
-    var isVerified = s.status === "verified" || s.verified === "verified";
+        var isVerified = !!(s.first_verifier_device);
     var badge = isVerified ? '<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen whitespace-nowrap">✅ 已認證</span>' : '<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400 whitespace-nowrap">⏳ 審核中</span>';
     var borderClass = isVerified ? "border-gold/25 hover:border-gold/60" : "border-yellow-400/30 border-dashed hover:border-yellow-400/60";
     var distDisplay = (userLocation && s.lat && s.lng) ? '<span class="text-neonpink neon-pink whitespace-nowrap">📍 ' + formatDist(s) + '</span>' : '<span class="text-white/40 whitespace-nowrap">📍 ' + (s.dist || '?') + ' km</span>';
@@ -9038,7 +9449,7 @@ function loadMoreStores() {
   };
   
   var newHtml = pageItems.map(function(s) {
-    var isVerified = s.status === "verified" || s.verified === "verified";
+        var isVerified = !!(s.first_verifier_device);
     var badge = isVerified ? '<span class="rounded-full border border-neongreen/40 bg-neongreen/10 px-2 py-0.5 text-[10px] text-neongreen">✅ 已認證</span>' : '<span class="rounded-full border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 text-[10px] text-yellow-400">⏳ 審核中</span>';
     var borderClass = isVerified ? "border-gold/25 hover:border-gold/60" : "border-yellow-400/30 border-dashed hover:border-yellow-400/60";
     var distDisplay = (userLocation && s.lat && s.lng) ? '<span class="text-neonpink neon-pink">📍 ' + formatDist(s) + '</span>' : '<span class="text-white/40">📍 ' + (s.dist || '?') + ' km</span>';
@@ -9949,7 +10360,7 @@ async function submitMachine(sid) {
         }
         if (s.lat && s.lng) {
             var isMallStoreMachine = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-            var limitDistanceMachine = isMallStoreMachine ? 0.4 : 0.25;
+            var limitDistanceMachine = isMallStoreMachine ? 0.25 : 0.1;
             var limitMetersMachine = Math.round(limitDistanceMachine * 1000);
             
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
@@ -10129,7 +10540,7 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
         
         if (s.lat && s.lng) {
             var isMallStoreCheckin = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-            var limitDistanceCheckin = isMallStoreCheckin ? 0.4 : 0.25;
+            var limitDistanceCheckin = isMallStoreCheckin ? 0.25 : 0.1;
             var limitMetersCheckin = Math.round(limitDistanceCheckin * 1000);
             
             var distance = calculateDistance(s.lat, s.lng, gpsLat, gpsLng);
@@ -11113,7 +11524,7 @@ async function aiCheckClawStore(photoUrl) {
 // ============================================================
 async function submitIntel() {
     if (!acquireSubmitLock('submitIntel')) return;
-
+    // ✅ 不需登入（AI/GPS 把關）
     if (isUserBanned()) {
         showBannedMessage();
         return;
@@ -11146,6 +11557,10 @@ async function submitIntel() {
             enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
             return;
         }
+        
+        // ✅ 關閉彈窗前保存 GPS 到局部變數
+        var capturedLat = _finalGpsLat;
+        var capturedLng = _finalGpsLng;
         
         var addr = '';
         if (selectedType === 'mall' && selectedMall && selectedFloor) {
@@ -11201,7 +11616,6 @@ async function submitIntel() {
             aiResult = await aiCheckClawStore(photoUrl);
             if (aiResult !== null) break;
             
-            // 等待 2 秒再重試
             await new Promise(function(resolve) { setTimeout(resolve, 2000); });
         }
         
@@ -11218,8 +11632,8 @@ async function submitIntel() {
                 staff: false,
                 machines: [],
                 photo: photoUrl,
-                lat: _finalGpsLat,
-                lng: _finalGpsLng,
+                lat: capturedLat,
+                lng: capturedLng,
                 mall: selectedType === 'mall' ? selectedMall : '',
                 floor: selectedType === 'mall' ? selectedFloor : '',
                 submitted_by: (STATE.user.user_id && isValidUUID(STATE.user.user_id)) ? STATE.user.user_id : null,
@@ -11233,8 +11647,7 @@ async function submitIntel() {
                 supplemented_by: null,
                 device: STATE.user.device,
                 ai_verification_status: 'passed',
-                verification_required: 1,
-                submit_ai_confidence: aiResult.confidence_score || null
+                verification_required: 1
             };
             
             var insertedId = null;
@@ -11295,7 +11708,6 @@ async function submitIntel() {
             // ❌ AI 判定失敗 → 通知用戶
             toast('❌ 提交不符合要求，已退回（照片不是夾公仔店）', 'pink');
             
-            // 通知用戶
             if (STATE.user.is_bound && STATE.user.user_id) {
                 addNotification('store_rejected', '你提交的店鋪「' + name + '」不符合要求，已退回');
             }
@@ -11304,15 +11716,14 @@ async function submitIntel() {
             // ⚠️ AI 沒回應 → 丟到後台處理
             toast('📤 已提交，等待管理員審核', 'gold');
             
-            // 寫入雲端（狀態 = unchecked）
             var newStore = {
                 name: name,
                 region: selectedRegion,
                 addr: addr,
                 status: 'pending',
                 photo: photoUrl,
-                lat: _finalGpsLat,
-                lng: _finalGpsLng,
+                lat: capturedLat,
+                lng: capturedLng,
                 mall: selectedType === 'mall' ? selectedMall : '',
                 floor: selectedType === 'mall' ? selectedFloor : '',
                 submitted_by_device: STATE.user.device,
@@ -11341,7 +11752,6 @@ async function submitIntel() {
         releaseSubmitLock('submitIntel');
     }
 }
-
 
 // ============================================================
 // 導航與視圖切換
@@ -11432,6 +11842,11 @@ function timeAgo(ts) {
 }
 
 function openModal(html) {
+  // ✅ 開新彈窗時清空舊 GPS
+  _finalGpsLat = null;
+  _finalGpsLng = null;
+  _finalGpsLocked = false;
+  
   var root = document.getElementById("modal-root");
   root.className = "fixed inset-0 z-50 mx-auto flex max-w-md items-end justify-center";
   root.innerHTML = '<div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div><div class="no-scrollbar animate-pop relative w-full rounded-t-3xl border-t border-gold/40 bg-zinc-950 p-5 glow-gold" style="height:90vh; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">' + html + '</div>';
@@ -11453,9 +11868,7 @@ function closeModal() {
       delete window._camStreams[key];
   });
   
-  _finalGpsLat = null;
-  _finalGpsLng = null;
-  _finalGpsLocked = false;
+
   _verifyMode = 'confirm';
   _verifyReportCategory = '';
   
@@ -12957,7 +13370,7 @@ async function submitHunterTask() {
         
         // 驗證距離
         var isMallStore = store.type === 'mall' || (store.mall && store.mall.trim() !== '');
-                    var limitDistance = isMallStore ? 0.4 : 0.25;
+                    var limitDistance = isMallStore ? 0.25 : 0.1;
         
         if (store.lat && store.lng) {
             var distance = calculateDistance(store.lat, store.lng, _finalGpsLat, _finalGpsLng);
