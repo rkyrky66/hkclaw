@@ -680,6 +680,9 @@
 <li class="nav-item" data-tab="machine-verifications" onclick="switchTab('machine-verifications')">
     <i class="fas fa-gamepad"></i><span>機台審核</span>
 </li>
+<li class="nav-item" data-tab="region-check" onclick="switchTab('region-check')">
+    <i class="fas fa-map-marked-alt"></i><span>地區檢查</span>
+</li>
 <li class="nav-item" data-tab="address-submissions" onclick="switchTab('address-submissions')">
     <i class="fas fa-map-marker-alt"></i><span>地址審核</span>
 </li>
@@ -1186,7 +1189,8 @@ dashboard: '儀表板',
     'bounty-reviews': '🏆 懸賞審核',
     'reports': '🚨 檢舉清單',
     'address-submissions': '📍 地址審核',
-     'custom-floors': '🏢 自訂樓層'
+     'custom-floors': '🏢 自訂樓層',
+     'region-check': '📍 地區檢查'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
@@ -1205,7 +1209,8 @@ dashboard: '儀表板',
     'bounty-reviews': loadBountyReviews,
     'reports': loadReports,
     'address-submissions': loadAddressSubmissions,
-    'custom-floors': loadCustomFloors
+    'custom-floors': loadCustomFloors,
+    'region-check': loadRegionCheck
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -5971,6 +5976,245 @@ async function revokeMachine(machineId) {
         
         toast('✅ 已退回');
         loadMachineVerifications();
+    } catch (e) {
+        toast('失敗: ' + e.message, 'error');
+    }
+}
+
+// ============================================================
+// 商業區 GPS 範圍（用於後台排查）
+// ============================================================
+var REGION_GPS_RANGE = {
+    '旺角': { lat_min: 22.317, lat_max: 22.327, lng_min: 114.167, lng_max: 114.170 },
+    '油麻地': { lat_min: 22.308, lat_max: 22.317, lng_min: 114.167, lng_max: 114.172 },
+    '佐敦': { lat_min: 22.300, lat_max: 22.308, lng_min: 114.167, lng_max: 114.173 },
+    '尖沙咀': { lat_min: 22.294, lat_max: 22.302, lng_min: 114.167, lng_max: 114.178 },
+    '深水埗': { lat_min: 22.326, lat_max: 22.336, lng_min: 114.147, lng_max: 114.160 },
+    '長沙灣': { lat_min: 22.333, lat_max: 22.340, lng_min: 114.147, lng_max: 114.157 },
+    '荔枝角': { lat_min: 22.332, lat_max: 22.338, lng_min: 114.145, lng_max: 114.150 },
+    '南昌': { lat_min: 22.327, lat_max: 22.337, lng_min: 114.154, lng_max: 114.170 },
+    '大角咀': { lat_min: 22.319, lat_max: 22.326, lng_min: 114.157, lng_max: 114.162 },
+    '柯士甸': { lat_min: 22.299, lat_max: 22.305, lng_min: 114.161, lng_max: 114.167 },
+    '觀塘': { lat_min: 22.308, lat_max: 22.332, lng_min: 114.210, lng_max: 114.226 },
+    '九龍城': { lat_min: 22.328, lat_max: 22.333, lng_min: 114.185, lng_max: 114.190 },
+    '紅磡': { lat_min: 22.302, lat_max: 22.310, lng_min: 114.185, lng_max: 114.193 },
+    '黃大仙': { lat_min: 22.338, lat_max: 22.344, lng_min: 114.185, lng_max: 114.200 },
+    '樂富': { lat_min: 22.338, lat_max: 22.342, lng_min: 114.185, lng_max: 114.190 },
+    '銅鑼灣': { lat_min: 22.278, lat_max: 22.286, lng_min: 114.182, lng_max: 114.190 },
+    '天后': { lat_min: 22.282, lat_max: 22.285, lng_min: 114.192, lng_max: 114.194 },
+    '炮台山': { lat_min: 22.288, lat_max: 22.292, lng_min: 114.194, lng_max: 114.196 },
+    '北角': { lat_min: 22.288, lat_max: 22.292, lng_min: 114.196, lng_max: 114.200 },
+    '中環': { lat_min: 22.280, lat_max: 22.288, lng_min: 114.155, lng_max: 114.158 },
+    '金鐘': { lat_min: 22.276, lat_max: 22.280, lng_min: 114.164, lng_max: 114.166 },
+    '上環': { lat_min: 22.285, lat_max: 22.290, lng_min: 114.149, lng_max: 114.152 },
+    '西營盤': { lat_min: 22.284, lat_max: 22.288, lng_min: 114.143, lng_max: 114.146 },
+    '堅尼地城': { lat_min: 22.282, lat_max: 22.286, lng_min: 114.127, lng_max: 114.130 },
+    '灣仔': { lat_min: 22.274, lat_max: 22.284, lng_min: 114.172, lng_max: 114.176 },
+    '鰂魚涌': { lat_min: 22.282, lat_max: 22.286, lng_min: 114.210, lng_max: 114.213 },
+    '太古': { lat_min: 22.285, lat_max: 22.288, lng_min: 114.215, lng_max: 114.219 },
+    '筲箕灣': { lat_min: 22.276, lat_max: 22.282, lng_min: 114.228, lng_max: 114.232 },
+    '香港仔': { lat_min: 22.246, lat_max: 22.250, lng_min: 114.152, lng_max: 114.160 },
+    '杏花邨': { lat_min: 22.276, lat_max: 22.280, lng_min: 114.238, lng_max: 114.242 },
+    '黃竹坑': { lat_min: 22.246, lat_max: 22.252, lng_min: 114.172, lng_max: 114.178 },
+    '屯門': { lat_min: 22.390, lat_max: 22.402, lng_min: 113.970, lng_max: 113.980 },
+    '荃灣': { lat_min: 22.367, lat_max: 22.375, lng_min: 114.110, lng_max: 114.117 },
+    '元朗': { lat_min: 22.440, lat_max: 22.450, lng_min: 114.020, lng_max: 114.040 },
+    '葵芳': { lat_min: 22.355, lat_max: 22.360, lng_min: 114.125, lng_max: 114.130 },
+    '葵興': { lat_min: 22.360, lat_max: 22.366, lng_min: 114.130, lng_max: 114.134 },
+    '將軍澳': { lat_min: 22.305, lat_max: 22.312, lng_min: 114.258, lng_max: 114.264 },
+    '坑口': { lat_min: 22.314, lat_max: 22.318, lng_min: 114.263, lng_max: 114.266 },
+    '調景嶺': { lat_min: 22.303, lat_max: 22.308, lng_min: 114.250, lng_max: 114.256 },
+    '日出康城': { lat_min: 22.293, lat_max: 22.297, lng_min: 114.269, lng_max: 114.272 },
+    '西貢': { lat_min: 22.378, lat_max: 22.386, lng_min: 114.268, lng_max: 114.276 },
+    '大埔': { lat_min: 22.448, lat_max: 22.456, lng_min: 114.166, lng_max: 114.174 },
+    '沙田': { lat_min: 22.378, lat_max: 22.386, lng_min: 114.186, lng_max: 114.192 },
+    '石門': { lat_min: 22.385, lat_max: 22.390, lng_min: 114.206, lng_max: 114.212 },
+    '大圍': { lat_min: 22.370, lat_max: 22.378, lng_min: 114.176, lng_max: 114.182 },
+    '馬鞍山': { lat_min: 22.423, lat_max: 22.428, lng_min: 114.228, lng_max: 114.233 },
+    '上水': { lat_min: 22.498, lat_max: 22.506, lng_min: 114.125, lng_max: 114.130 },
+    '粉嶺': { lat_min: 22.488, lat_max: 22.498, lng_min: 114.138, lng_max: 114.144 },
+    '青衣': { lat_min: 22.340, lat_max: 22.360, lng_min: 114.103, lng_max: 114.110 },
+    '東涌': { lat_min: 22.288, lat_max: 22.298, lng_min: 113.938, lng_max: 113.948 },
+    '昂坪': { lat_min: 22.253, lat_max: 22.260, lng_min: 113.900, lng_max: 113.912 },
+    '天水圍': { lat_min: 22.450, lat_max: 22.460, lng_min: 114.000, lng_max: 114.008 }
+};
+
+// 判斷 GPS 是否在地區範圍內
+function isGpsInRegion(region, lat, lng) {
+    var range = REGION_GPS_RANGE[region];
+    if (!range) return null;  // 無資料
+    return lat >= range.lat_min && lat <= range.lat_max &&
+           lng >= range.lng_min && lng <= range.lng_max;
+}
+
+// 地區檢查頁面
+var regionCheckFilter = 'all';
+
+function loadRegionCheck() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('claw_stores')
+        .select('id, name, region, lat, lng, region_check_status, region_check_result, region_manual_pass')
+        .order('id', { ascending: false })
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var stores = result.data || [];
+            
+            if (stores.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>沒有店鋪</p></div>';
+                return;
+            }
+            
+            // 統計
+            var uncheckedCount = stores.filter(function(s) { return !s.region_check_status || s.region_check_status === 'unchecked'; }).length;
+            var abnormalCount = stores.filter(function(s) { return s.region_check_result === 'abnormal' && s.region_manual_pass !== true; }).length;
+            var normalCount = stores.filter(function(s) { return s.region_check_result === 'normal' || s.region_manual_pass === true; }).length;
+            
+            function buildRegionFilterBtn(filter, label, count) {
+                var isActive = regionCheckFilter === filter;
+                return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="regionCheckFilter=\'' + filter + '\';loadRegionCheck()">' + label + ' (' + count + ')</button>';
+            }
+            
+            var html = '<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                '<span style="font-size:13px;color:var(--text-muted);">📍 地區檢查</span>' +
+                '<button class="btn-sm warning" onclick="checkAllStoresRegion()">🔍 一鍵檢查未檢查</button>' +
+            '</div>' +
+            '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+                buildRegionFilterBtn('all', '全部', stores.length) +
+                buildRegionFilterBtn('abnormal', '❌ 異常', abnormalCount) +
+                buildRegionFilterBtn('normal', '✅ 正常', normalCount) +
+                buildRegionFilterBtn('unchecked', '⏳ 未檢查', uncheckedCount) +
+            '</div>';
+            
+            // 篩選
+            var filtered = stores;
+            if (regionCheckFilter === 'abnormal') {
+                filtered = stores.filter(function(s) { return s.region_check_result === 'abnormal' && s.region_manual_pass !== true; });
+            } else if (regionCheckFilter === 'normal') {
+                filtered = stores.filter(function(s) { return s.region_check_result === 'normal' || s.region_manual_pass === true; });
+            } else if (regionCheckFilter === 'unchecked') {
+                filtered = stores.filter(function(s) { return !s.region_check_status || s.region_check_status === 'unchecked'; });
+            }
+            
+            html += '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;">';
+            
+            for (var i = 0; i < filtered.length; i++) {
+                var s = filtered[i];
+                
+                var statusBadge = '';
+                var resultText = '';
+                
+                if (s.region_manual_pass === true) {
+                    statusBadge = '<span class="status-badge confirmed">✅ 人工通過</span>';
+                } else if (s.region_check_result === 'abnormal') {
+                    statusBadge = '<span class="status-badge suspicious">❌ 異常</span>';
+                } else if (s.region_check_result === 'normal') {
+                    statusBadge = '<span class="status-badge confirmed">✅ 正常</span>';
+                } else {
+                    statusBadge = '<span class="status-badge pending">⏳ 未檢查</span>';
+                }
+                
+                var hasRange = REGION_GPS_RANGE[s.region] ? true : false;
+                var rangeText = hasRange ? '' : '（無範圍資料）';
+                
+                html += '<div style="border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--bg-card);">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+                        '<strong>#' + s.id + ' ' + (s.name || '未知') + '</strong>' +
+                        statusBadge +
+                    '</div>' +
+                    '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' +
+                        '<div>📍 聲稱地區：' + (s.region || '未設定') + rangeText + '</div>' +
+                        '<div>🗺️ GPS：' + (s.lat ? s.lat.toFixed(6) : 'N/A') + ', ' + (s.lng ? s.lng.toFixed(6) : 'N/A') + '</div>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:8px;">' +
+                        (s.region_check_result === 'abnormal' && s.region_manual_pass !== true ? '<button class="btn-sm success" onclick="manualPassRegion(\'' + s.id + '\')">✅ 人工通過</button>' : '') +
+                        '<button class="btn-sm" onclick="viewStoreDetail(\'' + s.id + '\')">📋 查看</button>' +
+                    '</div>' +
+                '</div>';
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+// 一鍵檢查所有未檢查的店鋪
+async function checkAllStoresRegion() {
+    if (!confirm('確定要檢查所有未檢查的店鋪 GPS 嗎？')) return;
+    
+    toast('🔍 開始檢查...');
+    
+    try {
+        var { data: stores } = await sb.from('claw_stores')
+            .select('id, region, lat, lng')
+            .or('region_check_status.is.null,region_check_status.eq.unchecked');
+        
+        if (!stores || stores.length === 0) {
+            toast('✅ 沒有需要檢查的店鋪');
+            return;
+        }
+        
+        var abnormalCount = 0;
+        var normalCount = 0;
+        var skipCount = 0;
+        
+        for (var i = 0; i < stores.length; i++) {
+            var s = stores[i];
+            
+            if (!s.lat || !s.lng || !s.region) {
+                skipCount++;
+                continue;
+            }
+            
+            var inRegion = isGpsInRegion(s.region, s.lat, s.lng);
+            
+            if (inRegion === null) {
+                skipCount++;
+                continue;
+            }
+            
+            var result = inRegion ? 'normal' : 'abnormal';
+            
+            await sb.from('claw_stores')
+                .update({
+                    region_check_status: 'checked',
+                    region_check_result: result,
+                    region_checked_at: new Date().toISOString()
+                })
+                .eq('id', s.id);
+            
+            if (result === 'abnormal') abnormalCount++;
+            else normalCount++;
+        }
+        
+        toast('✅ 檢查完成：正常 ' + normalCount + ' 間，異常 ' + abnormalCount + ' 間，跳過 ' + skipCount + ' 間');
+        loadRegionCheck();
+        
+    } catch (e) {
+        toast('檢查失敗: ' + e.message, 'error');
+    }
+}
+
+// 人工通過異常但正常的店鋪
+async function manualPassRegion(storeId) {
+    if (!confirm('確定此店鋪的地區正常嗎？\n\n將排除此異常。')) return;
+    
+    try {
+        await sb.from('claw_stores')
+            .update({
+                region_manual_pass: true,
+                region_manual_passed_at: new Date().toISOString(),
+                region_manual_passed_by: currentUser ? currentUser.display_name : 'admin',
+                region_check_result: 'normal'
+            })
+            .eq('id', parseInt(storeId));
+        
+        toast('✅ 已排除異常');
+        loadRegionCheck();
     } catch (e) {
         toast('失敗: ' + e.message, 'error');
     }
