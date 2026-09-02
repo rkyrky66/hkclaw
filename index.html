@@ -7002,7 +7002,7 @@ async function submitVerification(storeId) {
                             
                             console.log('✅ AI 核對通過，自動認證成功');
                             toast('🎉 搶先認證成功！+20 分', 'green');
-                            
+                                        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
                             await supabaseClientInstance
                                 .from('claw_stores')
                                 .update({ submitter_reward_claimed: false })
@@ -7024,6 +7024,7 @@ async function submitVerification(storeId) {
                         // 追加認證
                         if (aiCheckResult === 'passed') {
                             toast('🎉 追加認證成功！+10 分', 'green');
+                                        setTimeout(function() { showRewardAdAfterSubmit(10); }, 500);
                         } else if (aiCheckResult === 'failed') {
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
@@ -7590,6 +7591,7 @@ async function submitSupplementPart1(storeId) {
         await recordTaskCompletion('supplement');
         await recordRegionContribution('supplement', s.region, storeId);
         toast('✅ 地址驗證通過 +15 分', 'green');
+                setTimeout(function() { showRewardAdAfterSubmit(15); }, 500);
         
         if (CURRENT === 'map') {
             updateMapList();
@@ -7720,6 +7722,7 @@ async function submitSupplementPart2(storeId) {
     await addPoints(20, '補充店鋪資料');
     await recordTaskCompletion('supplement');
     toast('✅ 店鋪資料補充成功 +20 分', 'green');
+        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
     closeModal();
 }
 
@@ -9215,8 +9218,7 @@ function selectStoreSuggestion(prefix, storeId, storeName) {
 // 找店頁面
 // ============================================================
 function viewFind() {
-  setTimeout(function() { showFindAd(); }, 1000);
-  var recent = STATE.recentRegions || [];
+    var recent = STATE.recentRegions || [];
   
   // ✅ 最近 3 個地區（排除目前選擇）
   var recentRegions = recent.filter(function(r) { return r !== findState.region; }).slice(0, 3);
@@ -11698,6 +11700,7 @@ async function submitIntel() {
             updateStreak();
             
             toast('✅ 提交成功 +20 分', 'green');
+                        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -12080,6 +12083,60 @@ function showRewardAd() {
             } else {
                 btn.textContent = countdown + ' 秒後領取';
             }
+        }
+    }, 1000);
+}
+
+// ============================================================
+// 獎勵廣告：提交成功後積分加倍
+// ============================================================
+function showRewardAdAfterSubmit(pointsEarned) {
+    var today = todayKey();
+    var dailyData = daily();
+    
+    if (!dailyData.rewardAd) dailyData.rewardAd = 0;
+    if (dailyData.rewardAd >= 3) return;  // 每日上限 3 次
+    
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-5xl mb-3">🎬</div>
+            <h2 class="text-lg font-black text-gold">積分加倍！</h2>
+            <p class="text-sm text-white/70 mt-2">看 30 秒廣告</p>
+            <p class="text-xs text-neongreen mt-1">+${pointsEarned} → +${pointsEarned * 2}</p>
+            <button onclick="closeModal(); startRewardAd(${pointsEarned})" class="mt-4 w-full rounded-2xl bg-gold py-3 text-base font-black text-black">
+                🎬 看廣告加倍
+            </button>
+            <button onclick="closeModal()" class="mt-2 text-xs text-white/30">不用了</button>
+        </div>
+    `);
+}
+
+function startRewardAd(pointsEarned) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;background:#000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = 
+        '<div style="text-align:center;">' +
+            '<div style="width:80%;max-width:300px;height:200px;background:rgba(255,255,255,0.1);border-radius:16px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:16px;">[ 廣告 ]</div>' +
+            '<p id="reward-countdown" style="margin-top:16px;font-size:16px;color:#fff;">30 秒</p>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    
+    var countdown = 30;
+    var interval = setInterval(function() {
+        countdown--;
+        var el = document.getElementById('reward-countdown');
+        if (el) el.textContent = countdown + ' 秒';
+        
+        if (countdown <= 0) {
+            clearInterval(interval);
+            overlay.remove();
+            
+            // 加額外積分
+            addPoints(pointsEarned, '看廣告積分加倍');
+            var dailyData = daily();
+            dailyData.rewardAd = (dailyData.rewardAd || 0) + 1;
+            save();
+            toast('🎉 獲得額外 +' + pointsEarned + ' 分！', 'gold');
         }
     }, 1000);
 }
