@@ -24,6 +24,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="brands.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -10197,112 +10198,311 @@ function clearPhoto(key) {
 // 機台上架
 // ============================================================
 function openMachineForm(sid) {
-  // ✅ 清除殘留照片和 GPS
-window._cam = window._cam || {};
-window._camPreview = window._camPreview || {};
-window._cam['mf'] = null;
-window._camPreview['mf'] = null;
-_finalGpsLat = null;
-_finalGpsLng = null;
-_finalGpsLocked = false;
+  // 清除殘留照片
+  window._cam = window._cam || {};
+  window._camPreview = window._camPreview || {};
+  window._cam['mf'] = null;
+  window._camPreview['mf'] = null;
+  window._camMulti = window._camMulti || {};
+  window._camMulti['mf'] = [];
+  
+  // 重置選擇
+  window._mfSelections = {
+    size: '',
+    machine_no: '',
+    single: { feat: '', brand: '', plays: [] },
+    mini: [
+      { feat: '', brand: '', plays: [] },
+      { feat: '', brand: '', plays: [] },
+      { feat: '', brand: '', plays: [] },
+      { feat: '', brand: '', plays: [] }
+    ]
+  };
+  
+  _finalGpsLat = null;
+  _finalGpsLng = null;
+  _finalGpsLocked = false;
+  
+  var featOptions = ['技術台', '實爪台', '幸運台', '雜物台', '其它'];
+  var playOptions = ['刮盤', '夾換', '夾送'];
+  
+  function buildFeatSelect(prefix) {
+    var html = '<select id="' + prefix + '-feat" onchange="onMachineFeatChange(\'' + prefix + '\', this.value)" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-2 py-2 text-xs text-white">';
+    html += '<option value="">台性</option>';
+    featOptions.forEach(function(f) {
+      html += '<option value="' + f + '">' + f + '</option>';
+    });
+    html += '</select>';
+    return html;
+  }
+  
+  function buildBrandInput(prefix) {
+    var html = '<input id="' + prefix + '-brand-search" placeholder="搜尋品牌" autocomplete="off" oninput="onMachineBrandInput(\'' + prefix + '\', this.value)" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-2 py-2 text-xs text-white placeholder-zinc-600" />';
+    html += '<input type="hidden" id="' + prefix + '-brand-id" value="" />';
+    html += '<div id="' + prefix + '-brand-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-32 overflow-y-auto"></div>';
+    return html;
+  }
+  
+  function buildPlayButtons(prefix) {
+    var html = '<div class="flex gap-1 mt-1">';
+    playOptions.forEach(function(p) {
+      html += '<button onclick="toggleMachinePlay(\'' + prefix + '\', \'' + p + '\')" data-prefix="' + prefix + '" data-play="' + p + '" class="mf-play-btn rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-white/45">' + p + '</button>';
+    });
+    html += '</div>';
+    return html;
+  }
+  
+  function buildSingleMachine() {
+    return '<div class="rounded-xl border border-gold/30 bg-gold/5 p-3 mt-3">' +
+      '<p class="text-xs font-bold text-gold">🎰 台性及貨品</p>' +
+      '<div class="mt-2">' + buildFeatSelect('mf-single') + '</div>' +
+      '<div class="mt-2">' + buildBrandInput('mf-single') + '</div>' +
+      '<div class="mt-1">' + buildPlayButtons('mf-single') + '</div>' +
+    '</div>';
+  }
+  
+  function buildMiniMachine() {
+    var corners = ['左上', '右上', '左下', '右下'];
+    var html = '<div class="rounded-xl border border-gold/30 bg-gold/5 p-3 mt-3">' +
+      '<p class="text-xs font-bold text-gold">🎰 四格佈局（至少填一格）</p>';
+    
+    html += '<div class="grid grid-cols-2 gap-3 mt-2">';
+    for (var i = 0; i < 4; i++) {
+      var prefix = 'mf-mini-' + i;
+      html += '<div class="rounded-lg border border-white/10 bg-zinc-900/50 p-2">' +
+        '<p class="text-[10px] text-white/40 mb-1">' + corners[i] + '</p>' +
+        buildFeatSelect(prefix) +
+        '<div class="mt-1.5">' + buildBrandInput(prefix) + '</div>' +
+        buildPlayButtons(prefix) +
+      '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+  
   openModal(`
-    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3">
-      <h2 class="font-black text-neongreen neon-green">➕ 共享此店機台</h2>
-      <button onclick="closeModal()" class="text-2xl text-white/50">✕</button>
+    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">
+      <h2 class="font-black text-neongreen neon-green">🎰 更新機台</h2>
+      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
     </div>
-    <div class="flex-1 overflow-y-auto mt-4 space-y-4">
-      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">
-        <p class="text-xs text-white/40">📸 現場拍攝機台照片，確保資訊真實性</p>
-        <p class="text-xs text-neongreen mt-1">✅ 拍照後自動獲取 GPS 位置</p>
-      </div>
+    <div class="flex-1 overflow-y-auto mt-4 space-y-4" style="-webkit-overflow-scrolling:touch;">
+      
+      <!-- 拍照區 -->
       <div>
-        <label class="text-xs font-bold text-gold">📷 強制現場現拍機台照 <span class="text-neonpink">（必填）</span></label>
-        <div id="mf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-white/20 bg-zinc-900 p-3 text-center">
-          <button id="mf-camera-btn" class="w-full rounded-lg bg-white/10 text-white/30 cursor-not-allowed" disabled>📸 開啟相機拍照</button>
-          <img id="mf-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />
+        <label class="text-xs font-bold text-gold">📷 拍機台照片 <span class="text-neonpink">（必拍，1-2 張）</span></label>
+        <div id="mf-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">
+          <button onclick="openCamera('mf')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 拍照（第 1 張）</button>
         </div>
       </div>
+      
+      <!-- 機號 -->
       <div>
-        <label class="text-xs font-bold text-gold">📍 GPS 定位 <span class="text-neonpink">（必填）</span></label>
-        <div class="mt-2 rounded-xl border border-white/10 bg-zinc-900/50 p-3">
-          <span id="mf-gps" class="text-yellow-400 text-xs">⏳ 請點擊「開啟相機拍照」獲取位置</span>
+        <label class="text-xs font-bold text-gold">機號 <span class="text-white/40">（選填，4 英數內）</span></label>
+        <input id="mf-machine-no" maxlength="4" placeholder="如 A1" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" />
+      </div>
+      
+      <!-- 機型 -->
+      <div>
+        <label class="text-xs font-bold text-gold">機型 <span class="text-neonpink">（必選）</span></label>
+        <div class="mt-2 flex gap-2">
+          <button onclick="selectMachineSize('mini')" data-size="mini" class="mf-size-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45">迷你機</button>
+          <button onclick="selectMachineSize('standard')" data-size="standard" class="mf-size-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45">標準機</button>
+          <button onclick="selectMachineSize('large')" data-size="large" class="mf-size-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45">大機</button>
         </div>
       </div>
-      <div>
-        <p class="text-xs font-bold text-gold">台性（選 1）</p>
-        <div id="mf-feats" class="mt-2 flex flex-wrap gap-2">` + FEATURE_TAGS.map(function(t) { 
-          return '<button onclick="selectSingleTag(this, \'mf-feats\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
-        }).join('') + `</div>
-      </div>
-      <div>
-        <p class="text-xs font-bold text-gold">機台大小（選 1）</p>
-        <div id="mf-sizes" class="mt-2 flex flex-wrap gap-2">` + MACHINE_SIZE_TAGS.map(function(t) { 
-          return '<button onclick="selectSingleTag(this, \'mf-sizes\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
-        }).join('') + `</div>
-      </div>
-      <div>
-        <p class="text-xs font-bold text-gold">貨品（多選）</p>
-        <div id="mf-goods" class="mt-2 space-y-2">` + GOODS_CATEGORIES.map(function(cat) {
-          var subTags = cat.tags.map(function(t) {
-            return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] text-gold">' + t + '</button>';
-          }).join('');
-          return '<div><span class="text-[10px] text-white/40">' + cat.label + '</span><div class="mt-1 flex flex-wrap gap-1.5">' + subTags + '</div></div>';
-        }).join('') + `</div>
-      </div>
-      <div>
-        <p class="text-xs font-bold text-gold">額外玩法（多選）</p>
-        <div id="mf-plays" class="mt-2 flex flex-wrap gap-2">` + PLAY_TAGS.map(function(t) { 
-          return '<button onclick="this.classList.toggle(\'chip-active-green\')" data-tag="' + t + '" class="rounded-full border border-gold/40 px-3 py-1 text-xs text-gold">' + t + '</button>'; 
-        }).join('') + `</div>
-      </div>
+      
+      <!-- 標準/大機：單格 -->
+      <div id="mf-single-section" class="hidden"></div>
+      
+      <!-- 迷你機：四格 -->
+      <div id="mf-mini-section" class="hidden"></div>
+      
     </div>
-    <button onclick="this.classList.add('btn-press'); submitMachine('` + sid + `')" id="mf-submit-btn" 
-      class="mt-5 w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed">
-      📷 請先拍照
-    </button>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="submitMachine('${sid}')" id="mf-submit-btn" 
+        class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">
+        📷 請先拍照
+      </button>
+    </div>
   `);
   
-  function enableCameraButton() {
-    var camBtn = document.getElementById('mf-camera-btn');
-    if (camBtn) {
-      camBtn.disabled = false;
-      camBtn.className = 'w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black';
-      camBtn.innerHTML = '📸 開啟相機拍照';
-      camBtn.onclick = function() { openCamera('mf'); };
+  // 初始化區塊
+  document.getElementById('mf-single-section').innerHTML = buildSingleMachine();
+  document.getElementById('mf-mini-section').innerHTML = buildMiniMachine();
+  
+  // 監控表單狀態
+  var checkInterval = setInterval(function() {
+    updateMachineSubmitButton();
+  }, 500);
+  setTimeout(function() { clearInterval(checkInterval); }, 60000);
+}
+
+// 選擇機型
+function selectMachineSize(size) {
+  window._mfSelections.size = size;
+  
+  document.querySelectorAll('.mf-size-btn').forEach(function(btn) {
+    if (btn.dataset.size === size) {
+      btn.className = 'mf-size-btn flex-1 rounded-xl border border-gold bg-gold/20 py-2.5 text-sm font-black text-gold';
     } else {
-      setTimeout(enableCameraButton, 200);
+      btn.className = 'mf-size-btn flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-black text-white/45';
+    }
+  });
+  
+  var singleSection = document.getElementById('mf-single-section');
+  var miniSection = document.getElementById('mf-mini-section');
+  
+  if (size === 'mini') {
+    singleSection.classList.add('hidden');
+    miniSection.classList.remove('hidden');
+  } else {
+    singleSection.classList.remove('hidden');
+    miniSection.classList.add('hidden');
+  }
+  
+  updateMachineSubmitButton();
+}
+
+// 台性選擇
+function onMachineFeatChange(prefix, value) {
+  if (prefix === 'mf-single') {
+    window._mfSelections.single.feat = value;
+  } else {
+    var idx = parseInt(prefix.split('-')[2]);
+    window._mfSelections.mini[idx].feat = value;
+  }
+  updateMachineSubmitButton();
+}
+
+// 品牌輸入
+var _mfBrandTimers = {};
+function onMachineBrandInput(prefix, value) {
+  clearTimeout(_mfBrandTimers[prefix]);
+  _mfBrandTimers[prefix] = setTimeout(function() {
+    searchBrandForMachine(prefix, value);
+  }, 300);
+}
+
+// 品牌搜尋
+function searchBrandForMachine(prefix, query) {
+  var container = document.getElementById(prefix + '-brand-suggestions');
+  if (!container) return;
+  
+  if (!query || query.trim() === '') {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  var results = searchBrand(query);
+  
+  if (results.length > 0) {
+    container.innerHTML = results.map(function(brand) {
+      return '<button onclick="selectMachineBrand(\'' + prefix + '\', \'' + brand.id + '\', \'' + brand.primary_name.replace(/'/g, "\\'") + '\')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-xs text-white/80 border-b border-white/10 last:border-0">' + brand.primary_name + ' <span class="text-[10px] text-white/40">' + brand.category + '</span></button>';
+    }).join('');
+    container.classList.remove('hidden');
+  } else {
+    container.classList.add('hidden');
+  }
+}
+
+// 選擇品牌
+function selectMachineBrand(prefix, brandId, brandName) {
+  var searchInput = document.getElementById(prefix + '-brand-search');
+  var hiddenInput = document.getElementById(prefix + '-brand-id');
+  var container = document.getElementById(prefix + '-brand-suggestions');
+  
+  if (searchInput) searchInput.value = brandName;
+  if (hiddenInput) hiddenInput.value = brandId;
+  if (container) container.classList.add('hidden');
+  
+  // 儲存選擇
+  if (prefix === 'mf-single') {
+    window._mfSelections.single.brand = brandId;
+  } else {
+    var idx = parseInt(prefix.split('-')[2]);
+    window._mfSelections.mini[idx].brand = brandId;
+  }
+  
+  updateMachineSubmitButton();
+}
+
+// 切換玩法
+function toggleMachinePlay(prefix, play) {
+  var plays;
+  if (prefix === 'mf-single') {
+    plays = window._mfSelections.single.plays;
+  } else {
+    var idx = parseInt(prefix.split('-')[2]);
+    plays = window._mfSelections.mini[idx].plays;
+  }
+  
+  var i = plays.indexOf(play);
+  if (i >= 0) {
+    plays.splice(i, 1);
+  } else {
+    plays.push(play);
+  }
+  
+  // 更新按鈕樣式
+  document.querySelectorAll('.mf-play-btn[data-prefix="' + prefix + '"][data-play="' + play + '"]').forEach(function(btn) {
+    if (plays.indexOf(play) >= 0) {
+      btn.className = 'mf-play-btn rounded-full border border-gold bg-gold/20 px-2 py-0.5 text-[10px] text-gold';
+    } else {
+      btn.className = 'mf-play-btn rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-white/45';
+    }
+  });
+}
+
+// 更新提交按鈕
+function updateMachineSubmitButton() {
+  var btn = document.getElementById('mf-submit-btn');
+  if (!btn) return;
+  
+  var photos = window._camMulti?.['mf'] || [];
+  var photoReady = photos.length >= 1;
+  
+  if (!photoReady) {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '📷 請先拍照';
+    return;
+  }
+  
+  var size = window._mfSelections.size;
+  if (!size) {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '🎰 請選擇機型';
+    return;
+  }
+  
+  if (size === 'mini') {
+    // 至少一格有內容
+    var hasAny = window._mfSelections.mini.some(function(corner) {
+      return corner.feat && corner.brand;
+    });
+    
+    if (hasAny) {
+      btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green';
+      btn.disabled = false;
+      btn.innerHTML = '✅ 提交機台';
+    } else {
+      btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+      btn.disabled = true;
+      btn.innerHTML = '至少填一格';
+    }
+  } else {
+    // 標準/大機：台性和品牌必選
+    if (window._mfSelections.single.feat && window._mfSelections.single.brand) {
+      btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green';
+      btn.disabled = false;
+      btn.innerHTML = '✅ 提交機台';
+    } else {
+      btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+      btn.disabled = true;
+      btn.innerHTML = '請選擇台性和品牌';
     }
   }
-  setTimeout(enableCameraButton, 300);
-  
-  var checkInterval = setInterval(function() {
-    var photoReady = window._camPreview && window._camPreview.mf;
-    var btn = document.getElementById('mf-submit-btn');
-    var gpsEl = document.getElementById('mf-gps');
-    
-    if (btn) {
-      if (photoReady) {
-        btn.className = 'w-full rounded-2xl bg-neongreen py-3 font-black text-black glow-green hover:scale-[1.02] active:scale-[0.98] transition-all';
-        btn.disabled = false;
-        btn.innerHTML = '✅ 提交機台情報';
-      } else {
-        btn.className = 'w-full rounded-2xl bg-white/10 py-3 font-black text-white/30 cursor-not-allowed';
-        btn.disabled = true;
-        btn.innerHTML = '📷 請先拍照';
-      }
-    }
-    
-    if (gpsEl) {
-      if (gpsLat && gpsLng) {
-        gpsEl.textContent = '📍 定位成功：' + gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
-        gpsEl.className = 'text-neongreen text-xs';
-      } else {
-        gpsEl.textContent = '⏳ 請點擊「開啟相機拍照」獲取位置';
-        gpsEl.className = 'text-yellow-400 text-xs';
-      }
-    }
-  }, 500);
-  setTimeout(function() { return clearInterval(checkInterval); }, 60000);
 }
 
 // 單選標籤
@@ -13511,6 +13711,33 @@ async function submitHunterTask() {
     } finally {
         releaseSubmitLock('submitHunterTask');
     }
+}
+// ============================================================
+// 品牌搜尋（反向追溯母品牌）
+// ============================================================
+function searchBrand(query) {
+    if (!query || query.trim() === '') return [];
+    
+    var q = query.trim().toLowerCase();
+    var results = [];
+    
+    for (var i = 0; i < BRAND_DATABASE.length; i++) {
+        var brand = BRAND_DATABASE[i];
+        for (var j = 0; j < brand.aliases.length; j++) {
+            var alias = brand.aliases[j].toLowerCase();
+            if (alias.indexOf(q) !== -1) {
+                results.push({
+                    id: brand.id,
+                    primary_name: brand.primary_name,
+                    category: brand.category,
+                    matched_alias: brand.aliases[j]
+                });
+                break;
+            }
+        }
+    }
+    
+    return results;
 }
 </script>
 </script>
