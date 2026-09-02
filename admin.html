@@ -5985,66 +5985,71 @@ async function revokeMachine(machineId) {
 // 商業區 GPS 範圍（用於後台排查）
 // ============================================================
 var REGION_GPS_RANGE = {
-    '旺角': { lat_min: 22.317, lat_max: 22.327, lng_min: 114.167, lng_max: 114.170 },
-    '油麻地': { lat_min: 22.308, lat_max: 22.317, lng_min: 114.167, lng_max: 114.172 },
-    '佐敦': { lat_min: 22.300, lat_max: 22.308, lng_min: 114.167, lng_max: 114.173 },
-    '尖沙咀': { lat_min: 22.294, lat_max: 22.302, lng_min: 114.167, lng_max: 114.178 },
-    '深水埗': { lat_min: 22.326, lat_max: 22.336, lng_min: 114.147, lng_max: 114.160 },
-    '長沙灣': { lat_min: 22.333, lat_max: 22.340, lng_min: 114.147, lng_max: 114.157 },
-    '荔枝角': { lat_min: 22.332, lat_max: 22.338, lng_min: 114.145, lng_max: 114.150 },
-    '南昌': { lat_min: 22.327, lat_max: 22.337, lng_min: 114.154, lng_max: 114.170 },
-    '大角咀': { lat_min: 22.319, lat_max: 22.326, lng_min: 114.157, lng_max: 114.162 },
-    '柯士甸': { lat_min: 22.299, lat_max: 22.305, lng_min: 114.161, lng_max: 114.167 },
-    '觀塘': { lat_min: 22.308, lat_max: 22.332, lng_min: 114.210, lng_max: 114.226 },
-    '九龍城': { lat_min: 22.328, lat_max: 22.333, lng_min: 114.185, lng_max: 114.190 },
-    '紅磡': { lat_min: 22.302, lat_max: 22.310, lng_min: 114.185, lng_max: 114.193 },
-    '黃大仙': { lat_min: 22.338, lat_max: 22.344, lng_min: 114.185, lng_max: 114.200 },
-    '樂富': { lat_min: 22.338, lat_max: 22.342, lng_min: 114.185, lng_max: 114.190 },
-    '銅鑼灣': { lat_min: 22.278, lat_max: 22.286, lng_min: 114.182, lng_max: 114.190 },
-    '天后': { lat_min: 22.282, lat_max: 22.285, lng_min: 114.192, lng_max: 114.194 },
-    '炮台山': { lat_min: 22.288, lat_max: 22.292, lng_min: 114.194, lng_max: 114.196 },
-    '北角': { lat_min: 22.288, lat_max: 22.292, lng_min: 114.196, lng_max: 114.200 },
-    '中環': { lat_min: 22.280, lat_max: 22.288, lng_min: 114.155, lng_max: 114.158 },
-    '金鐘': { lat_min: 22.276, lat_max: 22.280, lng_min: 114.164, lng_max: 114.166 },
-    '上環': { lat_min: 22.285, lat_max: 22.290, lng_min: 114.149, lng_max: 114.152 },
-    '西營盤': { lat_min: 22.284, lat_max: 22.288, lng_min: 114.143, lng_max: 114.146 },
-    '堅尼地城': { lat_min: 22.282, lat_max: 22.286, lng_min: 114.127, lng_max: 114.130 },
-    '灣仔': { lat_min: 22.274, lat_max: 22.284, lng_min: 114.172, lng_max: 114.176 },
-    '鰂魚涌': { lat_min: 22.282, lat_max: 22.286, lng_min: 114.210, lng_max: 114.213 },
-    '太古': { lat_min: 22.285, lat_max: 22.288, lng_min: 114.215, lng_max: 114.219 },
-    '筲箕灣': { lat_min: 22.276, lat_max: 22.282, lng_min: 114.228, lng_max: 114.232 },
-    '香港仔': { lat_min: 22.246, lat_max: 22.250, lng_min: 114.152, lng_max: 114.160 },
-    '杏花邨': { lat_min: 22.276, lat_max: 22.280, lng_min: 114.238, lng_max: 114.242 },
-    '黃竹坑': { lat_min: 22.246, lat_max: 22.252, lng_min: 114.172, lng_max: 114.178 },
-    '屯門': { lat_min: 22.390, lat_max: 22.402, lng_min: 113.970, lng_max: 113.980 },
-    '荃灣': { lat_min: 22.367, lat_max: 22.375, lng_min: 114.110, lng_max: 114.117 },
-    '元朗': { lat_min: 22.440, lat_max: 22.450, lng_min: 114.020, lng_max: 114.040 },
-    '葵芳': { lat_min: 22.355, lat_max: 22.360, lng_min: 114.125, lng_max: 114.130 },
-    '葵興': { lat_min: 22.360, lat_max: 22.366, lng_min: 114.130, lng_max: 114.134 },
-    '將軍澳': { lat_min: 22.305, lat_max: 22.312, lng_min: 114.258, lng_max: 114.264 },
-    '坑口': { lat_min: 22.314, lat_max: 22.318, lng_min: 114.263, lng_max: 114.266 },
-    '調景嶺': { lat_min: 22.303, lat_max: 22.308, lng_min: 114.250, lng_max: 114.256 },
-    '日出康城': { lat_min: 22.293, lat_max: 22.297, lng_min: 114.269, lng_max: 114.272 },
-    '西貢': { lat_min: 22.378, lat_max: 22.386, lng_min: 114.268, lng_max: 114.276 },
-    '大埔': { lat_min: 22.448, lat_max: 22.456, lng_min: 114.166, lng_max: 114.174 },
-    '沙田': { lat_min: 22.378, lat_max: 22.386, lng_min: 114.186, lng_max: 114.192 },
-    '石門': { lat_min: 22.385, lat_max: 22.390, lng_min: 114.206, lng_max: 114.212 },
-    '大圍': { lat_min: 22.370, lat_max: 22.378, lng_min: 114.176, lng_max: 114.182 },
-    '馬鞍山': { lat_min: 22.423, lat_max: 22.428, lng_min: 114.228, lng_max: 114.233 },
-    '上水': { lat_min: 22.498, lat_max: 22.506, lng_min: 114.125, lng_max: 114.130 },
-    '粉嶺': { lat_min: 22.488, lat_max: 22.498, lng_min: 114.138, lng_max: 114.144 },
-    '青衣': { lat_min: 22.340, lat_max: 22.360, lng_min: 114.103, lng_max: 114.110 },
-    '東涌': { lat_min: 22.288, lat_max: 22.298, lng_min: 113.938, lng_max: 113.948 },
-    '昂坪': { lat_min: 22.253, lat_max: 22.260, lng_min: 113.900, lng_max: 113.912 },
-    '天水圍': { lat_min: 22.450, lat_max: 22.460, lng_min: 114.000, lng_max: 114.008 }
+    '旺角': { lat_min: 22.315, lat_max: 22.328, lng_min: 114.165, lng_max: 114.172 },
+    '油麻地': { lat_min: 22.305, lat_max: 22.318, lng_min: 114.165, lng_max: 114.173 },
+    '佐敦': { lat_min: 22.298, lat_max: 22.308, lng_min: 114.165, lng_max: 114.175 },
+    '尖沙咀': { lat_min: 22.292, lat_max: 22.305, lng_min: 114.165, lng_max: 114.180 },
+    '深水埗': { lat_min: 22.324, lat_max: 22.338, lng_min: 114.145, lng_max: 114.165 },
+    '長沙灣': { lat_min: 22.330, lat_max: 22.342, lng_min: 114.145, lng_max: 114.163 },
+    '荔枝角': { lat_min: 22.330, lat_max: 22.340, lng_min: 114.143, lng_max: 114.152 },
+    '南昌': { lat_min: 22.325, lat_max: 22.340, lng_min: 114.152, lng_max: 114.172 },
+    '大角咀': { lat_min: 22.317, lat_max: 22.328, lng_min: 114.155, lng_max: 114.164 },
+    '柯士甸': { lat_min: 22.297, lat_max: 22.307, lng_min: 114.159, lng_max: 114.169 },
+    '觀塘': { lat_min: 22.305, lat_max: 22.335, lng_min: 114.208, lng_max: 114.228 },
+    '九龍城': { lat_min: 22.326, lat_max: 22.335, lng_min: 114.183, lng_max: 114.192 },
+    '紅磡': { lat_min: 22.300, lat_max: 22.312, lng_min: 114.183, lng_max: 114.195 },
+    '黃大仙': { lat_min: 22.336, lat_max: 22.346, lng_min: 114.183, lng_max: 114.202 },
+    '樂富': { lat_min: 22.336, lat_max: 22.344, lng_min: 114.183, lng_max: 114.192 },
+    '銅鑼灣': { lat_min: 22.276, lat_max: 22.288, lng_min: 114.180, lng_max: 114.192 },
+    '天后': { lat_min: 22.280, lat_max: 22.287, lng_min: 114.190, lng_max: 114.196 },
+    '炮台山': { lat_min: 22.286, lat_max: 22.294, lng_min: 114.192, lng_max: 114.198 },
+    '北角': { lat_min: 22.286, lat_max: 22.294, lng_min: 114.194, lng_max: 114.202 },
+    '中環': { lat_min: 22.275, lat_max: 22.290, lng_min: 114.150, lng_max: 114.160 },
+    '金鐘': { lat_min: 22.274, lat_max: 22.282, lng_min: 114.162, lng_max: 114.168 },
+    '上環': { lat_min: 22.283, lat_max: 22.292, lng_min: 114.147, lng_max: 114.154 },
+    '西營盤': { lat_min: 22.282, lat_max: 22.290, lng_min: 114.141, lng_max: 114.148 },
+    '堅尼地城': { lat_min: 22.280, lat_max: 22.288, lng_min: 114.125, lng_max: 114.132 },
+    '灣仔': { lat_min: 22.272, lat_max: 22.286, lng_min: 114.170, lng_max: 114.178 },
+    '鰂魚涌': { lat_min: 22.280, lat_max: 22.288, lng_min: 114.208, lng_max: 114.215 },
+    '太古': { lat_min: 22.283, lat_max: 22.290, lng_min: 114.213, lng_max: 114.221 },
+    '筲箕灣': { lat_min: 22.274, lat_max: 22.284, lng_min: 114.226, lng_max: 114.234 },
+    '香港仔': { lat_min: 22.244, lat_max: 22.252, lng_min: 114.150, lng_max: 114.162 },
+    '杏花邨': { lat_min: 22.274, lat_max: 22.282, lng_min: 114.236, lng_max: 114.244 },
+    '黃竹坑': { lat_min: 22.244, lat_max: 22.254, lng_min: 114.170, lng_max: 114.180 },
+    '屯門': { lat_min: 22.388, lat_max: 22.404, lng_min: 113.968, lng_max: 113.982 },
+    '荃灣': { lat_min: 22.365, lat_max: 22.378, lng_min: 114.105, lng_max: 114.120 },
+    '元朗': { lat_min: 22.438, lat_max: 22.452, lng_min: 114.018, lng_max: 114.042 },
+    '葵芳': { lat_min: 22.353, lat_max: 22.362, lng_min: 114.123, lng_max: 114.132 },
+    '葵興': { lat_min: 22.355, lat_max: 22.370, lng_min: 114.125, lng_max: 114.136 },
+    '將軍澳': { lat_min: 22.295, lat_max: 22.325, lng_min: 114.250, lng_max: 114.275 },
+    '坑口': { lat_min: 22.312, lat_max: 22.320, lng_min: 114.261, lng_max: 114.268 },
+    '調景嶺': { lat_min: 22.301, lat_max: 22.310, lng_min: 114.248, lng_max: 114.258 },
+    '日出康城': { lat_min: 22.291, lat_max: 22.299, lng_min: 114.267, lng_max: 114.274 },
+    '西貢': { lat_min: 22.376, lat_max: 22.388, lng_min: 114.266, lng_max: 114.278 },
+    '大埔': { lat_min: 22.446, lat_max: 22.458, lng_min: 114.164, lng_max: 114.176 },
+    '沙田': { lat_min: 22.376, lat_max: 22.388, lng_min: 114.184, lng_max: 114.194 },
+    '石門': { lat_min: 22.383, lat_max: 22.392, lng_min: 114.204, lng_max: 114.214 },
+    '大圍': { lat_min: 22.368, lat_max: 22.380, lng_min: 114.174, lng_max: 114.184 },
+    '馬鞍山': { lat_min: 22.421, lat_max: 22.430, lng_min: 114.226, lng_max: 114.235 },
+    '上水': { lat_min: 22.496, lat_max: 22.508, lng_min: 114.123, lng_max: 114.132 },
+    '粉嶺': { lat_min: 22.486, lat_max: 22.500, lng_min: 114.136, lng_max: 114.146 },
+    '青衣': { lat_min: 22.338, lat_max: 22.362, lng_min: 114.101, lng_max: 114.112 },
+    '東涌': { lat_min: 22.286, lat_max: 22.300, lng_min: 113.936, lng_max: 113.950 },
+    '昂坪': { lat_min: 22.251, lat_max: 22.262, lng_min: 113.898, lng_max: 113.914 },
+    '天水圍': { lat_min: 22.448, lat_max: 22.462, lng_min: 113.998, lng_max: 114.010 }
 };
 
 // 判斷 GPS 是否在地區範圍內
 function isGpsInRegion(region, lat, lng) {
     var range = REGION_GPS_RANGE[region];
-    if (!range) return null;  // 無資料
-    return lat >= range.lat_min && lat <= range.lat_max &&
-           lng >= range.lng_min && lng <= range.lng_max;
+    if (!range) return null;
+    
+    var BUFFER = 0.003;  // 約 300 米緩衝區
+    
+    return lat >= (range.lat_min - BUFFER) && 
+           lat <= (range.lat_max + BUFFER) &&
+           lng >= (range.lng_min - BUFFER) && 
+           lng <= (range.lng_max + BUFFER);
 }
 
 // 地區檢查頁面
