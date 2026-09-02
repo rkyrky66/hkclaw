@@ -5784,8 +5784,10 @@ function loadMachineVerifications() {
                         return '<button class="btn-sm ' + (isActive ? 'primary' : '') + '" onclick="machineVerificationFilter=\'' + filter + '\';loadMachineVerifications()">' + label + ' (' + count + ')</button>';
                     }
                     
-                    var html = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
-                        buildMachineFilterBtn('all', '全部') +
+                    var html = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+    '<button class="btn-sm warning" onclick="batchAiCheckUncheckedMachines()">🔄 補做 AI 核對</button>' +
+    '<div style="width:1px;height:20px;background:var(--border-color);margin:0 4px;"></div>' +
+    buildMachineFilterBtn('all', '全部') +
                         buildMachineFilterBtn('failed', '❌ 失敗') +
                         buildMachineFilterBtn('unchecked', '⏳ 未核對') +
                         buildMachineFilterBtn('passed', '✅ 通過') +
@@ -5834,12 +5836,96 @@ function loadMachineVerifications() {
         });
 }
 
+// 批次補做機台 AI 核對
+async function batchAiCheckUncheckedMachines() {
+    if (!confirm('確定要為所有未核對的機台補做 AI 核對嗎？\n\n此操作將逐筆呼叫 AI，可能需要數分鐘。')) return;
+    
+    toast('🔄 開始補做機台 AI 核對...');
+    
+    try {
+        // 查詢所有未核對的機台
+        var { data: nullMachines } = await sb.from('claw_machines')
+            .select('*')
+            .is('ai_check_result', null);
+        var { data: uncheckedMachines } = await sb.from('claw_machines')
+            .select('*')
+            .eq('ai_check_result', 'unchecked');
+        
+        var allMachines = (nullMachines || []).concat(uncheckedMachines || []);
+        
+        console.log('🔍 需要補做的機台:', allMachines.length, '台');
+        
+        if (allMachines.length === 0) {
+            toast('✅ 沒有需要補做的機台');
+            loadMachineVerifications();
+            return;
+        }
+        
+        var passedCount = 0;
+        var failedCount = 0;
+        var errorCount = 0;
+        
+        for (var i = 0; i < allMachines.length; i++) {
+            var machine = allMachines[i];
+            console.log('🔍 核對機台 ID:', machine.id);
+            
+            if (!machine.photo) {
+                console.log('   ⚠️ 無照片，跳過');
+                errorCount++;
+                continue;
+            }
+            
+            var aiResult = null;
+            for (var attempt = 0; attempt < 3; attempt++) {
+                aiResult = await aiCheckClawMachine(machine.photo);
+                if (aiResult !== null) break;
+                console.log('   ⚠️ 重試第 ' + (attempt + 1) + ' 次...');
+                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+            }
+            
+            if (aiResult && aiResult.is_claw_machine !== undefined) {
+                var result = aiResult.is_claw_machine ? 'passed' : 'failed';
+                await sb.from('claw_machines')
+                    .update({
+                        ai_check_result: result,
+                        ai_confidence: aiResult.confidence_score || null,
+                        ai_checked_at: new Date().toISOString()
+                    })
+                    .eq('id', parseInt(machine.id));
+                
+                console.log('   ✅ 已寫入:', result);
+                if (result === 'passed') passedCount++;
+                else failedCount++;
+            } else {
+                console.log('   ⚠️ AI 沒回應');
+                errorCount++;
+            }
+            
+            await new Promise(function(resolve) { setTimeout(resolve, 5000); });
+        }
+        
+        console.log('🎉 完成。通過:', passedCount, '不通過:', failedCount, '錯誤:', errorCount);
+        toast('✅ 補做完成：通過 ' + passedCount + ' 台，不通過 ' + failedCount + ' 台，錯誤 ' + errorCount + ' 台');
+        loadMachineVerifications();
+        
+    } catch (e) {
+        console.error('❌ 批次失敗:', e);
+        toast('補做失敗: ' + e.message, 'error');
+    }
+}
+
 // 單獨 AI 核對機台
 async function singleAiCheckMachine(machineId) {
     if (!confirm('確定重新 AI 核對此機台嗎？')) return;
     
     try {
-        var { data: machine } = await sb.from('claw_machines').select('*').eq('id', machineId).single();
+        var numericMachineId = parseInt(machineId);
+        
+        var { data: machine } = await sb.from('claw_machines')
+            .select('*')
+            .eq('id', numericMachineId)
+            .single();
+        
         if (!machine || !machine.photo) { toast('找不到機台或無照片', 'error'); return; }
         
         var aiResult = null;
@@ -5857,7 +5943,7 @@ async function singleAiCheckMachine(machineId) {
                     ai_confidence: aiResult.confidence_score || null,
                     ai_checked_at: new Date().toISOString()
                 })
-                .eq('id', machineId);
+                .eq('id', numericMachineId);
             toast('✅ AI 核對完成: ' + result);
         } else {
             toast('⚠️ AI 沒回應', 'error');
@@ -5873,6 +5959,8 @@ async function manualPassMachine(machineId) {
     if (!confirm('確定人工通過此機台嗎？')) return;
     
     try {
+        var numericMachineId = parseInt(machineId);
+        
         await sb.from('claw_machines')
             .update({
                 manual_pass: true,
@@ -5880,7 +5968,8 @@ async function manualPassMachine(machineId) {
                 manual_passed_by: currentUser ? currentUser.display_name : 'admin',
                 ai_check_result: 'passed'
             })
-            .eq('id', machineId);
+            .eq('id', numericMachineId);
+        
         toast('✅ 已人工通過');
         loadMachineVerifications();
     } catch (e) {
@@ -5893,18 +5982,31 @@ async function revokeMachine(machineId) {
     if (!confirm('確定退回此機台提交嗎？')) return;
     
     try {
-        var { data: machine } = await sb.from('claw_machines').select('store_id').eq('id', machineId).single();
+        var numericMachineId = parseInt(machineId);
         
-        await sb.from('claw_machines').delete().eq('id', machineId);
+        var { data: machine } = await sb.from('claw_machines')
+            .select('store_id')
+            .eq('id', numericMachineId)
+            .single();
+        
+        await sb.from('claw_machines')
+            .delete()
+            .eq('id', numericMachineId);
         
         // 同步更新 claw_stores.machines
         if (machine && machine.store_id) {
-            var { data: store } = await sb.from('claw_stores').select('machines').eq('id', machine.store_id).single();
+            var { data: store } = await sb.from('claw_stores')
+                .select('machines')
+                .eq('id', machine.store_id)
+                .single();
+            
             if (store && store.machines) {
                 var updatedMachines = store.machines.filter(function(m) {
-                    return m.id !== machineId;
+                    return m.id !== String(numericMachineId);
                 });
-                await sb.from('claw_stores').update({ machines: updatedMachines }).eq('id', machine.store_id);
+                await sb.from('claw_stores')
+                    .update({ machines: updatedMachines })
+                    .eq('id', machine.store_id);
             }
         }
         
