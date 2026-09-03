@@ -1083,8 +1083,34 @@ async function recordTaskCompletion(taskKey) {
             console.warn('⚠️ 任務進度雲端同步失敗:', e.message);
         }
     }
-    
+        checkDailyTaskBonus();
     return true;
+}
+
+// 檢查每日任務 >100 全屏彈窗
+function checkDailyTaskBonus() {
+    var progress = getTaskProgress();
+    var totalScore = calculateDailyScore(progress);
+    
+    if (totalScore > 100 && !progress.bonus_100_claimed) {
+        progress.bonus_100_claimed = true;
+        save();
+        
+        // 全屏彈窗
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = 
+            '<div style="text-align:center;">' +
+                '<div class="text-6xl mb-4">🎉</div>' +
+                '<h2 class="text-2xl font-black text-gold neon-gold">今日任務超過 100 分！</h2>' +
+                '<p class="text-lg text-white mt-3">+30 獎勵積分</p>' +
+                '<button onclick="this.closest(\'div[style*=fixed]\').remove()" class="mt-6 rounded-2xl bg-gold px-8 py-3 text-base font-black text-black">👍 太棒了！</button>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        
+        addPoints(30, '每日任務超過100分獎勵');
+        fireConfettiOnce();
+    }
 }
 
 // 同步任務進度到雲端
@@ -2555,19 +2581,20 @@ const CheckinManager = {
       return false;
     }
     
-    const progress = getWeeklyCheckinProgress();
-    const daysSigned = progress.count + 1;
-    let bonus = 5;
-    let bonusMsg = '基礎簽到 +5 分';
-    if (daysSigned === 3) {
-      bonus += 5;
-      bonusMsg = '連續 3 天！額外 +5 分 🎉';
-    } else if (daysSigned === 5) {
-      bonus += 5;
-      bonusMsg = '連續 5 天！額外 +5 分 🎉🎉';
-    } else if (daysSigned === 7) {
-      bonus += 15;
-      bonusMsg = '🎊 本週全勤！額外 +15 分 🎊';
+    var progress = getWeeklyCheckinProgress();
+    var daysSigned = progress.count + 1;
+    var bonus = 5;
+    var bonusMsg = '基礎簽到 +5 分';
+    
+    if (daysSigned >= 7) {
+        bonus += 15;
+        bonusMsg = '連續 7 天！全勤 +20 分 🎊';
+    } else if (daysSigned >= 5) {
+        bonus += 10;
+        bonusMsg = '連續 5 天！+15 分 🔥';
+    } else if (daysSigned >= 3) {
+        bonus += 5;
+        bonusMsg = '連續 3 天！+10 分 ⭐';
     }
     
     if (CLOUD_ON) {
@@ -7741,7 +7768,7 @@ async function submitSupplementPart1(storeId) {
         await recordTaskCompletion('supplement');
         await recordRegionContribution('supplement', s.region, storeId);
         toast('✅ 地址驗證通過 +15 分', 'green');
-                setTimeout(function() { showRewardAdAfterSubmit(15); }, 500);
+
         
         if (CURRENT === 'map') {
             updateMapList();
@@ -8515,7 +8542,7 @@ async function submitPlayerPost() {
         await syncLivePost(post);
         
         if (isFree) {
-            await addPoints(5, '發布出貨戰報');
+            await addPoints(10, '發布出貨戰報');
         } else {
            await addPoints(-POST_COST, '發布戰報（超過免費次數）');
         }
@@ -9492,7 +9519,7 @@ var coreTasks = [
           '</div>';
       } else {
           rewardHtml = '<div class="mt-3 rounded-xl border border-gold/20 bg-gold/5 p-3">' +
-              '<p class="text-xs text-white/40">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 35 分！</p>' +
+              '<p class="text-xs text-white/40">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 30 分！</p>' +
           '</div>';
       }
   }
@@ -9567,8 +9594,8 @@ async function claimSubmitterReward(storeId) {
         store.submitter_reward_claimed = true;
         save();
         
-        await addPoints(35, '提交店鋪通過認證追加獎勵');
-        toast('🎉 領取 35 積分成功！', 'green');
+        await addPoints(30, '提交店鋪通過認證追加獎勵');
+        toast('🎉 領取 30 積分成功！', 'green');
         showView('task');
     } catch (e) {
         toast('❌ 領取失敗: ' + e.message, 'pink');
@@ -10764,11 +10791,13 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
             console.warn('⚠️ 投票流程失敗:', e.message);
         }
         
-        if (canEarnPoints) {
-    await addPoints(5, '打卡');
-} else {
-    toast('📍 打卡成功！今日加分已達上限', 'green');
-}
+          if (canEarnPoints) {
+            await addPoints(5, '打卡');
+            toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
+        } else {
+            // 第 4 次起：不加分、不顯示加分
+            toast('📍 已打卡（今日加分次數已達上限）', 'gold');
+        }
         
         await recordTaskCompletion('checkin');
         
@@ -10798,7 +10827,7 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
             }
         }
         
-        toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
+  
         
         await recordRegionContribution('checkin', s.region, storeId);
         
