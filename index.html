@@ -7378,9 +7378,10 @@ function openSupplementForm(storeId) {
         `}
       </div>
     </div>
-    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10 flex gap-2">
-      <button onclick="submitSupplementPart1('${s.id}')" id="sp-submit-part1" class="flex-1 rounded-2xl bg-gold py-3 text-sm font-black text-black">提交地址 +15分</button>
-      <button onclick="submitSupplementPart2('${s.id}')" id="sp-submit-part2" class="flex-1 rounded-2xl bg-neongreen py-3 text-sm font-black text-black" ${gpsUnlocked ? '' : 'disabled style="opacity:0.3;cursor:not-allowed;"'}>提交資料 +20分</button>
+    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">
+      <button onclick="submitSupplementAll('${s.id}')" id="sp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3 text-sm font-black text-white/30 cursor-not-allowed" disabled>
+        第一部分：未填妥　第二部分：未填妥
+      </button>
     </div>
   `);
 }
@@ -7482,6 +7483,7 @@ function onSupplementDistrictChange(value) {
 // 街道輸入
 var _spStreetTimer = null;
 function onSupplementStreetInput(value) {
+ console.log('🕵️ 街道輸入:', value); 
   window._supplementStreet = value.trim();
   clearTimeout(_spStreetTimer);
   _spStreetTimer = setTimeout(function() {
@@ -7583,6 +7585,61 @@ function selectSupplementField(fieldName, value) {
     }
   });
 }
+
+function updateSupplementSubmitButton() {
+  var btn = document.getElementById('sp-submit-btn');
+  if (!btn) return;
+  
+  // Part1 完成度
+  var p1Completed = 0;
+  var p1Total = 3;
+  if (window._supplementDistrict) p1Completed++;
+  if (window._supplementStreet) p1Completed++;
+  var buildingNo = document.getElementById('sp-building-no')?.value.trim();
+  if (buildingNo) p1Completed++;
+  
+  var p1Ready = p1Completed >= p1Total;
+  
+  // Part2 完成度
+  var p2Completed = 0;
+  var p2Total = 5;
+  if (window._supplementCoinChoice) p2Completed++;
+  if (window._supplementSelections.size) p2Completed++;
+  if (window._supplementSelections.has_staff) p2Completed++;
+  if (window._supplementSelections.hour24) p2Completed++;
+  if (window._supplementSelections.token) p2Completed++;
+  var p2PhotoReady = !!(window._camPreview && window._camPreview.sp);
+  if (p2PhotoReady) p2Completed++;
+  
+  var p2Unlocked = !window._supplementPart2Locked;
+  var p2Ready = p2Completed >= p2Total;
+  
+  // 狀態文字
+  var p1Text = p1Ready ? '已填妥' : '未填妥';
+  var p2Text = '';
+  if (!p2Unlocked) {
+    p2Text = '未有定位';
+  } else if (p2Ready) {
+    p2Text = '已填妥';
+  } else {
+    p2Text = '未填妥';
+  }
+  
+  var totalPoints = 0;
+  if (p1Ready) totalPoints += 15;
+  if (p2Ready) totalPoints += 20;
+  
+  if (p1Ready || p2Ready) {
+    btn.className = 'w-full rounded-2xl bg-neongreen py-3 text-sm font-black text-black glow-green';
+    btn.disabled = false;
+    btn.innerHTML = '第一部分：' + p1Text + '　第二部分：' + p2Text + '<br><span class="text-xs">提交可獲得：+' + totalPoints + ' 分</span>';
+  } else {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3 text-sm font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '第一部分：' + p1Text + '　第二部分：' + p2Text;
+  }
+}
+
 
 // AI 核對兌幣機照片
 async function aiCheckCoinMachine(photoUrl) {
@@ -7813,6 +7870,29 @@ async function submitSupplementPart2(storeId) {
     toast('✅ 店鋪資料補充成功 +20 分', 'green');
         setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
     closeModal();
+}
+
+async function submitSupplementAll(storeId) {
+  var p1Ready = window._supplementDistrict && window._supplementStreet && 
+                document.getElementById('sp-building-no')?.value.trim();
+  var p2Ready = window._supplementCoinChoice && 
+                window._supplementSelections.size && 
+                window._supplementSelections.has_staff && 
+                window._supplementSelections.hour24 && 
+                window._supplementSelections.token && 
+                (window._camPreview && window._camPreview.sp);
+  
+  if (p1Ready && p2Ready) {
+    // 兩者都提交
+    await submitSupplementPart1(storeId);
+    // Part1 會 closeModal，所以先提交 Part2
+  } else if (p1Ready) {
+    await submitSupplementPart1(storeId);
+  } else if (p2Ready) {
+    await submitSupplementPart2(storeId);
+  } else {
+    toast('請填寫第一部分或第二部分', 'gold');
+  }
 }
 
 // 選擇地區 Tab
@@ -10548,49 +10628,58 @@ function updateMachineSubmitButton() {
   
   var photos = window._camMulti?.['mf'] || [];
   var photoReady = photos.length >= 1;
-  
-  if (!photoReady) {
-    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-    btn.disabled = true;
-    btn.innerHTML = '📷 請先拍照';
-    return;
-  }
-  
   var size = window._mfSelections.size;
-  if (!size) {
-    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-    btn.disabled = true;
-    btn.innerHTML = '🎰 請選擇機型';
-    return;
-  }
+  
+  // 計算完成步驟
+  var completed = 0;
+  var total = 3;
+  
+  if (photoReady) completed++;
+  if (size) completed++;
+  
+  var featReady = false;
+  var brandReady = false;
   
   if (size === 'mini') {
-    // 至少一格有內容
     var hasAny = window._mfSelections.mini.some(function(corner) {
       return corner.feat && corner.brand;
     });
-    
     if (hasAny) {
-      btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green';
-      btn.disabled = false;
-      btn.innerHTML = '✅ 提交機台';
-    } else {
-      btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-      btn.disabled = true;
-      btn.innerHTML = '至少填一格';
+      featReady = true;
+      brandReady = true;
     }
-  } else {
-    // 標準/大機：台性和品牌必選
-    if (window._mfSelections.single.feat && window._mfSelections.single.brand) {
-      btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green';
-      btn.disabled = false;
-      btn.innerHTML = '✅ 提交機台';
-    } else {
-      btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
-      btn.disabled = true;
-      btn.innerHTML = '請選擇台性和品牌';
-    }
+  } else if (size === 'standard' || size === 'large') {
+    featReady = !!window._mfSelections.single.feat;
+    brandReady = !!window._mfSelections.single.brand;
   }
+  
+  if (featReady && brandReady) completed++;
+  
+  // 提交按鈕
+  if (!photoReady) {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '📷 請先拍照（' + completed + '/' + total + '）';
+    return;
+  }
+  
+  if (!size) {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '🎰 請選擇機型（' + completed + '/' + total + '）';
+    return;
+  }
+  
+  if (!featReady || !brandReady) {
+    btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
+    btn.disabled = true;
+    btn.innerHTML = '🏷️ 請選擇台性和品牌（' + completed + '/' + total + '）';
+    return;
+  }
+  
+  btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green';
+  btn.disabled = false;
+  btn.innerHTML = '✅ 提交機台';
 }
 
 // 單選標籤
