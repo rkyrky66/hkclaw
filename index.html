@@ -7956,57 +7956,6 @@ function selectSupplementDistrict(district) {
   if (display) display.textContent = district;
 }
 
-// 街道 AutoComplete
-var _supplementStreetTimer = null;
-
-function onSupplementStreetInput(value) {
-  window._supplementStreet = value.trim();
-  
-  clearTimeout(_supplementStreetTimer);
-  _supplementStreetTimer = setTimeout(function() {
-    autocompleteSupplementStreet(window._supplementStreet);
-  }, 500);
-}
-
-async function autocompleteSupplementStreet(query) {
-  var container = document.getElementById('supplement-street-suggestions');
-  if (!container) return;
-  
-  if (!query || query.length < 1) {
-    container.classList.add('hidden');
-    return;
-  }
-  
-  try {
-    var alsUrl = 'https://www.als.gov.hk/lookup?q=' + encodeURIComponent('香港 ' + (window._supplementDistrict ? window._supplementDistrict + ' ' : '') + query);
-    var alsRes = await fetch(alsUrl, { headers: { 'Accept': 'application/json' } });
-    var alsData = await alsRes.json();
-    
-    var streets = [];
-    if (alsData.SuggestedAddress && alsData.SuggestedAddress.length > 0) {
-      for (var i = 0; i < alsData.SuggestedAddress.length; i++) {
-        var chiStreet = alsData.SuggestedAddress[i].Address.PremisesAddress.ChiPremisesAddress;
-        if (chiStreet && chiStreet.ChiStreet && chiStreet.ChiStreet.StreetName) {
-          var streetName = chiStreet.ChiStreet.StreetName;
-          if (streets.indexOf(streetName) === -1) {
-            streets.push(streetName);
-          }
-        }
-      }
-    }
-    
-    if (streets.length > 0) {
-      container.innerHTML = streets.map(function(st) {
-        return '<button onclick="selectSupplementStreet(\'' + st.replace(/'/g, "\\'") + '\')" class="block w-full text-left px-3 py-2 hover:bg-gold/20 text-sm text-white/80 border-b border-white/10 last:border-0">' + st + '</button>';
-      }).join('');
-      container.classList.remove('hidden');
-    } else {
-      container.classList.add('hidden');
-    }
-  } catch (e) {
-    container.classList.add('hidden');
-  }
-}
 
 // 選擇街道
 function selectSupplementStreet(street) {
