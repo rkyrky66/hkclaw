@@ -4916,10 +4916,10 @@ function renderMapStoreListWithData(inBounds) {
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
     // 認證按鈕（三態：無認證/1次認證/2次認證）
-    if (!hasFirstVerifier) {
+       if (!hasFirstVerifier) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🔥 認證</span>';
     } else if (!hasSecondVerifier) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #3B82F6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">追加認證</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #3B82F6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 (1/2)</span>';
     } else {
         buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
     }
@@ -5794,8 +5794,11 @@ function openMallFromMap(mallName) {
 function openVerifyForm(storeId) {
   var s = STORES.find(function(x) { return x.id === storeId; });
   if (!s) { toast('找不到該店鋪', 'pink'); return; }
-  if (s.status === 'verified' || s.verified === 'verified') { 
-        toast('此店鋪已認證', 'gold'); 
+    var hasFirstVerifier = !!s.first_verifier_device;
+  var hasSecondVerifier = !!s.second_verifier_device;
+  
+  if (hasFirstVerifier && hasSecondVerifier) { 
+        toast('此店鋪已完滿認證', 'gold'); 
         return; 
     }
   if (s.submitted_by_device && s.submitted_by_device === STATE.user.device) { toast('你不能實證自己提交的店鋪', 'pink'); return; }
@@ -7513,7 +7516,8 @@ async function autocompleteSupplementStreet(query) {
         var chiStreet = alsData.SuggestedAddress[i].Address.PremisesAddress.ChiPremisesAddress;
         if (chiStreet && chiStreet.ChiStreet && chiStreet.ChiStreet.StreetName) {
           var streetName = chiStreet.ChiStreet.StreetName;
-          if (streetName.indexOf(query) !== -1 && streets.indexOf(streetName) === -1) streets.push(streetName);
+          if (streetName.indexOf(query) === 0 && streets.indexOf(streetName) === -1) {streets.push(streetName);
+          }
         }
       }
     }
