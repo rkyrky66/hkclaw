@@ -4952,10 +4952,15 @@ function renderMapStoreListWithData(inBounds) {
     }
     
     // 補充按鈕
-    if (!hasSupplemented) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
-    } else {
+        var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
+    var hasPart2 = !!(s.supplement_photo);
+    
+    if (hasPart1 && hasPart2) {
         buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完成補充\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">補充 ✅</span>';
+    } else if (hasPart1 || hasPart2) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 (1/2)</span>';
+    } else {
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
     }
     
     // 打卡按鈕
@@ -7297,7 +7302,24 @@ function openSupplementForm(storeId) {
   window._camPreview = window._camPreview || {};
   window._cam['sp'] = null;
   window._camPreview['sp'] = null;
+    // 讀取已填狀態
+  var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
+  var hasPart2 = !!(s.supplement_photo);
   
+  window._supplementPart1Done = hasPart1;
+  window._supplementPart2Done = hasPart2;
+  
+  // 如果 Part1 已填，預先載入
+  if (hasPart1 && s.addr) {
+    var addrParts = s.addr.split(' ');
+    if (addrParts.length >= 3) {
+      window._supplementDistrict = addrParts[0];
+      window._supplementStreet = addrParts[1];
+      window._supplementBuildingNo = addrParts.slice(2).join(' ');
+    }
+  }
+
+
   // 檢查 GPS 距離
   var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
   var limitDistance = isMallStore ? 0.25 : 0.1;
@@ -7318,7 +7340,7 @@ function openSupplementForm(storeId) {
       
       <!-- 第一部分：地址 -->
       <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-        <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）</p>
+                '<p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）' + (hasPart1 ? ' <span class="text-neongreen">✅ 已填妥</span>' : '') + '</p>' +
         
         <!-- 地區選擇 -->
         <div class="mt-3">
@@ -7351,7 +7373,7 @@ function openSupplementForm(storeId) {
       
       <!-- 第二部分：店鋪資料 -->
       <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-gold/30 bg-gold/5' : 'border-white/10 bg-white/5'}">
-        <p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+20 分）</p>
+                '<p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+20 分）' + (hasPart2 ? ' <span class="text-neongreen">✅ 已填妥</span>' : '') + '</p>' +
         ${gpsUnlocked ? `
           <div class="mt-3 space-y-3">
             <div>
@@ -7621,7 +7643,7 @@ function updateSupplementSubmitButton() {
   var btn = document.getElementById('sp-submit-btn');
   if (!btn) return;
   
-  // Part1 完成度
+  // Part1 完成度（包含已填的）
   var p1Completed = 0;
   var p1Total = 3;
   if (window._supplementDistrict) p1Completed++;
@@ -7629,7 +7651,7 @@ function updateSupplementSubmitButton() {
   var buildingNo = document.getElementById('sp-building-no')?.value.trim();
   if (buildingNo) p1Completed++;
   
-  var p1Ready = p1Completed >= p1Total;
+  var p1Ready = p1Completed >= p1Total || window._supplementPart1Done;
   
   // Part2 完成度
   var p2Completed = 0;
@@ -7643,12 +7665,12 @@ function updateSupplementSubmitButton() {
   if (p2PhotoReady) p2Completed++;
   
   var p2Unlocked = !window._supplementPart2Locked;
-  var p2Ready = p2Completed >= p2Total;
+  var p2Ready = (p2Completed >= p2Total) || window._supplementPart2Done;
   
   // 狀態文字
   var p1Text = p1Ready ? '已填妥' : '未填妥';
   var p2Text = '';
-  if (!p2Unlocked) {
+  if (!p2Unlocked && !window._supplementPart2Done) {
     p2Text = '未有定位';
   } else if (p2Ready) {
     p2Text = '已填妥';
@@ -7657,10 +7679,10 @@ function updateSupplementSubmitButton() {
   }
   
   var totalPoints = 0;
-  if (p1Ready) totalPoints += 15;
-  if (p2Ready) totalPoints += 20;
+  if (p1Ready && !window._supplementPart1Done) totalPoints += 15;
+  if (p2Ready && !window._supplementPart2Done) totalPoints += 20;
   
-  if (p1Ready || p2Ready) {
+  if (totalPoints > 0) {
     btn.className = 'w-full rounded-2xl bg-neongreen py-3 text-sm font-black text-black glow-green';
     btn.disabled = false;
     btn.innerHTML = '第一部分：' + p1Text + '　第二部分：' + p2Text + '<br><span class="text-xs">提交可獲得：+' + totalPoints + ' 分</span>';
@@ -7913,16 +7935,20 @@ async function submitSupplementAll(storeId) {
                 window._supplementSelections.token && 
                 (window._camPreview && window._camPreview.sp);
   
-  if (p1Ready && p2Ready) {
+  // 判斷需要提交什麼
+  var shouldSubmitP1 = p1Ready && !window._supplementPart1Done;
+  var shouldSubmitP2 = p2Ready && !window._supplementPart2Done;
+  
+  if (shouldSubmitP1 && shouldSubmitP2) {
     // 兩者都提交
+    await submitSupplementPart2(storeId);
     await submitSupplementPart1(storeId);
-    // Part1 會 closeModal，所以先提交 Part2
-  } else if (p1Ready) {
+  } else if (shouldSubmitP1) {
     await submitSupplementPart1(storeId);
-  } else if (p2Ready) {
+  } else if (shouldSubmitP2) {
     await submitSupplementPart2(storeId);
   } else {
-    toast('請填寫第一部分或第二部分', 'gold');
+    toast('請填寫未完成的部分', 'gold');
   }
 }
 
