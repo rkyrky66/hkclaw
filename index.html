@@ -7340,10 +7340,7 @@ function openSupplementForm(storeId) {
       <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
     </div>
     <div class="flex-1 overflow-y-auto mt-4 space-y-4" style="-webkit-overflow-scrolling:touch;">
-      
-      <!-- 第一部分：地址 -->
-      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-      <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）      ${hasPart1 ? `
+      ${hasPart1 ? `
         <!-- 第一部分已填：只顯示狀態 -->
         <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
           <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分） <span class="text-white/40">🔒 已被 ${addrSubmittedBy || '用戶'} 填妥</span></p>
