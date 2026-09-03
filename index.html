@@ -3734,6 +3734,8 @@ async function loadCloud() {
         name: s.name || "未命名店鋪",
         region: s.region || "旺角",
         addr: s.addr || "",
+                addr_submitted_by: s.addr_submitted_by || null,
+        addr_submitted_at: s.addr_submitted_at || null,
         ig: s.ig || "",
         fb: s.fb || "",
         status: s.status || "pending",
@@ -7305,6 +7307,7 @@ function openSupplementForm(storeId) {
     // 讀取已填狀態
   var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
   var hasPart2 = !!(s.supplement_photo);
+  var addrSubmittedBy = s.addr_submitted_by || '';
   
   window._supplementPart1Done = hasPart1;
   window._supplementPart2Done = hasPart2;
@@ -7340,36 +7343,46 @@ function openSupplementForm(storeId) {
       
       <!-- 第一部分：地址 -->
       <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-      <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）${hasPart1 ? ' <span class="text-neongreen">✅ 已填妥</span>' : ''}</p>
-        
-        <!-- 地區選擇 -->
-        <div class="mt-3">
-          <div id="sp-region-selector">
-            <button onclick="toggleSupplementRegionSelector()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-gold">
-              📍 地區：點擊選擇
-            </button>
-            <div id="sp-region-panel" class="hidden mt-2"></div>
-          </div>
-          <div id="sp-region-confirmed" class="hidden mt-2">
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-gold">✅ 已選擇：<span id="sp-region-display"></span></span>
-              <button onclick="reselectSupplementRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button>
+      <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）      ${hasPart1 ? `
+        <!-- 第一部分已填：只顯示狀態 -->
+        <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+          <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分） <span class="text-white/40">🔒 已被 ${addrSubmittedBy || '用戶'} 填妥</span></p>
+          <div class="mt-2 text-sm text-gold">📍 ${s.addr || ''}</div>
+        </div>
+      ` : `
+        <!-- 第一部分未填：顯示輸入區 -->
+        <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
+          <p class="text-xs font-bold text-gold">📍 第一部分：地址（+15 分）</p>
+          
+          <!-- 地區選擇 -->
+          <div class="mt-3">
+            <div id="sp-region-selector">
+              <button onclick="toggleSupplementRegionSelector()" class="w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-gold">
+                📍 地區：點擊選擇
+              </button>
+              <div id="sp-region-panel" class="hidden mt-2"></div>
+            </div>
+            <div id="sp-region-confirmed" class="hidden mt-2">
+              <div class="flex items-center gap-2">
+                <span class="text-sm text-gold">✅ 已選擇：<span id="sp-region-display"></span></span>
+                <button onclick="reselectSupplementRegion()" class="text-[10px] text-white/40 hover:text-gold">重新選擇</button>
+              </div>
             </div>
           </div>
+          
+          <!-- 街道 + 街號 -->
+          <div class="mt-3 flex gap-2 items-center">
+            <input id="sp-street" placeholder="街道" autocomplete="off" 
+              class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+              oninput="onSupplementStreetInput(this.value)" />
+            <input id="sp-building-no" placeholder="街號" 
+              class="rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
+              style="width:70px;flex-shrink:0;" oninput="updateSupplementAddressPreview()" />
+          </div>
+          <div id="sp-street-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-32 overflow-y-auto"></div>
+          <div class="mt-2 text-xs text-white/50">預覽：<span id="sp-address-preview-text"></span></div>
         </div>
-        
-        <!-- 街道 + 街號 -->
-        <div class="mt-3 flex gap-2 items-center">
-          <input id="sp-street" placeholder="街道" autocomplete="off" 
-            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
-            oninput="onSupplementStreetInput(this.value)" />
-          <input id="sp-building-no" placeholder="街號" 
-            class="rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold" 
-            style="width:70px;flex-shrink:0;" oninput="updateSupplementAddressPreview()" />
-        </div>
-        <div id="sp-street-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-32 overflow-y-auto"></div>
-        <div class="mt-2 text-xs text-white/50">預覽：<span id="sp-address-preview-text"></span></div>
-      </div>
+      `}
       
       <!-- 第二部分：店鋪資料 -->
       <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-gold/30 bg-gold/5' : 'border-white/10 bg-white/5'}">
@@ -7781,9 +7794,13 @@ async function submitSupplementPart1(storeId) {
     
     if (distanceMeters !== null && distanceMeters < 100) {
         // 驗證通過
-        s.addr = fullAddress;
+                s.addr = fullAddress;
         if (CLOUD_ON) {
-            await supabaseClientInstance.from('claw_stores').update({ addr: fullAddress }).eq('id', parseInt(storeId));
+            await supabaseClientInstance.from('claw_stores').update({ 
+                addr: fullAddress,
+                addr_submitted_by: STATE.user.device,
+                addr_submitted_at: new Date().toISOString()
+            }).eq('id', parseInt(storeId));
         }
         save();
         await addPoints(15, '補充地址');
