@@ -9011,7 +9011,7 @@ function openPlayerPost() {
   
   var tagsHtml = tagCategories.map(function(cat) {
     return '\n    <div class="mt-3">\n      <p class="text-[10px] text-white/40 mb-1">' + cat.name + '</p>\n      <div class="flex flex-wrap gap-1.5">\n        ' + cat.tags.map(function(t) {
-      return '\n          <button onclick="this.classList.toggle(\'chip-active-gold\')" \n            data-tag="' + t + '" \n            class="rounded-full border border-gold/40 px-2.5 py-1 text-[10px] text-gold hover:border-gold/60 transition-all">\n            ' + t + '\n          </button>\n        ';
+      return '\n          <button onclick="this.classList.toggle(\'chip-active-gold\')" \n            data-tag="' + t + '" \n            class="rounded-full border border-gold/40 px-3.5 py-1.5 text-[13px] text-gold hover:border-gold/60 transition-all">\n            ' + t + '\n          </button>\n        ';
     }).join('') + '\n      </div>\n    </div>\n  ';
   }).join('');
   
