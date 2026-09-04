@@ -951,35 +951,62 @@ var DEFAULT_STATE = {
 // ============================================================
 
 // 任務定義
-function getTaskPoints(taskKey) {
-    var configMap = {
-        'submit_store': 'submit_points',
-        'verify_store': 'verify_first_points',
-        'supplement': 'supplement_part1_points',
-        'checkin': 'checkin_points',
-        'machine_checkin': 'machine_points',
-        'share': 'post_points'
-    };
-    var configKey = configMap[taskKey];
-    return configKey ? getConfigInt(configKey, 5) : 5;
-}
-
-// 取得任務動態上限
-function getTaskLimit(taskKey) {
-    var configMap = {
-        'submit_store': 'submit_limit_daily',
-        'verify_store': 'verify_limit_daily',
-        'supplement': 'submit_limit_daily',
-        'checkin': 'checkin_limit_daily',
-        'machine_checkin': 'machine_limit_daily',
-        'share': 'post_limit_daily'
-    };
-    var configKey = configMap[taskKey];
-    if (configKey) {
-        return getConfigInt(configKey, 3);
+var TASK_TYPES = {
+    submit_store: {
+        label: '提交店鋪',
+        points: 15,
+        icon: '🏪',
+        category: 'core',
+        limit: 3,
+        action: 'openIntelForm',
+        efficiency: 3
+    },
+    verify_store: {
+        label: '認證店鋪',
+        points: 15,
+        icon: '🕵️',
+        category: 'core',
+        limit: 3,
+        action: 'openVerifyTask',
+        efficiency: 3
+    },
+    supplement: {
+        label: '補充資料',
+        points: 15,
+        icon: '📝',
+        category: 'core',
+        limit: 3,
+        action: 'openSupplementTask',
+        efficiency: 3
+    },
+    checkin: {
+        label: '店鋪打卡',
+        points: 5,
+        icon: '📍',
+        category: 'daily',
+        limit: 5,
+        action: 'quickTaskCheckin',
+        efficiency: 1
+    },
+    machine_checkin: {
+        label: '機台打卡',
+        points: 5,
+        icon: '🎰',
+        category: 'daily',
+        limit: 5,
+        action: 'quickTaskMachine',
+        efficiency: 1
+    },
+    share: {
+        label: '分享戰績',
+        points: 5,
+        icon: '📢',
+        category: 'daily',
+        limit: 3,
+        action: 'quickTaskShare',
+        efficiency: 1
     }
-    return 3;
-}
+};
 
 // 獲取今日任務進度
 function getTaskProgress() {
@@ -1001,47 +1028,21 @@ function getTaskProgress() {
     return STATE.taskProgress[today];
 }
 
-// 取得任務動態分數
-function getTaskPoints(taskKey) {
-    var configMap = {
-        'submit_store': 'submit_points',
-        'verify_store': 'verify_first_points',
-        'supplement': 'supplement_part1_points',
-        'checkin': 'checkin_points',
-        'machine_checkin': 'machine_points',
-        'share': 'post_points'
-    };
-    var configKey = configMap[taskKey];
-    if (configKey) {
-        return getConfigInt(configKey, 5);
-    }
-    // 預設回退
-    var defaults = {
-        'submit_store': 20,
-        'verify_store': 20,
-        'supplement': 15,
-        'checkin': 5,
-        'machine_checkin': 10,
-        'share': 10
-    };
-    return defaults[taskKey] || 5;
-}
-
 // 計算今日總得分
 function calculateDailyScore(progress) {
     if (!progress) progress = getTaskProgress();
     var total = 0;
     for (var key in TASK_TYPES) {
         var done = progress[key] || 0;
-        total += done * getTaskPoints(key);
+        total += done * TASK_TYPES[key].points;
     }
     return total;
 }
 
+// 檢查是否達標 (50分)
 function isDailyGoalReached(progress) {
     if (!progress) progress = getTaskProgress();
-    var dailyTaskThreshold = getConfigInt('daily_task_bonus_threshold', 100);
-    return calculateDailyScore(progress) >= dailyTaskThreshold;
+    return calculateDailyScore(progress) >= 50;
 }
 
 // 記錄任務完成
@@ -1050,14 +1051,10 @@ async function recordTaskCompletion(taskKey) {
     var task = TASK_TYPES[taskKey];
     if (!task) return false;
     
-    var limit = getTaskLimit(taskKey);
-    var dailyTaskThreshold = getConfigInt('daily_task_bonus_threshold', 100);
-    var dailyTaskBonus = getConfigInt('daily_task_bonus_points', 30);
-    
     // 檢查是否已達上限
     var current = progress[taskKey] || 0;
-    if (current >= limit) {
-        toast('⚠️ 今日 ' + task.label + ' 已達上限 (' + limit + ' 次)', 'pink');
+    if (current >= task.limit) {
+        toast('⚠️ 今日 ' + task.label + ' 已達上限 (' + task.limit + ' 次)', 'pink');
         return false;
     }
     
@@ -1067,13 +1064,14 @@ async function recordTaskCompletion(taskKey) {
     
     // 檢查是否達標
     var wasReached = progress.goal_reached || false;
-    var isReached = progress.total_points >= dailyTaskThreshold;
+    var isReached = progress.total_points >= 50;
     
     if (isReached && !wasReached) {
         progress.goal_reached = true;
         progress.goal_rewarded = true;
-        await addPoints(dailyTaskBonus, '🎯 每日任務達標獎勵！');
-        toast('🎉 恭喜達成今日目標！獲得 +' + dailyTaskBonus + ' 獎勵積分！', 'gold');
+        // 額外獎勵 +20 分 (不計入進度)
+        await addPoints(20, '🎯 每日任務達標獎勵！');
+        toast('🎉 恭喜達成今日目標！獲得 +20 獎勵積分！', 'gold');
     }
     
     save();
@@ -1086,19 +1084,16 @@ async function recordTaskCompletion(taskKey) {
             console.warn('⚠️ 任務進度雲端同步失敗:', e.message);
         }
     }
-    
+        checkDailyTaskBonus();
     return true;
 }
 
 // 檢查每日任務 >100 全屏彈窗
 function checkDailyTaskBonus() {
-    var threshold = getConfigInt('daily_task_bonus_threshold', 100);
-    var bonusPoints = getConfigInt('daily_task_bonus_points', 30);
-    
     var progress = getTaskProgress();
     var totalScore = calculateDailyScore(progress);
-
-    if (totalScore > threshold && !progress.bonus_100_claimed) {
+    
+    if (totalScore > 100 && !progress.bonus_100_claimed) {
         progress.bonus_100_claimed = true;
         save();
         
@@ -1108,16 +1103,17 @@ function checkDailyTaskBonus() {
         overlay.innerHTML = 
             '<div style="text-align:center;">' +
                 '<div class="text-6xl mb-4">🎉</div>' +
-                '<h2 class="text-2xl font-black text-gold neon-gold">今日任務超過 ' + threshold + ' 分！</h2>' +
-                '<p class="text-lg text-white mt-3">+' + bonusPoints + ' 獎勵積分</p>' +
+                '<h2 class="text-2xl font-black text-gold neon-gold">今日任務超過 100 分！</h2>' +
+                '<p class="text-lg text-white mt-3">+30 獎勵積分</p>' +
                 '<button onclick="this.closest(\'div[style*=fixed]\').remove()" class="mt-6 rounded-2xl bg-gold px-8 py-3 text-base font-black text-black">👍 太棒了！</button>' +
             '</div>';
         document.body.appendChild(overlay);
         
-        addPoints(bonusPoints, '每日任務超過' + threshold + '分獎勵');
+        addPoints(30, '每日任務超過100分獎勵');
         fireConfettiOnce();
     }
 }
+
 // 同步任務進度到雲端
 async function syncTaskProgress(progress) {
     if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
@@ -1222,10 +1218,15 @@ var REGION_KEYS = {
 // ============================================================
 // 貢獻值定義
 // ============================================================
-function getContributionValue(actionType) {
-    var key = 'contribution_' + actionType;
-    return getConfigInt(key, CONTRIBUTION_VALUES[actionType] || 1);
-}
+var CONTRIBUTION_VALUES = {
+    'checkin': 1,          // 打卡
+    'post': 1,             // 發布戰績/宣傳
+    'supplement': 2,       // 補充資料
+    'report': 2,           // 檢舉/報錯
+    'verify_store': 3,     // 認證店鋪
+    'submit_store': 5,     // 提交新店
+    'machine': 2           // 上架機台
+};
 
 // ============================================================
 // 稱號定義
@@ -1999,8 +2000,8 @@ async function redeemAdFree() {
       <div class="text-5xl mb-3">✨</div>
       <h2 class="text-xl font-black text-gold">兌換免廣告</h2>
       <div class="mt-4 w-full space-y-3">
-        <button onclick="confirmRedeemAdFree(' + adFree5Days + ', ' + adFree5Cost + ')" class="w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">' + adFree5Days + ' 天免廣告 · ' + adFree5Cost + ' 分</button>
-        <button onclick="confirmRedeemAdFree(' + adFree30Days + ', ' + adFree30Cost + ')" class="w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">' + adFree30Days + ' 天免廣告 · ' + adFree30Cost + ' 分</button>
+        <button onclick="confirmRedeemAdFree(5, 100)" class="w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">5 天免廣告 · 100 分</button>
+        <button onclick="confirmRedeemAdFree(30, 300)" class="w-full rounded-2xl bg-gold py-3 text-base font-black text-black glow-gold">30 天免廣告 · 300 分</button>
         <button onclick="closeModal()" class="w-full text-xs text-white/30">取消</button>
       </div>
     </div>
@@ -2039,8 +2040,7 @@ async function checkDailySubmitLimit() {
       if (response.ok) {
         var data = await response.json();
         var count = data.length > 0 ? data[0].submit_count : 0;
-        var submitLimit = getConfigInt('submit_limit_daily', 3);
-if (count >= submitLimit) {
+        if (count >= 3) {
           toast('⚠️ 每日僅能提交 3 間店鋪，明日再來！', 'pink');
           return false;
         }
@@ -2584,24 +2584,18 @@ const CheckinManager = {
     
     var progress = getWeeklyCheckinProgress();
     var daysSigned = progress.count + 1;
-    
-    var checkinBasePoints = getConfigInt('checkin_points', 5);
-    var checkinBonus3Days = getConfigInt('checkin_bonus_3_days', 5);
-    var checkinBonus5Days = getConfigInt('checkin_bonus_5_days', 10);
-    var checkinBonus7Days = getConfigInt('checkin_bonus_7_days', 15);
-    
-    var bonus = checkinBasePoints;
-    var bonusMsg = '基礎簽到 +' + checkinBasePoints + ' 分';
+    var bonus = 5;
+    var bonusMsg = '基礎簽到 +5 分';
     
     if (daysSigned >= 7) {
-        bonus += checkinBonus7Days;
-        bonusMsg = '連續 7 天！全勤 +' + (checkinBasePoints + checkinBonus7Days) + ' 分 🎊';
+        bonus += 15;
+        bonusMsg = '連續 7 天！全勤 +20 分 🎊';
     } else if (daysSigned >= 5) {
-        bonus += checkinBonus5Days;
-        bonusMsg = '連續 5 天！+' + (checkinBasePoints + checkinBonus5Days) + ' 分 🔥';
+        bonus += 10;
+        bonusMsg = '連續 5 天！+15 分 🔥';
     } else if (daysSigned >= 3) {
-        bonus += checkinBonus3Days;
-        bonusMsg = '連續 3 天！+' + (checkinBasePoints + checkinBonus3Days) + ' 分 ⭐';
+        bonus += 5;
+        bonusMsg = '連續 3 天！+10 分 ⭐';
     }
     
     if (CLOUD_ON) {
@@ -2790,11 +2784,7 @@ function doCheckin() {
   CheckinManager.doCheckin();
 }
 
-  function showCheckinReminder() {
-    var checkinBasePoints = getConfigInt('checkin_points', 5);
-    var checkinBonus3Days = getConfigInt('checkin_bonus_3_days', 5);
-    var checkinBonus5Days = getConfigInt('checkin_bonus_5_days', 10);
-    var checkinBonus7Days = getConfigInt('checkin_bonus_7_days', 15);
+function showCheckinReminder() {
   const progress = getWeeklyCheckinProgress();
   const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
   
@@ -2818,11 +2808,11 @@ function doCheckin() {
       <p class="text-xs text-white/30 mt-2">本週簽到 ${progress.count}/7 天</p>
       <div class="mt-4 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">
         <p class="text-xs text-white/40">📌 獎勵規則</p>
-           <div class="mt-1 text-[10px] text-white/30 space-y-0.5">
-          <p>✅ 每日簽到：<span class="text-neongreen">+${checkinBasePoints} 分</span></p>
-          <p>🔥 連續 3 天：<span class="text-gold">+${checkinBonus3Days} 分</span></p>
-          <p>🔥 連續 5 天：<span class="text-gold">+${checkinBonus5Days} 分</span></p>
-          <p>🎊 全勤 7 天：<span class="text-gold">+${checkinBonus7Days} 分</span></p>
+        <div class="mt-1 text-[10px] text-white/30 space-y-0.5">
+          <p>✅ 每日簽到：<span class="text-neongreen">+5 分</span></p>
+          <p>🔥 連續 3 天：<span class="text-gold">+5 分</span></p>
+          <p>🔥 連續 5 天：<span class="text-gold">+5 分</span></p>
+          <p>🎊 全勤 7 天：<span class="text-gold">+15 分</span></p>
         </div>
       </div>
       <button onclick="doCheckinFromReminder()" 
@@ -3610,9 +3600,8 @@ async function syncUserDataAfterBind(user) {
     await loadTaskProgressFromCloud();
     
     if (isNewUser) {
-      var bindBonus = getConfigInt('bind_bonus_points', 20);
-      addPoints(bindBonus, 'Google 帳號綁定獎勵');
-      toast('✅ 帳號綁定成功！數據已雲端備份 (+' + bindBonus + ' 分)', 'green');
+      addPoints(20, 'Google 帳號綁定獎勵');
+      toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
     } else {
       toast('✅ 帳號登入成功！數據已合併同步', 'green');
     }
@@ -4748,7 +4737,6 @@ marker.on('click', function(e) {
     if (badge) badge += ' ';
 
     var displayName = badge;
-    var charCount = 0;
 for (var i = 0; i < s.name.length; i++) {
     var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
     charCount += isCJK ? 2 : 1;
@@ -7088,9 +7076,8 @@ async function submitVerification(storeId) {
                                 .eq('id', numericStoreId);
                             
                             console.log('✅ AI 核對通過，自動認證成功');
-                                                        var verifyFirstPoints = getConfigInt('verify_first_points', 20);
-                            toast('🎉 搶先認證成功！+' + verifyFirstPoints + ' 分', 'green');
-                            setTimeout(function() { showRewardAdAfterSubmit(verifyFirstPoints); }, 500);
+                            toast('🎉 搶先認證成功！+20 分', 'green');
+                            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
                             
                             await supabaseClientInstance
                                 .from('claw_stores')
@@ -7111,9 +7098,8 @@ async function submitVerification(storeId) {
                         
                     } else if (reviewResult === 'verifier_2') {
                         if (aiCheckResult === 'passed') {
-                                                        var verifySecondPoints = getConfigInt('verify_second_points', 10);
-                            toast('🎉 追加認證成功！+' + verifySecondPoints + ' 分', 'green');
-                            setTimeout(function() { showRewardAdAfterSubmit(verifySecondPoints); }, 500);
+                            toast('🎉 追加認證成功！+10 分', 'green');
+                            setTimeout(function() { showRewardAdAfterSubmit(10); }, 500);
                         } else if (aiCheckResult === 'failed') {
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
@@ -7137,15 +7123,13 @@ async function submitVerification(storeId) {
                     console.warn('⚠️ 重新載入失敗:', e.message);
                 }
             }
-             // 在 submitVerification 開頭
-    var verifyFirstPoints = getConfigInt('verify_first_points', 20);
-    var verifySecondPoints = getConfigInt('verify_second_points', 10);
-        // 7. 加分
-    if (reviewResult === 'verifier_1') {
-        await addPoints(verifyFirstPoints, '搶先認證');
-    } else if (reviewResult === 'verifier_2') {
-        await addPoints(verifySecondPoints, '追加認證');
-    }
+            
+            // 7. 加分
+            if (reviewResult === 'verifier_1') {
+                await addPoints(20, '搶先認證');
+            } else if (reviewResult === 'verifier_2') {
+                await addPoints(10, '追加認證');
+            }
             
             await recordTaskCompletion('verify_store');
             updateStreak();
@@ -7352,8 +7336,6 @@ function openSupplementForm(storeId) {
   window._supplementBuildingNo = '';
   window._supplementCurrentTab = 'kl';
   window._supplementPart2Locked = true;
-    var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
-  var supplementPart2Points = getConfigInt('supplement_part2_points', 20);
   window._supplementCoinChoice = '';
   window._supplementSelections = {};
   window._cam = window._cam || {};
@@ -7367,7 +7349,9 @@ function openSupplementForm(storeId) {
   
   window._supplementPart1Done = hasPart1;
   window._supplementPart2Done = hasPart2;
-  
+    var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
+  var supplementPart2Points = getConfigInt('supplement_part2_points', 20);
+
   // 如果 Part1 已填，預先載入
   if (hasPart1 && s.addr) {
     var addrParts = s.addr.split(' ');
@@ -7397,7 +7381,7 @@ function openSupplementForm(storeId) {
     </div>
     <div class="flex-1 overflow-y-auto mt-4 space-y-4" style="-webkit-overflow-scrolling:touch;">
       ${hasPart1 ? `
-               <!-- 第一部分已填：只顯示狀態 -->
+        <!-- 第一部分已填：只顯示狀態 -->
         <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
           <p class="text-xs font-bold text-gold">📍 第一部分：地址（+${supplementPart1Points} 分） <span class="text-white/40">🔒 已被 ${addrSubmittedBy || '用戶'} 填妥</span></p>
           <div class="mt-2 text-sm text-gold">📍 ${s.addr || ''}</div>
@@ -7405,7 +7389,7 @@ function openSupplementForm(storeId) {
       ` : `
         <!-- 第一部分未填：顯示輸入區 -->
         <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">
-          <p class="text-xs font-bold text-gold">📍 第一部分：地址（+${supplementPart1Points} 分）</p>>
+          <p class="text-xs font-bold text-gold">📍 第一部分：地址（+${supplementPart1Points} 分）</p>
           
           <!-- 地區選擇 -->
           <div class="mt-3">
@@ -7439,7 +7423,7 @@ function openSupplementForm(storeId) {
       
             <!-- 第二部分：店鋪資料 -->
       <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-gold/30 bg-gold/5' : 'border-white/10 bg-white/5'}" style="position:relative;${gpsUnlocked ? '' : 'overflow:hidden;'}">
-        <p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+' + supplementPart2Points + ' 分）</p>
+        <p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+${supplementPart2Points} 分）</p>
         
         <!-- 完整內容（鎖定時半透明顯示） -->
         <div style="${gpsUnlocked ? '' : 'opacity:0.4;pointer-events:none;'}">
@@ -7752,11 +7736,8 @@ function updateSupplementSubmitButton() {
   }
   
   var totalPoints = 0;
-   var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
-  var supplementPart2Points = getConfigInt('supplement_part2_points', 20);
-  
-  if (p1Ready && !window._supplementPart1Done) totalPoints += supplementPart1Points;
-  if (p2Ready && !window._supplementPart2Done) totalPoints += supplementPart2Points;
+  if (p1Ready && !window._supplementPart1Done) totalPoints += 15;
+  if (p2Ready && !window._supplementPart2Done) totalPoints += 20;
   
   if (totalPoints > 0) {
     btn.className = 'w-full rounded-2xl bg-neongreen py-3 text-sm font-black text-black glow-green';
@@ -7866,11 +7847,10 @@ async function submitSupplementPart1(storeId) {
             }).eq('id', parseInt(storeId));
         }
         save();
-                await addPoints(part1Points, '補充地址');
+        await addPoints(15, '補充地址');
         await recordTaskCompletion('supplement');
         await recordRegionContribution('supplement', s.region, storeId);
-               var part1Points = getConfigInt('supplement_part1_points', 15);
-        toast('✅ 地址驗證通過 +' + part1Points + ' 分', 'green');
+        toast('✅ 地址驗證通過 +15 分', 'green');
 
         
         if (CURRENT === 'map') {
@@ -7999,11 +7979,10 @@ async function submitSupplementPart2(storeId) {
             .eq('id', parseInt(storeId));
     }
     
-        await addPoints(part2Points, '補充店鋪資料');
+    await addPoints(20, '補充店鋪資料');
     await recordTaskCompletion('supplement');
-       var part2Points = getConfigInt('supplement_part2_points', 20);
-    toast('✅ 店鋪資料補充成功 +' + part2Points + ' 分', 'green');
-    setTimeout(function() { showRewardAdAfterSubmit(part2Points); }, 500);
+    toast('✅ 店鋪資料補充成功 +20 分', 'green');
+        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
     closeModal();
 }
 
@@ -8279,21 +8258,16 @@ async function submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng,
         if (CLOUD_ON) {
             await supabaseClientInstance
                 .from('claw_stores')
-                .update({ 
-                    addr: address,
-                    addr_submitted_by: STATE.user.device,
-                    addr_submitted_at: new Date().toISOString()
-                })
+                .update({ addr: address })
                 .eq('id', parseInt(storeId));
         }
         
         save();
-        var supplementPoints = getConfigInt('supplement_part1_points', 15);
-        await addPoints(supplementPoints, '補充地址');
+        await addPoints(15, '補充地址');
         await recordRegionContribution('supplement', s.region, storeId);
         await recordTaskCompletion('supplement');
         
-        toast('✅ 地址已補充！+' + supplementPoints + ' 分', 'green');
+        toast('✅ 地址已補充！+15 分', 'green');
         closeModal();
         setTimeout(function() { openStore(storeId); }, 300);
         
@@ -8343,6 +8317,18 @@ async function submitAddressForReview(storeId, address, geocodedLat, geocodedLng
 }
 
 
+function checkPerfectFile(storeId) {
+  var s = STORES.find(function(x) { return x.id === storeId; });
+  if (!s) return;
+  var hasAddress = s.address_detail && s.address_detail !== '';
+  var hasSize = s.size && s.size !== '中';
+  var hasStaff = s.has_staff !== undefined && s.has_staff !== null;
+  var hasCoin = s.has_e_coin !== undefined && s.has_e_coin !== null;
+  if (hasAddress && hasSize && hasStaff && hasCoin) {
+    updateAchievementStat('perfect_file');
+    toast('📝 完美檔案！這間店的資料已完整！+20 分', 'gold');
+  }
+}
 
 // ============================================================
 // 🔴 P0: 實時頁面 (Live) - 雲端同步版本
@@ -8597,29 +8583,23 @@ async function submitPlayerPost() {
         var today = todayKey();
         var dailyData = daily();
         var postCount = dailyData.live || 0;
-        var postFreeCount = getConfigInt('post_free_count', 2);
-        var postDailyLimit = getConfigInt('post_limit_daily', 2);
-        var postCost = getConfigInt('post_cost', 10);
-        
-        var isFree = postCount < postFreeCount;
-        
-        if (postCount >= postDailyLimit) {
-            toast('📢已達每日發佈上限(' + postDailyLimit + '/' + postDailyLimit + ')', 'pink');
-            enableSubmitButton(submitBtn, '✅ 發布戰報');
-            return;
-        }
-        
+        var isFree = postCount < POST_FREE_COUNT;
+        if (postCount >= POST_DAILY_LIMIT) {
+    toast('📢已達每日發佈上限(' + POST_DAILY_LIMIT + '/' + POST_DAILY_LIMIT + ')', 'pink');
+    enableSubmitButton(submitBtn, '✅ 發布戰報');
+    return;
+}
         if (isFree) {
-            toast('🎯 今日第 ' + (postCount + 1) + ' 次免費發布（共 ' + postFreeCount + ' 次免費）', 'green');
+            toast('🎯 今日第 ' + (postCount + 1) + ' 次免費發布（共 2 次免費）', 'green');
         } else {
-            if (STATE.points < postCost) {
-                toast('⚠️ 積分不足 ' + postCost + ' 分，無法發布（今日前 ' + postFreeCount + ' 次免費已用完）', 'pink');
+            if (STATE.points < POST_COST) {
+                toast('⚠️ 積分不足 10 分，無法發布（今日前 2 次免費已用完）', 'pink');
                 enableSubmitButton(submitBtn, '✅ 發布戰報');
                 return;
             }
-            toast('💡 今日第 ' + (postCount + 1) + ' 次發布，扣除 ' + postCost + ' 積分', 'gold');
+            toast('💡 今日第 ' + (postCount + 1) + ' 次發布，扣除 10 積分', 'gold');
         }
-        var expireHours = getConfigInt('post_expire_hours', 24);
+        
         var post = {
             id: 'p' + Date.now() + '_' + uid(),
             track: 'player',
@@ -8634,8 +8614,7 @@ async function submitPlayerPost() {
             author_device: STATE.user.device,
             author_user_id: STATE.user.user_id || null,
             ts: now(),
-            
-expire: now() + expireHours * HOUR,
+            expire: now() + (STATE.extendedPostLifespan ? 2 * DAY : DAY),
             likes: [],
             likeCount: 0,
             is_linked: false,
@@ -8649,11 +8628,10 @@ expire: now() + expireHours * HOUR,
         
         await syncLivePost(post);
         
-                if (isFree) {
-            var postPoints = getConfigInt('post_points', 10);
-            await addPoints(postPoints, '發布出貨戰報');
+        if (isFree) {
+            await addPoints(10, '發布出貨戰報');
         } else {
-            await addPoints(-postCost, '發布戰報（超過免費次數）');
+           await addPoints(-POST_COST, '發布戰報（超過免費次數）');
         }
         
         dailyData.live = postCount + 1;
@@ -8679,35 +8657,34 @@ expire: now() + expireHours * HOUR,
 // 發布台主宣傳 - 加入防重鎖
 // ============================================================
 async function submitOwnerPost() {
+    // 🔒 防重鎖
     if (!acquireSubmitLock('submitOwnerPost')) return;
     if (!requireLogin('發布宣傳')) return;
     if (isUserBanned()) {
-        showBannedMessage();
-        return;
-    }
+    showBannedMessage();
+    return;
+}
     var submitBtn = disableSubmitButton('lo-submit-btn', '⏳ 發布中...');
-    
-    var postPoints = getConfigInt('post_points', 10);
     
     try {
         var storeId = document.getElementById('lo-store-id')?.value;
         if (!storeId) { 
             toast('請選擇店鋪', 'pink'); 
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return; 
         }
         
         var photoBlob = window._cam?.lo;
         if (!photoBlob) { 
             toast('請先拍照', 'pink'); 
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return; 
         }
         
         var store = STORES.find(function(s) { return s.id === storeId; });
         if (!store) { 
             toast('找不到該店鋪', 'pink'); 
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return; 
         }
         
@@ -8715,7 +8692,7 @@ enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
         
         if (!gpsLat || !gpsLng) {
             toast('📍 請先開啟 GPS 定位，以確保宣傳資訊的真實性', 'pink');
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return;
         }
         
@@ -8728,7 +8705,7 @@ enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
             var distanceMeters = Math.round(distance * 1000);
             if (distance > limitDistanceOwner) {
                 toast('⚠️ 你距離該店鋪 ' + distanceMeters + ' 米，請在 ' + limitMetersOwner + ' 米內發布宣傳\n\n實況資訊的真實性是我們的核心價值', 'pink');
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+                enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
                 return;
             }
             toast('✅ 距離 ' + distanceMeters + ' 米，在 ' + limitMetersOwner + ' 米範圍內，可以發布', 'green');
@@ -8741,7 +8718,7 @@ enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
         
         if (plan && STATE.points < plan.cost) {
             toast('積分不足 ' + plan.cost + '，無法使用連結功能', 'pink');
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+            enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
             return;
         }
         
@@ -8752,7 +8729,7 @@ enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
                 photoUrl = await uploadImage(file, 'posts');
             } catch (e) {
                 toast('圖片上傳失敗', 'pink');
-enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
+                enableSubmitButton(submitBtn, '✅ 發布宣傳（+5 分）');
                 return;
             }
         }
@@ -8789,7 +8766,7 @@ enableSubmitButton(submitBtn, '✅ 發布宣傳（+' + postPoints + ' 分）');
         await syncLivePost(post);
         
         if (!plan) {
-await addPoints(postPoints, '發布台主宣傳');
+            await addPoints(5, '發布台主宣傳');
         }
         
         updateStreak();
@@ -8797,7 +8774,7 @@ await addPoints(postPoints, '發布台主宣傳');
         // 記錄任務進度 (分享戰績)
         await recordTaskCompletion('share');
         await recordRegionContribution('post', store.region, storeId);
-toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+' + postPoints + ' 分', 'green');
+        toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+5 分', 'green');
         closeModal();
         showView('live');
     } finally {
@@ -8979,11 +8956,10 @@ async function deletePost(postId) {
     STATE.livePosts = STATE.livePosts.filter(function(p) { return p.id !== postId; });
     save();
     
-    // 扣分（動態）
-    var deletePostPenalty = getConfigInt('delete_post_penalty', 10);
-    await addPoints(-deletePostPenalty, '刪除貼文');
+    // 扣分
+    await addPoints(-10, '刪除貼文');
     
-    toast('✅ 貼文已刪除，-' + deletePostPenalty + ' 分', 'green');
+    toast('✅ 貼文已刪除，-10 分', 'green');
     
     if (CURRENT === 'live') {
       showView('live');
@@ -9067,7 +9043,6 @@ async function saveEditedTags(postId) {
 // 發布貼文 UI
 // ============================================================
 function openPlayerPost() {
-  var postPoints = getConfigInt('post_points', 10);
   // ✅ 清除殘留照片
   window._cam = window._cam || {};
   window._camPreview = window._camPreview || {};
@@ -9087,7 +9062,7 @@ function openPlayerPost() {
     }).join('') + '\n      </div>\n    </div>\n  ';
   }).join('');
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">\n        <p class="text-xs text-white/40">分享你的夾娃娃戰果！</p>\n        <p class="text-xs text-neongreen mt-1">📸 最多 3 張照片 + 🏷️ 選擇標籤 = +' + postPoints + ' 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <div style="display:flex; gap:6px;">\n          <input id="lp-store-search" placeholder="輸入店名搜尋..." \n            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" \n            autocomplete="off" oninput="filterStoreSuggestions(\'lp\')" onfocus="filterStoreSuggestions(\'lp\')" />\n          <button onclick="selectStoreFromMap(\'lp\')" \n            class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">\n            🗺️ 地圖選\n          </button>\n        </div>\n        <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lp-store-id" value="" />\n        <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏷️ 戰報標籤 <span class="text-white/40">（選填，可多選）</span></label>\n        ' + tagsHtml + '\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填，最多 3 張）</span></label>\n        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lp\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請選擇店鋪並拍照</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neongreen/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neongreen neon-green">🎯 發布出貨戰報</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neongreen/20 bg-neongreen/5 p-3">\n        <p class="text-xs text-white/40">分享你的夾娃娃戰果！</p>\n        <p class="text-xs text-neongreen mt-1">📸 最多 3 張照片 + 🏷️ 選擇標籤 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <div style="display:flex; gap:6px;">\n          <input id="lp-store-search" placeholder="輸入店名搜尋..." \n            class="flex-1 rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" \n            autocomplete="off" oninput="filterStoreSuggestions(\'lp\')" onfocus="filterStoreSuggestions(\'lp\')" />\n          <button onclick="selectStoreFromMap(\'lp\')" \n            class="rounded-lg border border-gold/40 px-3 py-2.5 text-sm text-gold hover:bg-gold/10 transition-all whitespace-nowrap">\n            🗺️ 地圖選\n          </button>\n        </div>\n        <div id="lp-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lp-store-id" value="" />\n        <div id="lp-selected-store" class="hidden mt-2 text-xs text-gold">✅ 已選擇：<span id="lp-selected-store-name"></span></div>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏷️ 戰報標籤 <span class="text-white/40">（選填，可多選）</span></label>\n        ' + tagsHtml + '\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 戰果照片 <span class="text-neonpink">（必填，最多 3 張）</span></label>\n        <div id="lp-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neongreen/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lp\')" class="w-full rounded-lg bg-neongreen/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n        </div>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitPlayerPost()" id="lp-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請選擇店鋪並拍照</button>\n    </div>\n  ');
   
   var checkInterval = setInterval(function() {
     var storeId = document.getElementById('lp-store-id')?.value;
@@ -9098,8 +9073,7 @@ function openPlayerPost() {
       if (storeId && photoReady) {
         btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
         btn.disabled = false;
-                var postPoints = getConfigInt('post_points', 10);
-        btn.innerHTML = '✅ 發布戰報（+' + postPoints + ' 分）';
+        btn.innerHTML = '✅ 發布戰報（+5 分）';
       } else {
         btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
         btn.disabled = true;
@@ -9133,7 +9107,7 @@ function openOwnerPost() {
       return;
   }
   
-  openModal('\n    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">\n        <p class="text-xs text-white/40">宣傳你更新過的機台，吸引更多夾客！</p>\n                <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +' + getConfigInt('post_points', 10) + ' 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions(\'lo\')" onfocus="filterStoreSuggestions(\'lo\')" />\n        <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lo-store-id" value="" />\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>\n        <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lo\')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>\n        <div class="mt-2 grid grid-cols-3 gap-2">\n          <button onclick="selectLinkPlan(2, 20)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 2天<br><span class="text-gold">20分</span></button>\n          <button onclick="selectLinkPlan(4, 55)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 4天<br><span class="text-gold">55分</span></button>\n          <button onclick="selectLinkPlan(7, 85)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">85分</span></button>\n        </div>\n        <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>\n    </div>\n  ');
+  openModal('\n    <div class="flex items-center justify-between border-b border-neonpink/30 pb-3 flex-shrink-0">\n      <h2 class="font-black text-neonpink neon-pink">🏬 發布台主宣傳</h2>\n      <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>\n    </div>\n    <div class="flex-1 overflow-y-auto mt-4 space-y-4">\n      <div class="rounded-xl border border-neonpink/20 bg-neonpink/5 p-3">\n        <p class="text-xs text-white/40">宣傳你更新過的機台，吸引更多夾客！</p>\n        <p class="text-xs text-neonpink mt-1">📸 強制拍照 + 🏷️ 選擇店鋪 = +5 分</p>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">🏪 選擇店鋪 <span class="text-neonpink">（必填）</span></label>\n        <input id="lo-store-search" placeholder="輸入店名搜尋..." class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-gold" autocomplete="off" oninput="filterStoreSuggestions(\'lo\')" onfocus="filterStoreSuggestions(\'lo\')" />\n        <div id="lo-store-suggestions" class="hidden mt-1 rounded-lg border border-gold/30 bg-zinc-900 overflow-hidden max-h-40 overflow-y-auto"></div>\n        <input type="hidden" id="lo-store-id" value="" />\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📝 宣傳內容 <span class="text-white/40">（選填）</span></label>\n        <textarea id="lo-content" placeholder="例如：全新 chiikawa 系列登場！" class="mt-1 w-full rounded-lg border border-gold/40 bg-zinc-900 px-3 py-2.5 text-sm placeholder-zinc-600 focus:outline-none focus:border-gold resize-none" rows="2"></textarea>\n      </div>\n      <div>\n        <label class="text-xs font-bold text-gold">📷 宣傳照片 <span class="text-neonpink">（必填）</span></label>\n        <div id="lo-camera-container" class="mt-2 rounded-xl border-2 border-dashed border-neonpink/60 bg-zinc-900 p-3 text-center">\n          <button onclick="openCamera(\'lo\')" class="w-full rounded-lg bg-neonpink/90 py-2.5 text-sm font-black text-black">📸 開啟相機拍照</button>\n          <img id="lo-preview" class="mt-2 hidden w-full rounded-lg" alt="預覽" />\n        </div>\n      </div>\n      <div class="rounded-xl border border-gold/30 bg-gold/5 p-3">\n        <label class="text-xs font-bold text-gold flex items-center gap-2">🔗 連結機台資料 <span class="text-[9px] text-white/30">（宣傳將顯示在店鋪頁面及機台頁面）</span></label>\n        <div class="mt-2 grid grid-cols-3 gap-2">\n          <button onclick="selectLinkPlan(2, 20)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌱 2天<br><span class="text-gold">20分</span></button>\n          <button onclick="selectLinkPlan(4, 55)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌿 4天<br><span class="text-gold">55分</span></button>\n          <button onclick="selectLinkPlan(7, 85)" class="link-plan-btn rounded-lg border border-white/20 p-2 text-center text-xs text-white/40 hover:border-gold/40 transition-all">🌳 7天<br><span class="text-gold">85分</span></button>\n        </div>\n        <p id="link-plan-info" class="text-[10px] text-white/30 mt-2">💡 選擇方案後，貼文將在指定天數內顯示在機台頁面</p>\n      </div>\n    </div>\n    <div class="flex-shrink-0 mt-4 pt-3 border-t border-white/10">\n      <button onclick="this.classList.add(\'btn-press\'); submitOwnerPost()" id="lo-submit-btn" class="w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed">請搜尋並選擇店鋪</button>\n    </div>\n  ');
   
   setTimeout(function() {
     var input = document.getElementById('lo-store-search');
@@ -9150,7 +9124,7 @@ function openOwnerPost() {
         btn.className = 'w-full rounded-2xl bg-neonpink py-3.5 text-base font-black text-black glow-pink transition-all hover:scale-[1.02] active:scale-[0.98]';
         btn.disabled = false;
         var plan = window._loLinkPlan;
-        btn.innerHTML = plan ? '✅ 發布宣傳（' + plan.days + '天 · -' + plan.cost + '分）' : '✅ 發布宣傳（+' + postPoints + ' 分）';
+        btn.innerHTML = plan ? '✅ 發布宣傳（' + plan.days + '天 · -' + plan.cost + '分）' : '✅ 發布宣傳（+5 分）';
       } else {
         btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
         btn.disabled = true;
@@ -9223,8 +9197,7 @@ function checkPostForm(prefix) {
     if (hiddenInput && hiddenInput.value && photoReady) {
       btn.className = 'w-full rounded-2xl bg-neongreen py-3.5 text-base font-black text-black glow-green transition-all hover:scale-[1.02] active:scale-[0.98]';
       btn.disabled = false;
-      var postPoints = getConfigInt('post_points', 10);
-      btn.innerHTML = '✅ 發布戰報（+' + postPoints + ' 分）';
+      btn.innerHTML = '✅ 發布戰報（+5 分）';
     } else {
       btn.className = 'w-full rounded-2xl bg-white/10 py-3.5 text-base font-black text-white/30 cursor-not-allowed';
       btn.disabled = true;
@@ -9606,7 +9579,7 @@ function reselectFindRegion() {
 function viewTask() {
     var progress = getTaskProgress();
     var totalScore = calculateDailyScore(progress);
-        var percentage = Math.min(100, (totalScore / dailyTaskThreshold) * 100);
+    var percentage = Math.min(100, (totalScore / 50) * 100);
     var isReached = isDailyGoalReached(progress);
     var levelInfo = getUserLevel();
     var hunterTaskHtml = renderHunterTaskSection();
@@ -9615,30 +9588,19 @@ function viewTask() {
         progress._lastSeen = {};
     }
     
-    // 動態分數
-    var submitPoints = getConfigInt('submit_points', 20);
-    var verifyPoints = getConfigInt('verify_first_points', 20);
-    var supplementPoints = getConfigInt('supplement_part1_points', 15);
-    var checkinPoints = getConfigInt('checkin_points', 5);
-    var machinePoints = getConfigInt('machine_points', 10);
-    var postPoints = getConfigInt('post_points', 10);
-    var checkinLimit = getConfigInt('checkin_limit_daily', 3);
-    var machineLimit = getConfigInt('machine_limit_daily', 3);
-    var postLimit = getConfigInt('post_limit_daily', 2);
-    
     // 核心任務（3 段）
-    var coreTasks = [
-        { key: 'submit_store', label: '提交', icon: '🏪', points: submitPoints },
-        { key: 'verify_store', label: '認證', icon: '🕵️', points: verifyPoints },
-        { key: 'supplement', label: '補充', icon: '📝', points: supplementPoints }
-    ];
+var coreTasks = [
+    { key: 'submit_store', label: '提交', icon: '🏪', points: 20 },
+    { key: 'verify_store', label: '認證', icon: '🕵️', points: 20 },
+    { key: 'supplement', label: '補充', icon: '📝', points: 15 }
+];
     
-    // 日常任務
+    // 日常任務（5 段或 3 段）
     var dailyTasks = [
-        { key: 'checkin', label: '打卡', icon: '📍', points: checkinPoints, limit: checkinLimit },
-        { key: 'machine_checkin', label: '機台更新', icon: '🎰', points: machinePoints, limit: machineLimit },
-        { key: 'share', label: '分享', icon: '📢', points: postPoints, limit: postLimit }
-    ];
+        { key: 'checkin', label: '打卡', icon: '📍', points: 5, limit: 5 },
+        { key: 'machine_checkin', label: '機台更新', icon: '🎰', points: 5, limit: 5 },
+        { key: 'share', label: '分享', icon: '📢', points: 5, limit: 3 }
+      ];
     
     function buildTaskCell(task, limit) {
         var done = progress[task.key] || 0;
@@ -9691,46 +9653,44 @@ function viewTask() {
   var claimableStores = verifiedStores.filter(function(s) { 
       return !s.submitter_reward_claimed; 
   });
-  var extraPoints = getConfigInt('submitter_extra_points', 30);
-  var rewardHtml = '';
-    var extraPoints = getConfigInt('submitter_extra_points', 30);
   
+  var rewardHtml = '';
   if (mySubmittedStores.length > 0) {
       if (claimableStores.length > 0) {
           var firstClaimable = claimableStores[0];
           rewardHtml = '<div class="mt-3 rounded-xl border border-neongreen/30 bg-neongreen/5 p-3">' +
-              '<p class="text-xs text-white/60">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 ' + extraPoints + ' 分！</p>' +
-              '<button onclick="claimSubmitterReward(\'' + firstClaimable.id + '\')" class="mt-2 w-full rounded-xl bg-neongreen py-2.5 text-sm font-black text-black glow-green">🎉 點此領取：' + extraPoints + ' 積分</button>' +
+              '<p class="text-xs text-white/60">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 30 分！</p>' +
+              '<button onclick="claimSubmitterReward(\'' + firstClaimable.id + '\')" class="mt-2 w-full rounded-xl bg-neongreen py-2.5 text-sm font-black text-black glow-green">🎉 點此領取：35 積分</button>' +
           '</div>';
       } else {
           rewardHtml = '<div class="mt-3 rounded-xl border border-gold/20 bg-gold/5 p-3">' +
-              '<p class="text-xs text-white/40">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 ' + extraPoints + ' 分！</p>' +
+              '<p class="text-xs text-white/40">💡 目前提交了 ' + mySubmittedStores.length + ' 間店鋪，每間認證後可追加 30 分！</p>' +
           '</div>';
       }
   }
   
     return '\n    <!-- 今日進度總覽 -->\n' +
-                '<div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">' +
+        '<div class="rounded-2xl border border-gold/40 bg-zinc-950 p-4 glow-gold">' +
             '<div class="flex items-center justify-between">' +
                 '<p class="text-xs text-white/50">🎯 今日獵人進度</p>' +
-                '<span class="text-xs ' + (isReached ? 'text-neongreen' : 'text-gold') + ' font-bold">' + totalScore + ' / ' + dailyTaskThreshold + ' 分</span>' +
+                '<span class="text-xs ' + (isReached ? 'text-neongreen' : 'text-gold') + ' font-bold">' + totalScore + ' / 50 分</span>' +
             '</div>' +
             '<div class="task-progress-bar mt-1 h-3 w-full rounded-full overflow-hidden">' +
                 '<div class="bar-fill h-full ' + (isReached ? 'complete' : '') + '" style="width:' + percentage + '%;"></div>' +
             '</div>' +
             '<div class="mt-2 flex items-center justify-between text-[10px]">' +
                 '<span class="text-white/30">' + 
-                    (isReached ? '🎉 已達標！' : '還差 ' + (dailyTaskThreshold - totalScore) + ' 分達標') + 
+                    (isReached ? '🎉 已達標！' : '還差 ' + (50 - totalScore) + ' 分達標') + 
                 '</span>' +
                 '<span class="' + (isReached ? 'text-neongreen' : 'text-white/30') + '">' +
-                    (isReached ? '✅ 已獲得 +' + dailyTaskBonus + ' 獎勵積分！' : '🎁 達標獎勵 +' + dailyTaskBonus + ' 分') +
+                    (isReached ? '✅ 已獲得 +20 獎勵積分！' : '🎁 達標獎勵 +20 分') +
                 '</span>' +
             '</div>' +
         '</div>' +
         
 '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 獵人任務</h3>\n' +
 '<div class="task-grid">' + coreHtml + '</div></div>\n' +
-'<p class="text-[10px] text-white/30 mt-1">🕵️ 搶先認證 +' + verifyFirstPoints + ' 分，追加認證 +' + verifySecondPoints + ' 分</p>\n' +
+'<p class="text-[10px] text-white/30 mt-1">🕵️ 搶先認證 +20 分，追加認證 +10 分</p>\n' +
 rewardHtml + '\n' +
         '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-neongreen neon-green">📋 日常任務</h3>\n' +
         '<div class="task-grid">' + dailyHtml + '</div></div>\n' +
@@ -9779,9 +9739,8 @@ async function claimSubmitterReward(storeId) {
         store.submitter_reward_claimed = true;
         save();
         
-        var extraPoints = getConfigInt('submitter_extra_points', 30);
-await addPoints(extraPoints, '提交店鋪通過認證追加獎勵');
-        toast('🎉 領取 ' + extraPoints + ' 積分成功！', 'green');
+        await addPoints(30, '提交店鋪通過認證追加獎勵');
+        toast('🎉 領取 30 積分成功！', 'green');
         showView('task');
     } catch (e) {
         toast('❌ 領取失敗: ' + e.message, 'pink');
@@ -9802,19 +9761,15 @@ function renderWeeklyCheckin() {
   html += '</div>';
   html += '<div class="text-center text-[10px] text-white/40 mt-1">本週簽到 ' + progress.count + '/7 天</div>';
   var bonusInfo = '';
-      var checkinBonus3Days = getConfigInt('checkin_bonus_3_days', 5);
-    var checkinBonus5Days = getConfigInt('checkin_bonus_5_days', 10);
-    var checkinBonus7Days = getConfigInt('checkin_bonus_7_days', 15);
-    
-    if (progress.count >= 7) {
-        bonusInfo = '🎊 已達全勤！';
-    } else if (progress.count >= 5) {
-        bonusInfo = '再 2 天達全勤 (+' + checkinBonus7Days + '分)';
-    } else if (progress.count >= 3) {
-        bonusInfo = '再 2 天達 5 天 (+' + checkinBonus5Days + '分)';
-    } else {
-        bonusInfo = (7 - progress.count) + ' 天後全勤 (+' + checkinBonus7Days + '分)';
-    }
+  if (progress.count >= 7) {
+    bonusInfo = '🎊 已達全勤！';
+  } else if (progress.count >= 5) {
+    bonusInfo = '再 2 天達全勤 (+15分)';
+  } else if (progress.count >= 3) {
+    bonusInfo = '再 2 天達 5 天 (+5分)';
+  } else {
+    bonusInfo = (7 - progress.count) + ' 天後全勤 (+15分)';
+  }
   html += '<div class="text-center text-[9px] text-gold/60 mt-0.5">' + bonusInfo + '</div>';
   html += '</div>';
   return html;
@@ -10840,10 +10795,9 @@ async function submitMachine(sid) {
             }
             
             save();
-            var machinePoints = getConfigInt('machine_points', 10);
-            await addPoints(machinePoints, '機台更新');
+            await addPoints(10, '機台更新');
             await recordTaskCompletion('machine_checkin');
-            toast('✅ 機台更新成功 +' + machinePoints + ' 分', 'green');
+            toast('✅ 機台更新成功 +10 分', 'green');
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -10892,7 +10846,7 @@ async function submitMachine(sid) {
             }
             
             save();
-                        await addPoints(machinePoints, '機台更新');
+            await addPoints(10, '機台更新');
             await recordTaskCompletion('machine_checkin');
             toast('📤 已提交，等待管理員審核', 'gold');
         }
@@ -10982,11 +10936,11 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
             console.warn('⚠️ 投票流程失敗:', e.message);
         }
         
-        if (canEarnPoints) {
-            var checkinPoints = getConfigInt('checkin_points', 5);
-            await addPoints(checkinPoints, '打卡');
-            toast('✅ 在「' + s.name + '」打卡成功！+' + checkinPoints + ' 分', 'green');
+          if (canEarnPoints) {
+            await addPoints(5, '打卡');
+            toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
         } else {
+            // 第 4 次起：不加分、不顯示加分
             toast('📍 已打卡（今日加分次數已達上限）', 'gold');
         }
         
@@ -12134,16 +12088,13 @@ async function submitIntel() {
             }
             
             save();
-            var submitPoints = getConfigInt('submit_points', 20);
-await addPoints(submitPoints, '提交店鋪情報');
+            await addPoints(20, '提交店鋪情報');
             await recordTaskCompletion('submit_store');
             await recordRegionContribution('submit_store', selectedRegion, insertedId);
             updateStreak();
             
-                        var submitPoints = getConfigInt('submit_points', 20);
-            toast('✅ 提交成功 +' + submitPoints + ' 分', 'green');
-            setTimeout(function() { showRewardAdAfterSubmit(submitPoints); }, 500);
-            
+            toast('✅ 提交成功 +20 分', 'green');
+            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -12197,8 +12148,7 @@ await addPoints(submitPoints, '提交店鋪情報');
                 }
             }
             
-            var submitPoints = getConfigInt('submit_points', 20);
-await addPoints(submitPoints, '提交店鋪情報');
+            await addPoints(20, '提交店鋪情報');
             await recordTaskCompletion('submit_store');
         }
         
@@ -12491,6 +12441,52 @@ function showFindAd() {
     }, 1000);
 }
 
+function showRewardAd() {
+    if (!requireLogin('看廣告')) return;
+    
+    var today = todayKey();
+    var dailyData = daily();
+    var adCount = dailyData.ad || 0;
+    
+    if (adCount >= 2) {
+        toast('今日已達看廣告上限（2 次）', 'gold');
+        return;
+    }
+    
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = 
+        '<div style="text-align:center;width:90%;max-width:320px;">' +
+            '<div style="height:200px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:16px;">[ 廣告 ]</div>' +
+            '<p style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.5);">觀看廣告後 +20 積分</p>' +
+            '<button id="reward-ad-close" disabled style="margin-top:16px;padding:12px 24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:rgba(255,255,255,0.3);font-size:14px;cursor:not-allowed;">3 秒後領取</button>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    
+    var countdown = 3;
+    var interval = setInterval(function() {
+        countdown--;
+        var btn = document.getElementById('reward-ad-close');
+        if (btn) {
+            if (countdown <= 0) {
+                clearInterval(interval);
+                btn.textContent = '✅ 領取 20 積分';
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+                btn.style.background = '#00FF00';
+                btn.style.color = '#000';
+                btn.onclick = function() {
+                    overlay.remove();
+                    dailyData.ad = adCount + 1;
+                    save();
+                    addPoints(20, '觀看廣告獎勵');
+                };
+            } else {
+                btn.textContent = countdown + ' 秒後領取';
+            }
+        }
+    }, 1000);
+}
 
 // ============================================================
 // 獎勵廣告：提交成功後積分加倍
@@ -13040,7 +13036,6 @@ const UserFocus = {
 (async function initApp() {
   showSplashAd();
   console.log('🚀 爪爪情報站啟動中...');
-      await loadAppConfig();
   await loadCloud();
   await checkUserBanStatus();
   await loadMalls();
@@ -13311,11 +13306,11 @@ function checkHunterTaskTrigger(actionType) {
     // 已觸發、已接受、已完成、已拒絕，不再觸發
     if (state.status !== 'none') return;
     
-     // 檢查是否已達標（動態門檻）
-    var dailyTaskThreshold = getConfigInt('daily_task_bonus_threshold', 100);
+    // 檢查是否已達 50 分
     var progress = getTaskProgress();
     var totalScore = calculateDailyScore(progress);
-    if (totalScore < dailyTaskThreshold) return;
+    if (totalScore < 50) return;
+    
     // 檢查行為是否在觸發列表
     if (HUNTER_TASK_TRIGGERS.indexOf(actionType) === -1) return;
     
@@ -13945,40 +13940,6 @@ function searchBrand(query) {
     
     return results;
 }
-// ============================================================
-// 動態配置
-// ============================================================
-var APP_CONFIG = {};
-
-async function loadAppConfig() {
-    try {
-        var result = await supabaseClientInstance
-            .from('app_config')
-            .select('config_key, config_value');
-        
-        if (!result.error && result.data) {
-            result.data.forEach(function(row) {
-                APP_CONFIG[row.config_key] = row.config_value;
-            });
-            console.log('✅ 配置已載入:', Object.keys(APP_CONFIG).length, '項');
-        }
-    } catch (e) {
-        console.warn('⚠️ 配置載入失敗:', e.message);
-    }
-}
-
-function getConfig(key, defaultValue) {
-    return APP_CONFIG[key] !== undefined ? APP_CONFIG[key] : defaultValue;
-}
-
-function getConfigInt(key, defaultValue) {
-    return parseInt(getConfig(key, defaultValue));
-}
-
-function getConfigFloat(key, defaultValue) {
-    return parseFloat(getConfig(key, defaultValue));
-}
-
 </script>
 </script>
 </body>
