@@ -12478,7 +12478,8 @@ var submitPoints = getConfigInt('submit_points', 20);
             photoUrl = window._camPreview?.nt || '';
         }
         
-        toast('📤 已提交，AI 審核中...', 'gold');
+        toast('📤 提交成功！', 'green');
+        fireConfettiOnce();
         closeModal();
         
         // AI 判定（最多 5 次重試）
@@ -12604,7 +12605,8 @@ var submitPoints = getConfigInt('submit_points', 20);
             await recordRegionContribution('submit_store', selectedRegion, insertedId);
             updateStreak();
             
-            toast('✅ 提交成功 +' + submitPoints + ' 分', 'green');
+            toast('✅ 店鋪「' + name + '」已成功納入資料庫，感謝你的貢獻！', 'green');
+                        addNotification('store_approved', '✅ 店鋪「' + name + '」已成功納入資料庫，感謝你的貢獻！');
             setTimeout(function() { showRewardAdAfterSubmit(submitPoints); }, 500);
             
             if (CURRENT === 'map') {
@@ -12615,11 +12617,9 @@ var submitPoints = getConfigInt('submit_points', 20);
         } else if (aiResult && aiResult.is_claw_store === false) {
             // ❌ AI 判定失敗
             console.log('❌ AI 判定不通過，退回提交');
-            toast('❌ 提交不符合要求，已退回（照片不是夾公仔店）', 'pink');
+            toast('❌ 店鋪「' + name + '」提交已被退回，原因：未能確認是夾公仔店，請重新拍攝並提交。', 'pink');
             
-            if (STATE.user.is_bound && STATE.user.user_id) {
-                addNotification('store_rejected', '你提交的店鋪「' + name + '」不符合要求，已退回');
-            }
+            addNotification('store_rejected', '❌ 店鋪「' + name + '」提交已被退回，原因：未能確認是夾公仔店，請重新拍攝並提交。');
             
         } else {
             // ⚠️ AI 沒回應 → 寫入後台處理
