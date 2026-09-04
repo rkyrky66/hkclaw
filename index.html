@@ -6783,7 +6783,6 @@ async function submitVerification(storeId) {
     if (!acquireSubmitLock('submitVerification')) return;
     isSubmittingVerification = true;
 
-    
     var submitBtn = disableSubmitButton('vf-submit-btn', '⏳ 提交中...');
     
     try {
@@ -6809,8 +6808,9 @@ async function submitVerification(storeId) {
                 return; 
             }
             
+            // ✅ 修正：GPS 距離 100/250
             var isMallStore = s.type === 'mall' || (s.mall && s.mall.trim() !== '');
-            var limitDistance = isMallStore ? 0.5 : 0.3;
+            var limitDistance = isMallStore ? 0.25 : 0.1;
             
             if (s.lat && s.lng) {
                 var distance = calculateDistance(s.lat, s.lng, _finalGpsLat, _finalGpsLng);
@@ -6829,7 +6829,9 @@ async function submitVerification(storeId) {
                 try {
                     var file = new File([photoBlob], "verify_" + Date.now() + ".jpg", { type: 'image/jpeg' });
                     photoUrl = await uploadImage(file, 'verifications');
+                    console.log('✅ 認證照片上傳成功');
                 } catch (e) { 
+                    console.error('❌ 認證照片上傳失敗:', e);
                     toast('圖片上傳失敗', 'pink'); 
                     enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                     return; 
@@ -6857,10 +6859,8 @@ async function submitVerification(storeId) {
                     reviewResult = await upsertVerificationReview(storeId, verification);
                     
                     console.log('🕵️ reviewResult:', reviewResult);
-                    console.log('🕵️ storeId:', storeId);
                     
                     if (reviewResult === 'already_complete') {
-                        // 已認證完畢，同步 claw_stores
                         var syncResult = await supabaseClientInstance
                             .from('verification_reviews')
                             .select('verifier_1_device, verifier_1_name, verifier_2_device, verifier_2_name')
@@ -6881,7 +6881,7 @@ async function submitVerification(storeId) {
                                 .eq('id', numericStoreId);
                         }
                         
-                        toast('此店鋪已認證完畢', 'gold');
+                        toast('此店鋪已完滿認證', 'gold');
                         enableSubmitButton(submitBtn, '✅ 提交實證（+20 積分）');
                         return;
                     }
@@ -6905,6 +6905,7 @@ async function submitVerification(storeId) {
                         .from('store_verifications')
                         .insert(verification);
                     if (insertVerificationResult.error) throw insertVerificationResult.error;
+                    console.log('✅ store_verifications 寫入成功');
                 } catch (e) {
                     console.warn('⚠️ store_verifications 寫入失敗:', e.message);
                 }
@@ -6919,8 +6920,6 @@ async function submitVerification(storeId) {
                         updateData = {
                             verification_count: 1,
                             verification_count_2: 0,
-                            status: 'pending',
-                            is_verified: false,
                             first_verifier_device: verification.verifier_device,
                             first_verifier_name: STATE.user.name || STATE.user.display_name || '',
                             first_verified_at: new Date().toISOString()
@@ -6943,7 +6942,7 @@ async function submitVerification(storeId) {
                             .eq('id', numericStoreId);
                         
                         if (updateStoreResult.error) throw updateStoreResult.error;
-                        console.log('✅ claw_stores 已更新:', JSON.stringify(updateData));
+                        console.log('✅ claw_stores 已更新');
                     }
                 } catch (e) {
                     console.warn('⚠️ claw_stores 更新失敗:', e.message);
@@ -6952,6 +6951,8 @@ async function submitVerification(storeId) {
             
             // 4. 觸發 AI 核對
             if (reviewResult === 'verifier_1' || reviewResult === 'verifier_2') {
+                console.log('🤖 開始 AI 核對...');
+                
                 var firstSubmitterPhoto = s.photo || '';
                 var firstSubmitterGps = { lat: s.lat || 0, lng: s.lng || 0 };
                 
@@ -6969,13 +6970,9 @@ async function submitVerification(storeId) {
                     console.warn('⚠️ 讀取認證者資料失敗:', e.message);
                 }
                 
-                                if (reviewData) {
-                    var aiResults = await runAiVerificationCheck(
-                        storeId,
-                        firstSubmitterPhoto, firstSubmitterGps,
-                        reviewData.verifier_1_photo || '', reviewData.verifier_1_gps || { lat: 0, lng: 0 },
-                        reviewData.verifier_2_photo || '', reviewData.verifier_2_gps || { lat: 0, lng: 0 }
-                    );
+                if (reviewData) {
+                    var hasVerifier1 = reviewData.verifier_1_photo && firstSubmitterPhoto;
+                    var hasVerifier2 = reviewData.verifier_2_photo && firstSubmitterPhoto;
                     
                     var aiCheckResult = 'unchecked';
                     var aiGroup1Result = null;
@@ -6983,33 +6980,59 @@ async function submitVerification(storeId) {
                     var aiGroup1Confidence = null;
                     var aiGroup2Confidence = null;
                     
-                    if (aiResults && aiResults.group1 && aiResults.group2) {
-                        aiGroup1Result = aiResults.group1.is_same_store === true;
-                        aiGroup2Result = aiResults.group2.is_same_store === true;
-                        aiGroup1Confidence = aiResults.group1.confidence_score || 0;
-                        aiGroup2Confidence = aiResults.group2.confidence_score || 0;
+                    if (hasVerifier1 && hasVerifier2) {
+                        // 有 2 位認證者
+                        console.log('🔍 執行完整兩組核對...');
+                        var aiResults = await runAiVerificationCheck(
+                            storeId,
+                            firstSubmitterPhoto, firstSubmitterGps,
+                            reviewData.verifier_1_photo, reviewData.verifier_1_gps || { lat: 0, lng: 0 },
+                            reviewData.verifier_2_photo, reviewData.verifier_2_gps || { lat: 0, lng: 0 }
+                        );
                         
-                        // ✅ 信心分數門檻
-                        var CONFIDENCE_THRESHOLD = 0.8;
+                        console.log('🤖 AI 核對結果:', aiResults);
                         
-                        if (aiGroup1Result && aiGroup2Result) {
-                            // 兩組都判斷同一店鋪
-                            if (aiGroup1Confidence >= CONFIDENCE_THRESHOLD && aiGroup2Confidence >= CONFIDENCE_THRESHOLD) {
+                        if (aiResults && aiResults.group1 && aiResults.group2) {
+                            aiGroup1Result = aiResults.group1.is_same_store === true;
+                            aiGroup2Result = aiResults.group2.is_same_store === true;
+                            aiGroup1Confidence = aiResults.group1.confidence_score || 0;
+                            aiGroup2Confidence = aiResults.group2.confidence_score || 0;
+                            
+                            var CONFIDENCE_THRESHOLD = 0.8;
+                            
+                            if (aiGroup1Result && aiGroup2Result &&
+                                aiGroup1Confidence >= CONFIDENCE_THRESHOLD && aiGroup2Confidence >= CONFIDENCE_THRESHOLD) {
                                 aiCheckResult = 'passed';
                             } else {
-                                aiCheckResult = 'failed';  // 低信心 → 轉人手審核
+                                aiCheckResult = 'failed';
                             }
-                        } else {
-                            // 至少一組判斷不同店鋪
-                            if (aiGroup1Confidence >= CONFIDENCE_THRESHOLD && aiGroup2Confidence >= CONFIDENCE_THRESHOLD) {
-                                aiCheckResult = 'failed';  // 高信心不通過 → 退回
+                        }
+                        
+                    } else if (hasVerifier1) {
+                        // 只有 1 位認證者（首認）
+                        console.log('🔍 執行單組核對...');
+                        var aiResult1 = await aiCompareStorePhotos(
+                            firstSubmitterPhoto, firstSubmitterGps,
+                            reviewData.verifier_1_photo, reviewData.verifier_1_gps || { lat: 0, lng: 0 }
+                        );
+                        
+                        console.log('🤖 AI 單組結果:', aiResult1);
+                        
+                        if (aiResult1 && aiResult1.is_same_store !== undefined) {
+                            aiGroup1Result = aiResult1.is_same_store === true;
+                            aiGroup1Confidence = aiResult1.confidence_score || 0;
+                            
+                            var CONFIDENCE_THRESHOLD_1 = 0.8;
+                            
+                            if (aiGroup1Result && aiGroup1Confidence >= CONFIDENCE_THRESHOLD_1) {
+                                aiCheckResult = 'passed';
                             } else {
-                                aiCheckResult = 'failed';  // 低信心 → 轉人手審核
+                                aiCheckResult = 'failed';
                             }
                         }
                     }
                     
-                    // ✅ 寫入 AI 結果（包含信心分數）
+                    // 寫入 AI 結果
                     try {
                         await supabaseClientInstance
                             .from('verification_reviews')
@@ -7022,14 +7045,13 @@ async function submitVerification(storeId) {
                                 ai_checked_at: new Date().toISOString()
                             })
                             .eq('store_id', stringStoreId);
-                        console.log('✅ AI 核對結果已寫入:', aiCheckResult, '信心:', aiGroup1Confidence, aiGroup2Confidence);
+                        console.log('✅ AI 核對結果已寫入:', aiCheckResult);
                     } catch (e) {
-                        console.warn('⚠️ 寫入 AI 核對結果失敗:', e.message);
+                        console.warn('⚠️ 寫入 AI 結果失敗:', e.message);
                     }
                     
                     // 根據結果處理
                     if (reviewResult === 'verifier_1') {
-                        // 搶先認證
                         if (aiCheckResult === 'passed') {
                             await supabaseClientInstance
                                 .from('claw_stores')
@@ -7041,7 +7063,8 @@ async function submitVerification(storeId) {
                             
                             console.log('✅ AI 核對通過，自動認證成功');
                             toast('🎉 搶先認證成功！+20 分', 'green');
-                                        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
+                            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
+                            
                             await supabaseClientInstance
                                 .from('claw_stores')
                                 .update({ submitter_reward_claimed: false })
@@ -7052,7 +7075,7 @@ async function submitVerification(storeId) {
                             if (regionStat) updateAchievementStat(regionStat);
                             
                         } else if (aiCheckResult === 'failed') {
-                            console.log('⚠️ AI 核對未通過或低信心，等待管理員審核');
+                            console.log('⚠️ AI 核對未通過，等待管理員審核');
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
                             console.log('⚠️ AI 核對服務不可用');
@@ -7060,10 +7083,9 @@ async function submitVerification(storeId) {
                         }
                         
                     } else if (reviewResult === 'verifier_2') {
-                        // 追加認證
                         if (aiCheckResult === 'passed') {
                             toast('🎉 追加認證成功！+10 分', 'green');
-                                        setTimeout(function() { showRewardAdAfterSubmit(10); }, 500);
+                            setTimeout(function() { showRewardAdAfterSubmit(10); }, 500);
                         } else if (aiCheckResult === 'failed') {
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
@@ -7082,6 +7104,7 @@ async function submitVerification(storeId) {
             if (CLOUD_ON) {
                 try {
                     await loadCloud();
+                    console.log('✅ 已重新載入店鋪資料');
                 } catch (e) {
                     console.warn('⚠️ 重新載入失敗:', e.message);
                 }
@@ -7382,10 +7405,12 @@ function openSupplementForm(storeId) {
         </div>
       `}
       
-      <!-- 第二部分：店鋪資料 -->
-      <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-gold/30 bg-gold/5' : 'border-white/10 bg-white/5'}">
-         <p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+20 分）${hasPart2 ? ' <span class="text-neongreen">✅ 已填妥</span>' : ''}</p>
-        ${gpsUnlocked ? `
+            <!-- 第二部分：店鋪資料 -->
+      <div id="sp-part2" class="rounded-xl border p-3 ${gpsUnlocked ? 'border-gold/30 bg-gold/5' : 'border-white/10 bg-white/5'}" style="position:relative;${gpsUnlocked ? '' : 'overflow:hidden;'}">
+        <p class="text-xs font-bold text-gold">🎰 第二部分：店鋪資料（+20 分）</p>
+        
+        <!-- 完整內容（鎖定時半透明顯示） -->
+        <div style="${gpsUnlocked ? '' : 'opacity:0.4;pointer-events:none;'}">
           <div class="mt-3 space-y-3">
             <div>
               <label class="text-xs text-gold">兌幣機狀態</label>
@@ -7433,10 +7458,15 @@ function openSupplementForm(storeId) {
               </div>
             </div>
           </div>
-        ` : `
-          <div class="mt-4 text-center">
-            <div class="text-4xl mb-2">🔒</div>
-            <p class="text-base font-bold text-gold">要到現場開啟 GPS 才能填寫</p>
+        </div>
+        
+        <!-- 鎖定遮罩 -->
+        ${gpsUnlocked ? '' : `
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;border-radius:12px;z-index:10;">
+            <div class="text-center">
+              <div class="text-4xl mb-2">🔒</div>
+              <p class="text-base font-bold text-gold">要到現場開啟 GPS 才能填寫</p>
+            </div>
           </div>
         `}
       </div>

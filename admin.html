@@ -1978,7 +1978,8 @@ function renderStoreDetail(store, fieldStatuses) {
         '<div class="admin-actions-bar">' +
             '<span class="action-label">⚠️ 管理員操作</span>' +
             '<button class="btn-sm primary" onclick="confirmReviewed(\'' + store.id + '\')">✅ 已查閱</button>' +
-            (hasSupplement ? '<button class="btn-sm danger" onclick="revokeSupplement(\'' + store.id + '\', \'' + supplementerDevice + '\', \'補充者\')">🗑️ 撤銷補充</button>' : '') +
+            (store.addr && store.addr !== '' ? '<button class="btn-sm danger" onclick="revokeSupplementPart1(\'' + store.id + '\', \'' + (store.addr_submitted_by || '') + '\', \'' + (store.name || '').replace(/'/g, "\\'") + '\')">🗑️ 退回地址</button>' : '') +
+            (hasSupplement ? '<button class="btn-sm danger" onclick="revokeSupplementPart2(\'' + store.id + '\', \'' + supplementerDevice + '\', \'' + (store.name || '').replace(/'/g, "\\'") + '\')">🗑️ 退回資料</button>' : '') +
             '<button class="btn-sm danger" onclick="if(confirm(\'確定要隱藏此店鋪嗎？\')) hideStore(\'' + store.id + '\')">🚫 隱藏店鋪</button>' +
         '</div>' +
         '<div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border-color);">' +
@@ -4488,6 +4489,123 @@ async function rejectAddress(submissionId, address, submittedBy, storeName) {
         
         toast('✅ 已拒絕並清空地址');
         loadAddressSubmissions();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 退回補充資料 Part1（地址）
+async function revokeSupplementPart1(storeId, submittedBy, storeName) {
+    if (!confirm('確定退回「' + storeName + '」的地址補充嗎？\n\n地址將被清空，用戶可重新提交。')) return;
+    
+    try {
+        // 清空 claw_stores 的地址
+        await sb.from('claw_stores')
+            .update({
+                addr: '',
+                addr_submitted_by: null,
+                addr_submitted_at: null
+            })
+            .eq('id', parseInt(storeId));
+        
+        // 記錄操作
+        await sb.from('admin_actions')
+            .insert({
+                store_id: String(storeId),
+                action_type: 'revoke_supplement_part1',
+                target_type: 'address',
+                target_id: submittedBy || '',
+                reason: '退回地址補充',
+                performed_by: currentUser ? currentUser.display_name : 'admin',
+                metadata: { store_name: storeName }
+            });
+        
+        // 通知用戶
+        if (submittedBy) {
+            var { data: userProfile } = await sb.from('user_profiles')
+                .select('id')
+                .eq('device_id', submittedBy)
+                .maybeSingle();
+            
+            if (userProfile && userProfile.id) {
+                await sb.from('user_notifications')
+                    .insert({
+                        user_id: userProfile.id,
+                        type: 'supplement_rejected',
+                        message: '你為「' + storeName + '」補充的地址經審核後已被退回',
+                        is_read: false,
+                        created_at: new Date().toISOString()
+                    });
+            }
+        }
+        
+        toast('✅ 已退回地址，用戶可重新提交');
+        loadAddressSubmissions();
+        
+    } catch (e) {
+        toast('操作失敗: ' + e.message, 'error');
+    }
+}
+
+// 退回補充資料 Part2（店鋪資料/兌幣機）
+async function revokeSupplementPart2(storeId, submittedBy, storeName) {
+    if (!confirm('確定退回「' + storeName + '」的店鋪資料補充嗎？\n\n照片和投票將被清空。')) return;
+    
+    try {
+        // 清空 claw_stores
+        await sb.from('claw_stores')
+            .update({
+                supplement_photo: '',
+                supplemented_by: null,
+                supplement_count: Math.max(0, (localStoreCache.stores.find(function(s) { return s.id === parseInt(storeId); })?.supplement_count || 1) - 1)
+            })
+            .eq('id', parseInt(storeId));
+        
+        // 刪除該用戶的投票
+        if (submittedBy) {
+            await fetch(SUPABASE_URL + "/rest/v1/store_field_votes?store_id=eq.%22" + encodeURIComponent(storeId) + "%22&voted_by=eq.%22" + encodeURIComponent(submittedBy) + "%22", {
+                method: 'DELETE',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_KEY,
+                    'Prefer': 'return=minimal'
+                }
+            });
+        }
+        
+        // 記錄操作
+        await sb.from('admin_actions')
+            .insert({
+                store_id: String(storeId),
+                action_type: 'revoke_supplement_part2',
+                target_type: 'supplement',
+                target_id: submittedBy || '',
+                reason: '退回店鋪資料補充',
+                performed_by: currentUser ? currentUser.display_name : 'admin',
+                metadata: { store_name: storeName }
+            });
+        
+        // 通知用戶
+        if (submittedBy) {
+            var { data: userProfile } = await sb.from('user_profiles')
+                .select('id')
+                .eq('device_id', submittedBy)
+                .maybeSingle();
+            
+            if (userProfile && userProfile.id) {
+                await sb.from('user_notifications')
+                    .insert({
+                        user_id: userProfile.id,
+                        type: 'supplement_rejected',
+                        message: '你為「' + storeName + '」補充的店鋪資料經審核後已被退回',
+                        is_read: false,
+                        created_at: new Date().toISOString()
+                    });
+            }
+        }
+        
+        toast('✅ 已退回店鋪資料');
         
     } catch (e) {
         toast('操作失敗: ' + e.message, 'error');
