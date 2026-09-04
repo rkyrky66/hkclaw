@@ -1455,6 +1455,70 @@ function getMarkerLevelInfo(storeId) {
 }
 
 // ============================================================
+// 機台熱度系統
+// ============================================================
+
+// 計算店鋪熱度
+function calculateStoreHeat(store) {
+    var heat = store.heat_score || 0;
+    var lastUpdate = store.heat_updated_at ? new Date(store.heat_updated_at).getTime() : 0;
+    var nowTime = Date.now();
+    var daysSinceUpdate = (nowTime - lastUpdate) / DAY;
+    
+    // 熱度衰減（每天 5%）
+    heat = heat * Math.pow(0.95, daysSinceUpdate);
+    
+    return Math.max(0, Math.round(heat));
+}
+
+// 取得熱度等級與機位數量
+function getHeatLevel(heatScore) {
+    if (heatScore >= 60) return { level: 3, label: '火爆', slots: 15 };
+    if (heatScore >= 30) return { level: 2, label: '熱門', slots: 12 };
+    if (heatScore >= 10) return { level: 1, label: '一般', slots: 8 };
+    return { level: 0, label: '冷門', slots: 5 };
+}
+
+// 增加店鋪熱度
+async function addStoreHeat(storeId, amount) {
+    try {
+        var { data: store } = await supabaseClientInstance
+            .from('claw_stores')
+            .select('heat_score, heat_updated_at')
+            .eq('id', parseInt(storeId))
+            .single();
+        
+        var currentHeat = store ? (store.heat_score || 0) : 0;
+        var lastUpdate = store && store.heat_updated_at ? new Date(store.heat_updated_at).getTime() : 0;
+        var nowTime = Date.now();
+        var daysSinceUpdate = (nowTime - lastUpdate) / DAY;
+        
+        // 先衰減
+        currentHeat = currentHeat * Math.pow(0.95, daysSinceUpdate);
+        
+        // 再增加
+        currentHeat += amount;
+        
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({
+                heat_score: currentHeat,
+                heat_updated_at: new Date().toISOString()
+            })
+            .eq('id', parseInt(storeId));
+        
+        // 同步本地
+        var localStore = STORES.find(function(s) { return s.id === String(storeId); });
+        if (localStore) {
+            localStore.heat_score = currentHeat;
+            localStore.heat_updated_at = new Date().toISOString();
+        }
+    } catch (e) {
+        console.warn('⚠️ 增加熱度失敗:', e.message);
+    }
+}
+
+// ============================================================
 // 用戶貢獻可視化系統
 // ============================================================
 
@@ -3782,6 +3846,8 @@ supplement_photo: s.supplement_photo || '',
         supplement_count: s.supplement_count || 0,
         supplemented_by: s.supplemented_by || null,
         is_hidden: s.is_hidden || false,
+        heat_score: s.heat_score || 0,
+        heat_updated_at: s.heat_updated_at || null,
         type: s.mall && s.mall.trim() !== '' ? 'mall' : 'street',
         _userVerified: userVerified,           // ✅ 正確設定
         _userSupplemented: userSupplemented     // ✅ 正確設定
@@ -4999,6 +5065,7 @@ function renderMapStoreListWithData(inBounds) {
     return '<button onclick="openStoreFromMap(\'' + s.id + '\')" class="w-full rounded-xl border p-3 text-left transition-all active:scale-[0.98]" style="border-color:' + btnColor + ';background:rgba(0,0,0,0.4);">\n' +
         '<div style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">\n' +
             '<span class="font-bold text-base" style="color:' + nameColor + ';">' + s.name + '</span>\n' +
+            '<span style="color:#FF6B00;font-size:10px;margin-left:4px;">🔥' + calculateStoreHeat(s) + '</span>\n' +
             '<span style="color:#fff;font-size:13px;margin-left:8px;">' + (s.addr && s.addr !== '' ? s.addr : s.region + '地鋪') + '</span>\n' +
             '<span style="color:#aaa;font-size:11px;margin-left:8px;">' + distText + '</span>\n' +
         '</div>\n' +
@@ -5470,6 +5537,25 @@ function buildMachineSnapshot(s) {
         '</div>';
     }
     
+    // 排序：固定機位在前，其餘按更新時間
+    var sortedMachines = s.machines.slice().sort(function(a, b) {
+        var aFixed = a.is_fixed ? 1 : 0;
+        var bFixed = b.is_fixed ? 1 : 0;
+        if (aFixed !== bFixed) return bFixed - aFixed;
+        return b.updated - a.updated;
+    });
+    
+    // 熱度決定展示數量
+    var heatScore = calculateStoreHeat(s);
+    var heatLevel = getHeatLevel(heatScore);
+    var displayLimit = heatLevel.slots;
+    
+    // 固定機位不佔限額
+    var fixedMachines = sortedMachines.filter(function(m) { return m.is_fixed; });
+    var flowMachines = sortedMachines.filter(function(m) { return !m.is_fixed; });
+    var visibleFlowMachines = flowMachines.slice(0, displayLimit);
+    var displayMachines = fixedMachines.concat(visibleFlowMachines);
+    
     var machineCards = [];
     for (var mi = 0; mi < s.machines.length; mi++) {
         var m = s.machines[mi];
@@ -5520,7 +5606,8 @@ function buildMachineSnapshot(s) {
         var isFavMachine = STATE.favMachines.indexOf(m.id) !== -1;
         
         machineCards.push(
-            '<div class="rounded-xl border p-2 text-left ' + glow + '" style="border-color:' + borderColor + ';border-width:' + borderWidth + ';background:#09090b;">' +
+            '<div class="rounded-xl border p-2 text-left ' + glow + '" style="border-color:' + borderColor + ';border-width:' + borderWidth + ';background:#09090b;position:relative;">' +
+                (m.is_fixed ? '<div style="position:absolute;top:6px;right:6px;font-size:16px;z-index:5;">📌</div>' : '') +
                 '<div class="flex items-center justify-between mb-1">' +
                     '<b class="text-xs text-gold">台號 ' + m.no + '</b>' +
                     freshLabel +
@@ -7085,6 +7172,7 @@ async function submitVerification(storeId) {
                             
                             console.log('✅ AI 核對通過，自動認證成功');
                             var verifyFirstPoints = getConfigInt('verify_first_points', 20);
+                            await addStoreHeat(storeId, 5);  // ← 認證加熱度
                             toast('🎉 搶先認證成功！+' + verifyFirstPoints + ' 分', 'green');
                                         setTimeout(function() { showRewardAdAfterSubmit(verifyFirstPoints); }, 500);
                             
@@ -8649,8 +8737,10 @@ async function submitPlayerPost() {
         if (isFree) {
             var postPoints = getConfigInt('post_points', 10);
             await addPoints(postPoints, '發布出貨戰報');
+            await addStoreHeat(storeId, 3);  // ← 戰績加熱度
         } else {
            await addPoints(-postCost, '發布戰報（超過免費次數）');
+           await addStoreHeat(storeId, 3);  // ← 戰績加熱度
         }
         
         dailyData.live = postCount + 1;
@@ -9498,7 +9588,9 @@ function filteredStores() {
   if (findSortMethod === 'name') {
       list.sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-HK'); });
   } else if (findSortMethod === 'hot') {
-      list.sort(function(a, b) { return (b.verification_count || 0) - (a.verification_count || 0); });
+      list.sort(function(a, b) { 
+          return calculateStoreHeat(b) - calculateStoreHeat(a); 
+      });
   } else if (findSortMethod === 'distance') {
       if (userLocation) {
           list.forEach(function(s) { s._dist = (s.lat && s.lng) ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng) : 9999; });
@@ -10818,6 +10910,7 @@ async function submitMachine(sid) {
             save();
             var machinePoints = getConfigInt('machine_points', 10);
             await addPoints(machinePoints, '機台更新');
+            await addStoreHeat(sid, 2);  // ← 機台更新加熱度
             await recordTaskCompletion('machine_checkin');
             toast('✅ 機台更新成功 +' + machinePoints + ' 分', 'green');
             
@@ -10961,6 +11054,7 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
         if (canEarnPoints) {
             var checkinPoints = getConfigInt('checkin_points', 5);
             await addPoints(checkinPoints, '打卡');
+            await addStoreHeat(storeId, 1);  // ← 打卡加熱度
             toast('✅ 在「' + s.name + '」打卡成功！+' + checkinPoints + ' 分', 'green');
         } else {
             // 第 4 次起：不加分、不顯示加分
