@@ -693,6 +693,9 @@
                     <i class="fas fa-check-double"></i><span>認證審核</span>
                     <span class="badge badge-warning" id="badge-verifications">0</span>
                 </li>
+                <li class="nav-item" data-tab="app-config" onclick="switchTab('app-config')">
+    <i class="fas fa-cog"></i><span>配置管理</span>
+</li>
                 <li class="nav-item" data-tab="flagged" onclick="switchTab('flagged')">
                     <i class="fas fa-exclamation-triangle"></i><span>⚠️ 存疑清單</span>
                     <span class="badge badge-danger" id="badge-flagged">0</span>
@@ -1190,7 +1193,8 @@ dashboard: '儀表板',
     'reports': '🚨 檢舉清單',
     'address-submissions': '📍 地址審核',
      'custom-floors': '🏢 自訂樓層',
-     'region-check': '📍 地區檢查'
+     'region-check': '📍 地區檢查',
+     'app-config': '⚙️ 配置管理'
     };
     document.getElementById('page-title').textContent = titles[tab] || tab;
     closeSidebar();
@@ -1210,7 +1214,8 @@ dashboard: '儀表板',
     'reports': loadReports,
     'address-submissions': loadAddressSubmissions,
     'custom-floors': loadCustomFloors,
-    'region-check': loadRegionCheck
+    'region-check': loadRegionCheck,
+    'app-config': loadAppConfigPage
     };
     if (loaders[tab]) loaders[tab]();
 }
@@ -6442,6 +6447,67 @@ async function manualPassRegion(storeId) {
         loadRegionCheck();
     } catch (e) {
         toast('失敗: ' + e.message, 'error');
+    }
+}
+
+function loadAppConfigPage() {
+    var container = document.getElementById('tab-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>載入中...</span></div>';
+    
+    sb.from('app_config')
+        .select('*')
+        .order('config_key')
+        .then(function(result) {
+            if (result.error) throw result.error;
+            var configs = result.data || [];
+            
+            var groups = {};
+            configs.forEach(function(config) {
+                var group = '其他';
+                if (config.config_key.indexOf('_limit') !== -1) group = '任務限額';
+                else if (config.config_key.indexOf('_points') !== -1) group = '積分設定';
+                else if (config.config_key.indexOf('contribution_') !== -1) group = '貢獻權重';
+                else if (config.config_key.indexOf('expire') !== -1 || config.config_key.indexOf('fresh') !== -1) group = '過期設定';
+                
+                if (!groups[group]) groups[group] = [];
+                groups[group].push(config);
+            });
+            
+            var html = '<div style="max-height:65vh;overflow-y:auto;padding-right:4px;">';
+            
+            for (var groupName in groups) {
+                html += '<div class="section-header">' + groupName + '</div>';
+                
+                groups[groupName].forEach(function(config) {
+                    html += '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-color);">' +
+                        '<div style="flex:1;min-width:150px;">' +
+                            '<div style="font-size:13px;">' + config.config_key + '</div>' +
+                            '<div style="font-size:11px;color:var(--text-muted);">' + (config.description || '') + '</div>' +
+                        '</div>' +
+                        '<input type="text" id="config-' + config.id + '" value="' + config.config_value + '" style="width:100px;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);font-size:13px;" />' +
+                        '<button class="btn-sm primary" onclick="saveAppConfig(\'' + config.id + '\', \'' + config.config_key + '\')">💾</button>' +
+                    '</div>';
+                });
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>載入失敗: ' + error.message + '</p></div>';
+        });
+}
+
+async function saveAppConfig(configId, configKey) {
+    var value = document.getElementById('config-' + configId).value;
+    
+    try {
+        await sb.from('app_config')
+            .update({ config_value: value, updated_at: new Date().toISOString() })
+            .eq('id', configId);
+        toast('✅ 已儲存');
+    } catch (e) {
+        toast('儲存失敗: ' + e.message, 'error');
     }
 }
 
