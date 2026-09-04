@@ -4933,44 +4933,52 @@ function renderMapStoreListWithData(inBounds) {
     var nameColor = isVerified ? '#00CC66' : '#FFB800';
     var btnColor = isVerified ? '#00FF88' : '#FFD700';
     
-    var distText = '未開啟GPS定位';
+    // 距離
+    var distText = '📍 未定位';
     if (userLocation && s.lat && s.lng) {
         var dist = calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng);
-        distText = '📍' + (dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km');
+        distText = '📍 ' + (dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km');
     }
     
-    var hasSupplemented = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
+    // 補充狀態
+    var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
+    var hasPart2 = !!(s.supplement_photo);
+    
+    // 打卡狀態
     var hasCheckedIn = hasCheckedInToday(s.id);
-    var hasPosted = (STATE.livePosts || []).some(function(p) { return p.store_id === String(s.id) && p.author_device === STATE.user.device; });
     
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
-    // 認證按鈕（三態：無認證/1次認證/2次認證）
-       if (!hasFirstVerifier) {
+    // 認證按鈕
+    if (!hasFirstVerifier) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🔥 認證</span>';
     } else if (!hasSecondVerifier) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #3B82F6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">認證 (1/2)</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">認證 (1/2)</span>';
     } else {
-        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">已認證 ✅</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完滿認證\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">認證 ✅</span>';
     }
     
     // 補充按鈕
-        var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
-    var hasPart2 = !!(s.supplement_photo);
-    
     if (hasPart1 && hasPart2) {
         buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'此店鋪已完成補充\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">補充 ✅</span>';
     } else if (hasPart1 || hasPart2) {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 (1/2)</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 (1/2)</span>';
     } else {
-        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">補充 📝</span>';
+        buttonsHtml += '<span onclick="event.stopPropagation(); openSupplementForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">📝 補充</span>';
     }
     
     // 打卡按鈕
-    buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasCheckedIn ? '打卡 ✅' : '打卡 📍') + '</span>';
+    if (!hasCheckedIn) {
+        buttonsHtml += '<span onclick="event.stopPropagation(); doStoreCheckin(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">📍 打卡</span>';
+    } else {
+        buttonsHtml += '<span onclick="event.stopPropagation(); toast(\'今日已打卡\', \'gold\');" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">打卡 ✅</span>';
+    }
     
-    // 戰績按鈕
-    buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid ' + btnColor + ';color:#fff;font-size:11px;font-weight:600;cursor:pointer;">' + (hasPosted ? '戰績 ✅' : '戰績 📢') + '</span>';
+    // 機台按鈕
+    buttonsHtml += '<span onclick="event.stopPropagation(); openMachineForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🎰 機台</span>';
+    
+    // 戰績按鈕（無已發布狀態）
+    buttonsHtml += '<span onclick="event.stopPropagation(); quickAction(\'post\', \'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">📢 戰績</span>';
     
     buttonsHtml += '</div>';
     
@@ -4978,14 +4986,14 @@ function renderMapStoreListWithData(inBounds) {
         '<div style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">\n' +
             '<span class="font-bold text-base" style="color:' + nameColor + ';">' + s.name + '</span>\n' +
             '<span style="color:#fff;font-size:13px;margin-left:8px;">' + (s.addr && s.addr !== '' ? s.addr : s.region + '地鋪') + '</span>\n' +
+            '<span style="color:#aaa;font-size:11px;margin-left:8px;">' + distText + '</span>\n' +
         '</div>\n' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">\n' +
+        '<div class="mt-2">\n' +
             buttonsHtml + '\n' +
-            '<span class="text-xs text-white/60 whitespace-nowrap flex-shrink-0;">' + distText + '</span>\n' +
         '</div>\n' +
     '</button>';
 };
- 
+
 var renderMallGroup = function(group) {
     var distText = '未開啟GPS定位';
     if (userLocation && group.stores[0].lat && group.stores[0].lng) {
