@@ -4726,11 +4726,17 @@ marker.on('click', function(e) {
         var isVerified = !!(s.first_verifier_device);
     var bgColor = isVerified ? '#00CC66' : '#FFB800';
     var borderColor = isVerified ? '#00FF88' : '#FFD700';
-    var isNewStore = !s.first_verifier_device && s.ai_verification_status === 'passed';
-var newBadge = isNewStore ? '🔥 ' : '';
+        var hasPart1 = !!(s.addr && s.addr !== '' && s.addr !== '（未填地址）');
+    var hasPart2 = !!(s.supplement_photo);
+    var needsVerify = !s.first_verifier_device;
+    var needsSupplement = !hasPart1 || !hasPart2;
+    
+    var badge = '';
+    if (needsVerify) badge += '🔍';
+    if (needsSupplement) badge += '📝';
+    if (badge) badge += ' ';
 
-var displayName = newBadge;
-var charCount = 0;
+    var displayName = badge;
 for (var i = 0; i < s.name.length; i++) {
     var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
     charCount += isCJK ? 2 : 1;
