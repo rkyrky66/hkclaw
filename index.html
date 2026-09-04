@@ -1519,6 +1519,98 @@ async function addStoreHeat(storeId, amount) {
 }
 
 // ============================================================
+// 固定機位系統
+// ============================================================
+
+// 取得用戶的固定機位
+async function getUserFixedSlots() {
+    try {
+        var { data } = await supabaseClientInstance
+            .from('machine_slots')
+            .select('*')
+            .eq('owner_device', STATE.user.device)
+            .order('created_at', { ascending: false });
+        
+        return data || [];
+    } catch (e) {
+        console.warn('⚠️ 取得固定機位失敗:', e.message);
+        return [];
+    }
+}
+
+// 檢查用戶是否擁有某機台的固定機位
+async function hasUserFixedSlot(storeId, machineId) {
+    var slots = await getUserFixedSlots();
+    return slots.some(function(slot) {
+        return slot.store_id === String(storeId) && slot.machine_id === machineId;
+    });
+}
+
+// 標記機台為固定機位
+async function markMachineAsFixed(storeId, machineId) {
+    try {
+        var store = STORES.find(function(s) { return s.id === storeId; });
+        if (!store) return;
+        
+        var machine = store.machines.find(function(m) { return m.id === machineId; });
+        if (!machine) return;
+        
+        machine.is_fixed = true;
+        
+        // 更新 claw_stores
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({ machines: store.machines })
+            .eq('id', parseInt(storeId));
+        
+        // 寫入 machine_slots
+        await supabaseClientInstance
+            .from('machine_slots')
+            .insert({
+                owner_device: STATE.user.device,
+                store_id: String(storeId),
+                machine_id: machineId,
+                slot_type: 'fixed',
+                update_mode: 'self',
+                created_at: new Date().toISOString()
+            });
+        
+        console.log('✅ 機台已標記為固定機位');
+    } catch (e) {
+        console.warn('⚠️ 標記固定機位失敗:', e.message);
+    }
+}
+
+// 取消固定機位
+async function unmarkMachineAsFixed(storeId, machineId) {
+    try {
+        var store = STORES.find(function(s) { return s.id === storeId; });
+        if (!store) return;
+        
+        var machine = store.machines.find(function(m) { return m.id === machineId; });
+        if (machine) {
+            machine.is_fixed = false;
+        }
+        
+        await supabaseClientInstance
+            .from('claw_stores')
+            .update({ machines: store.machines })
+            .eq('id', parseInt(storeId));
+        
+        await supabaseClientInstance
+            .from('machine_slots')
+            .delete()
+            .eq('owner_device', STATE.user.device)
+            .eq('store_id', String(storeId))
+            .eq('machine_id', machineId);
+        
+        console.log('✅ 已取消固定機位');
+    } catch (e) {
+        console.warn('⚠️ 取消固定機位失敗:', e.message);
+    }
+}
+
+// ============================================================
 // 用戶貢獻可視化系統
 // ============================================================
 
@@ -1904,6 +1996,56 @@ function isValidUUID(str) {
   return uuidRegex.test(str);
 }
 
+// 壓縮圖片到指定大小
+function compressImage(file, maxSize) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var ctx = canvas.getContext('2d');
+                
+                var scale = 1;
+                if (img.width > 800) scale = 800 / img.width;
+                if (img.height > 800) scale = Math.min(scale, 800 / img.height);
+                
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                var quality = 0.7;
+                canvas.toBlob(function(blob) {
+                    if (blob.size <= maxSize) {
+                        resolve(blob);
+                        return;
+                    }
+                    
+                    // 如果還是太大，降低品質
+                    var lowQuality = function() {
+                        quality -= 0.1;
+                        if (quality < 0.1) {
+                            resolve(blob);  // 最低品質仍太大，就直接用
+                            return;
+                        }
+                        canvas.toBlob(function(newBlob) {
+                            if (newBlob.size <= maxSize || quality < 0.1) {
+                                resolve(newBlob);
+                            } else {
+                                lowQuality();
+                            }
+                        }, 'image/jpeg', quality);
+                    };
+                    lowQuality();
+                }, 'image/jpeg', quality);
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 async function uploadImage(file, folder) {
   if (folder === void 0) folder = 'stores';
   if (!CLOUD_ON) {
@@ -1913,6 +2055,15 @@ async function uploadImage(file, folder) {
       reader.readAsDataURL(file);
     });
   }
+  
+  // 壓縮照片到 150 KB
+  var MAX_PHOTO_SIZE = 150 * 1024;
+  var compressedFile = file;
+  
+  if (file.size > MAX_PHOTO_SIZE) {
+    compressedFile = await compressImage(file, MAX_PHOTO_SIZE);
+  }
+  
   var BUCKET = 'claw-stores-images';
   var fileName = folder + "/" + Date.now() + "_" + uid() + ".jpg";
   var path = "storage/v1/object/" + BUCKET + "/" + fileName;
@@ -1921,9 +2072,9 @@ async function uploadImage(file, folder) {
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: "Bearer " + SUPABASE_KEY,
-      'Content-Type': file.type || 'image/jpeg'
+      'Content-Type': compressedFile.type || 'image/jpeg'
     },
-    body: file
+    body: compressedFile
   });
   if (!uploadRes.ok) {
     var errText = await uploadRes.text();
@@ -3830,6 +3981,7 @@ hour24: s.hour24 !== undefined && s.hour24 !== null ? s.hour24 : null,
         // ✅ 新增以下欄位
         first_verifier_device: s.first_verifier_device || null,
         first_verifier_name: s.first_verifier_name || null,
+        verify_submit_status: s.verify_submit_status || '',
         first_verified_at: s.first_verified_at || null,
         second_verifier_device: s.second_verifier_device || null,
         second_verifier_name: s.second_verifier_name || null,
@@ -5030,7 +5182,11 @@ function renderMapStoreListWithData(inBounds) {
     var buttonsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     
     // 認證按鈕
-    if (!hasFirstVerifier) {
+    var verifyStatus = s.verify_submit_status || '';
+    
+    if (verifyStatus === 'pending') {
+        buttonsHtml += '<span style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.05);border:1px solid #FFB800;color:#FFB800;font-size:11px;font-weight:600;">⏳ 審核中</span>';
+    } else if (!hasFirstVerifier) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid #FFB800;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🔥 認證</span>';
     } else if (!hasSecondVerifier) {
         buttonsHtml += '<span onclick="event.stopPropagation(); openVerifyForm(\'' + s.id + '\')" style="padding:4px 10px;border-radius:16px;background:rgba(0,255,0,0.1);border:1px solid #00FF00;color:#00FF00;font-size:11px;font-weight:600;cursor:pointer;">認證 (1/2)</span>';
@@ -5617,7 +5773,10 @@ function buildMachineSnapshot(s) {
                 '<p class="mt-1 truncate text-[10px] text-white/50">🎁 <span class="text-gold">' + prizeText + '</span></p>' +
                 '<div class="mt-2 flex gap-1.5">' +
                     '<button onclick="openMachineForm(\'' + s.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-gold/30 py-1.5 text-[10px] font-bold text-gold">📸 更新</button>' +
-                    '<button onclick="toggleFavMachine(\'' + m.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-neonpink/30 py-1.5 text-[10px] font-bold ' + (isFavMachine ? 'text-neonpink' : 'text-white/40') + '">' + (isFavMachine ? '❤️' : '🤍') + '</button>' +
+                    (m.is_fixed ? 
+                        '<button onclick="unmarkMachineAsFixed(\'' + s.id + '\', \'' + m.id + '\')" class="flex-1 rounded-lg bg-gold/20 border border-gold/50 py-1.5 text-[10px] font-bold text-gold">📌 取消固定</button>' :
+                        '<button onclick="markMachineAsFixed(\'' + s.id + '\', \'' + m.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-white/20 py-1.5 text-[10px] font-bold text-white/40">📌 固定</button>'
+                    ) +
                     '<button onclick="reportMachine(\'' + m.id + '\', \'' + m.no + '\')" class="flex-1 rounded-lg bg-white/10 border border-white/20 py-1.5 text-[10px] font-bold text-white/40">🚨</button>' +
                 '</div>' +
             '</div>'
@@ -7170,11 +7329,20 @@ async function submitVerification(storeId) {
                                 })
                                 .eq('id', numericStoreId);
                             
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'passed'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
                             console.log('✅ AI 核對通過，自動認證成功');
+                            toast('✅ 店鋪「' + s.name + '」認證成功，已寫入資料庫！', 'green');
+                            
                             var verifyFirstPoints = getConfigInt('verify_first_points', 20);
-                            await addStoreHeat(storeId, 5);  // ← 認證加熱度
-                            toast('🎉 搶先認證成功！+' + verifyFirstPoints + ' 分', 'green');
-                                        setTimeout(function() { showRewardAdAfterSubmit(verifyFirstPoints); }, 500);
+                            await addStoreHeat(storeId, 5);
+                            await addPoints(verifyFirstPoints, '搶先認證');
+                            setTimeout(function() { showRewardAdAfterSubmit(verifyFirstPoints); }, 500);
                             
                             await supabaseClientInstance
                                 .from('claw_stores')
@@ -7186,22 +7354,64 @@ async function submitVerification(storeId) {
                             if (regionStat) updateAchievementStat(regionStat);
                             
                         } else if (aiCheckResult === 'failed') {
-                            console.log('⚠️ AI 核對未通過，等待管理員審核');
-                            toast('📤 已提交，等待管理員審核', 'gold');
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'rejected'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
+                            console.log('⚠️ AI 核對未通過');
+                            addNotification('verification_rejected', '❌ 你提交的店鋪「' + s.name + '」不符合要求，已退回');
+                            toast('❌ 你提交的店鋪「' + s.name + '」不符合要求，已退回', 'pink');
                         } else {
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'pending'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
                             console.log('⚠️ AI 核對服務不可用');
-                            toast('📤 已提交，等待管理員審核', 'gold');
+                            addNotification('verification_pending', '⏳ 你提交的店鋪「' + s.name + '」等待管理員審核');
+                            toast('⏳ 已提交，等待管理員審核', 'gold');
                         }
                         
                     } else if (reviewResult === 'verifier_2') {
+                        // 追加認證：不影響主認證狀態
                         if (aiCheckResult === 'passed') {
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'passed'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
+                            toast('✅ 店鋪「' + s.name + '」追加認證成功！', 'green');
+                            
                             var verifySecondPoints = getConfigInt('verify_second_points', 10);
-                            toast('🎉 追加認證成功！+' + verifySecondPoints + ' 分', 'green');
-                                        setTimeout(function() { showRewardAdAfterSubmit(verifySecondPoints); }, 500);
+                            await addPoints(verifySecondPoints, '追加認證');
+                            setTimeout(function() { showRewardAdAfterSubmit(verifySecondPoints); }, 500);
                         } else if (aiCheckResult === 'failed') {
-                            toast('📤 已提交，等待管理員審核', 'gold');
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'rejected'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
+                            addNotification('verification_rejected', '❌ 你對「' + s.name + '」的追加認證不符合要求，已退回');
+                            toast('❌ 不符合要求，已退回', 'pink');
                         } else {
-                            toast('📤 已提交，等待管理員審核', 'gold');
+                            await supabaseClientInstance
+                                .from('verification_reviews')
+                                .update({
+                                    verify_submit_status: 'pending'
+                                })
+                                .eq('store_id', stringStoreId);
+                            
+                            addNotification('verification_pending', '⏳ 你對「' + s.name + '」的追加認證等待管理員審核');
+                            toast('⏳ 已提交，等待管理員審核', 'gold');
                         }
                     }
                 }
@@ -7362,6 +7572,7 @@ async function upsertVerificationReview(storeId, verification) {
                 verifier_2_photo: verification.photo_url,
                 verifier_2_gps: { lat: verification.lat, lng: verification.lng },
                 admin_status: 'pending',
+                verify_submit_status: 'pending',
                 updated_at: new Date().toISOString()
             };
             
@@ -7405,6 +7616,7 @@ async function upsertVerificationReview(storeId, verification) {
                 verifier_1_photo: verification.photo_url,
                 verifier_1_gps: { lat: verification.lat, lng: verification.lng },
                 admin_status: 'pending',
+                verify_submit_status: 'pending',
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -10060,10 +10272,187 @@ function viewMe() {
     }
   }, 100);
   
-  return '\n    <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">\n      <div class="flex items-center gap-4"><div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div><div><div class="text-lg font-black">' + STATE.user.name + '</div><div class="text-[11px] text-gold/70">裝置 ' + STATE.user.device + '</div></div></div>\n      <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">' + STATE.points + '</div></div><div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">' + (filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通") + '</div></div></div>\n      <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ' + (STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold") + ' py-3.5 text-base font-black">' + (STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）") + '</button>\n    </div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📝 我的貼文</h3><div class="space-y-2">' + postHtml + '</div></div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3>\n      <div class="space-y-2">\n        ' + (favS.length ? favS.map(function(s) {
+  return '\n    <div class="animate-pop rounded-3xl border border-gold/40 bg-gradient-to-b from-zinc-900 to-black p-5 glow-gold">\n      <div class="flex items-center gap-4"><div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-neongreen/50 bg-black text-3xl glow-green">🕹️</div><div><div class="text-lg font-black">' + STATE.user.name + '</div><div class="text-[11px] text-gold/70">裝置 ' + STATE.user.device + '</div></div></div>\n      <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-2xl border border-neongreen/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">持有積分</div><div class="text-2xl font-black text-neongreen neon-green">' + STATE.points + '</div></div><div class="rounded-2xl border border-neonpink/30 bg-black/50 p-3 text-center"><div class="text-[10px] text-white/50">Filter</div><div class="text-sm font-black text-neonpink neon-pink">' + (filterActive() ? "剩 " + Math.ceil((STATE.filterPassUntil - now()) / DAY) + " 天" : "未開通") + '</div></div></div>\n      <button onclick="redeemAdFree()" class="mt-5 w-full rounded-2xl ' + (STATE.adFree ? "bg-white/10 text-white/50" : "bg-gold text-black glow-gold") + ' py-3.5 text-base font-black">' + (STATE.adFree ? "✅ 已兌換免廣告" : "✨ 兌換免廣告（80 積分）") + '</button>\n    </div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📊 台主儀表板</h3>' +
+        '<div class="rounded-xl border border-gold/30 bg-gold/5 p-3 mb-3">' +
+            '<button onclick="showOwnerDashboard()" class="w-full rounded-xl bg-gold/20 border border-gold/50 py-3 text-sm font-black text-gold">' +
+                '📊 開啟台主儀表板' +
+            '</button>' +
+        '</div></div>\n' +
+    '\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">📝 我的貼文</h3><div class="space-y-2">' + postHtml + '</div></div>\n    <div class="mt-5"><h3 class="mb-2 text-sm font-black text-white/90">⭐ 收藏店鋪</h3>\n      <div class="space-y-2">\n        ' + (favS.length ? favS.map(function(s) {
     return '\n          <div class="flex items-center gap-2 rounded-xl border border-gold/25 bg-zinc-950 p-3">\n            <button onclick="openStore(\'' + s.id + '\')" class="flex-1 text-left text-sm text-gold truncate">\n              ' + s.name + ' <span class="text-[10px] text-white/40">· ' + s.region + '</span>\n            </button>\n            <div class="flex gap-1 flex-shrink-0">\n              <button onclick="quickAction(\'checkin\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-neongreen/30 px-2 py-1 text-[10px] text-neongreen hover:bg-neongreen/10 transition-all">打卡</button>\n              <button onclick="quickAction(\'update\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-gold/30 px-2 py-1 text-[10px] text-gold hover:bg-gold/10 transition-all">更新</button>\n              <button onclick="quickAction(\'post\', \'' + s.id + '\')" class="quick-action-btn rounded-lg border border-neonpink/30 px-2 py-1 text-[10px] text-neonpink hover:bg-neonpink/10 transition-all">戰報</button>\n            </div>\n          </div>\n        ';
   }).join('') : '<p class="rounded-xl border border-white/10 p-3 text-center text-xs text-white/40">尚無收藏</p>') + '\n      </div>\n    </div>\n    ' + (!STATE.user.is_bound ? '\n    <div class="mt-4 rounded-xl border border-gold/30 bg-gold/5 p-4">\n      <p class="text-sm font-bold text-gold">🔗 綁定帳號</p>\n      <p class="text-xs text-white/40 mt-1">綁定後數據永久保存，換手機也不怕遺失</p>\n      <button onclick="bindGoogleAccount()" class="mt-3 w-full rounded-lg bg-white text-black py-2.5 text-sm font-black">🔐 用 Google 帳號綁定</button>\n      <p class="text-[9px] text-white/30 mt-2">📌 綁定後可獲得 <span class="text-neongreen">+20 積分</span></p>\n      <p class="text-[8px] text-white/20 mt-1">💡 需要 Supabase 後台啟用 Google Provider</p>\n    </div>\n    ' : '\n    <div class="mt-4 rounded-xl border border-neongreen/30 bg-neongreen/5 p-4">\n      <div class="flex items-center gap-2">\n        <span class="text-neongreen">✅ 已綁定</span>\n        <span class="text-xs text-white/40">' + (STATE.user.email || '') + '</span>\n        <button onclick="logoutGoogle()" class="ml-auto text-xs text-white/30 hover:text-white">登出</button>\n      </div>\n    </div>\n    ') + '\n   ' + regionCollectionHtml + ' ' + achievementHtml + '\n    <button onclick="resetAll()" class="mt-6 w-full rounded-xl border border-neonpink/40 py-2 text-xs text-neonpink">重置資料</button>\n  ';
 }
+
+// ============================================================
+// 台主儀表板
+// ============================================================
+async function showOwnerDashboard() {
+    var slots = await getUserFixedSlots();
+    
+    if (slots.length === 0) {
+        openModal(`
+            <div class="flex flex-col items-center py-4">
+                <div class="text-5xl mb-3">📊</div>
+                <h2 class="text-xl font-black text-gold">台主儀表板</h2>
+                <p class="text-sm text-white/50 mt-2">你尚未購買任何固定機位</p>
+                <p class="text-xs text-white/30 mt-1">固定機位可讓你的機台永久保留，不會被新機台取代</p>
+                <button onclick="closeModal()" class="mt-4 w-full rounded-2xl bg-gold py-3 text-base font-black text-black">
+                    了解固定機位
+                </button>
+            </div>
+        `);
+        return;
+    }
+    
+    // 取得所有固定機位的機台
+    var machineListHtml = '';
+    var totalSlots = slots.length;
+    
+    for (var i = 0; i < slots.length; i++) {
+        var slot = slots[i];
+        var store = STORES.find(function(s) { return s.id === slot.store_id; });
+        var machine = null;
+        
+        if (store && store.machines) {
+            machine = store.machines.find(function(m) { return m.id === slot.machine_id; });
+        }
+        
+        if (!store || !machine) {
+            machineListHtml += '<div class="rounded-lg border border-white/10 bg-white/5 p-3 mb-2">' +
+                '<p class="text-xs text-white/40">機台已不存在（店鋪 #' + slot.store_id + '）</p>' +
+            '</div>';
+            continue;
+        }
+        
+        var updateModeText = slot.update_mode === 'self' ? '🔒 自管' : '🔓 公開';
+        var expiresText = slot.expires_at ? new Date(slot.expires_at).toLocaleDateString('zh-HK') : '未設定';
+        
+        machineListHtml += '<div class="rounded-lg border border-gold/30 bg-zinc-950 p-3 mb-2">' +
+            '<div class="flex items-center justify-between">' +
+                '<span class="text-sm font-bold text-gold">📌 ' + store.name + ' · ' + machine.no + '</span>' +
+                '<span class="text-xs text-white/40">' + updateModeText + '</span>' +
+            '</div>' +
+            '<div class="mt-1 flex items-center justify-between text-[11px] text-white/40">' +
+                '<span>有效至：' + expiresText + '</span>' +
+                '<span>熱度：' + calculateStoreHeat(store) + '</span>' +
+            '</div>' +
+            '<div class="mt-2 flex gap-2">' +
+                '<button onclick="openMachineForm(\'' + store.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-gold/30 py-1.5 text-[10px] font-bold text-gold">📸 更新</button>' +
+                '<button onclick="unmarkMachineAsFixed(\'' + store.id + '\', \'' + machine.id + '\')" class="flex-1 rounded-lg bg-white/10 border border-white/20 py-1.5 text-[10px] font-bold text-white/40">📌 取消固定</button>' +
+            '</div>' +
+        '</div>';
+    }
+    
+    openModal(`
+        <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
+            <h2 class="font-black text-gold">📊 台主儀表板</h2>
+            <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mt-4">
+            <div class="rounded-xl border border-gold/30 bg-gold/5 p-3 mb-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-white/70">總固定機位</span>
+                    <span class="text-lg font-black text-gold">${totalSlots} 台</span>
+                </div>
+            </div>
+            ${machineListHtml}
+        </div>
+    `);
+}
+
+// ============================================================
+// 固定機位付款
+// ============================================================
+var STRIPE_PUBLISHABLE_KEY = 'pk_test_XXXX';  // 替換為 Stripe Publishable Key
+
+// 購買機位方案
+var SLOT_PLANS = [
+    { id: 'single_1m', label: '1 台 · 1 個月', slots: 1, months: 1, price: 18 },
+    { id: 'single_3m', label: '1 台 · 3 個月', slots: 1, months: 3, price: 45 },
+    { id: 'bulk_5_1m', label: '5 台 · 1 個月', slots: 5, months: 1, price: 75 },
+    { id: 'bulk_5_3m', label: '5 台 · 3 個月', slots: 5, months: 3, price: 190 },
+    { id: 'bulk_10_1m', label: '10 台 · 1 個月', slots: 10, months: 1, price: 120 },
+    { id: 'bulk_10_3m', label: '10 台 · 3 個月', slots: 10, months: 3, price: 300 }
+];
+
+// 顯示購買機位頁面
+function showSlotPlans() {
+    var plansHtml = SLOT_PLANS.map(function(plan) {
+        return '<button onclick="selectSlotPlan(\'' + plan.id + '\')" class="w-full rounded-xl border border-gold/40 bg-zinc-950 p-3 text-left mb-2">' +
+            '<div class="flex items-center justify-between">' +
+                '<span class="text-sm font-bold text-gold">' + plan.label + '</span>' +
+                '<span class="text-sm font-black text-white">HKD ' + plan.price + '</span>' +
+            '</div>' +
+            '<div class="text-[10px] text-white/40 mt-1">' + plan.slots + ' 台 · ' + plan.months + ' 個月</div>' +
+        '</button>';
+    }).join('');
+    
+    openModal(`
+        <div class="flex items-center justify-between border-b border-gold/30 pb-3 flex-shrink-0">
+            <h2 class="font-black text-gold">💰 購買固定機位</h2>
+            <button onclick="closeModal()" class="text-2xl text-white/50 hover:text-white transition-colors">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mt-4">
+            <p class="text-xs text-white/50 mb-3">固定機位讓你的機台永久保留，不會被新機台取代。</p>
+            ${plansHtml}
+        </div>
+    `);
+}
+
+// 選擇方案
+function selectSlotPlan(planId) {
+    var plan = SLOT_PLANS.find(function(p) { return p.id === planId; });
+    if (!plan) return;
+    
+    closeModal();
+    
+    openModal(`
+        <div class="flex flex-col items-center py-4">
+            <div class="text-5xl mb-3">💳</div>
+            <h2 class="text-xl font-black text-gold">確認購買</h2>
+            <div class="mt-3 w-full rounded-xl border border-gold/30 bg-gold/5 p-3">
+                <p class="text-sm text-white/70">方案：${plan.label}</p>
+                <p class="text-lg font-black text-gold mt-1">HKD ${plan.price}</p>
+            </div>
+            <button onclick="processSlotPayment('${plan.id}')" class="mt-4 w-full rounded-2xl bg-gold py-3 text-base font-black text-black">
+                💳 前往付款
+            </button>
+            <button onclick="closeModal()" class="mt-2 text-xs text-white/30">取消</button>
+        </div>
+    `);
+}
+
+// 處理付款（Stripe Checkout）
+async function processSlotPayment(planId) {
+    var plan = SLOT_PLANS.find(function(p) { return p.id === planId; });
+    if (!plan) return;
+    
+    toast('💳 正在連接 Stripe...', 'gold');
+    
+    // 建立付款記錄
+    var { data: payment } = await supabaseClientInstance
+        .from('payments')
+        .insert({
+            owner_device: STATE.user.device,
+            amount_hkd: plan.price,
+            slot_count: plan.slots,
+            duration_months: plan.months,
+            status: 'pending',
+            created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    
+    // 呼叫 Stripe Checkout（需後端建立 session）
+    // 由於 GitHub Pages 無後端，需要使用 Supabase Edge Function 或 Stripe Payment Links
+    
+    toast('⚠️ 需要設定 Stripe 後端才能完成付款', 'gold');
+    
+    // 暫存付款 ID
+    window._pendingPaymentId = payment.id;
+    window._pendingPlan = plan;
+}
+
 // ============================================================
 // 渲染地區收集卡
 // ============================================================
@@ -10296,6 +10685,7 @@ async function capturePhoto(key) {
     var canvas = document.createElement('canvas');
     var MAX_WIDTH = 800;
     var MAX_HEIGHT = 800;
+    var MAX_PHOTO_SIZE = 150 * 1024;  // 150 KB
     
     var videoWidth = videoEl.videoWidth || 800;
     var videoHeight = videoEl.videoHeight || 600;
@@ -10307,11 +10697,11 @@ async function capturePhoto(key) {
     var ctx = canvas.getContext('2d');
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
     
-    var quality = 0.6;
+    var quality = 0.7;
     var dataUrl = canvas.toDataURL('image/jpeg', quality);
     
-    while (dataUrl.length > 100 * 1024 && quality > 0.2) {
-        quality -= 0.1;
+    while (dataUrl.length > MAX_PHOTO_SIZE && quality > 0.1) {
+        quality -= 0.05;
         dataUrl = canvas.toDataURL('image/jpeg', quality);
     }
     
@@ -10856,8 +11246,9 @@ async function submitMachine(sid) {
         }
         
         // 本地顯示提交中
-        toast('📤 已提交，AI 審核中...', 'gold');
-        closeModal();
+            toast('📤 提交成功！', 'green');
+            fireConfettiOnce();
+            closeModal();
         
         // AI 判定第一張照片
         var aiResult = null;
@@ -10879,7 +11270,8 @@ async function submitMachine(sid) {
                 updated: now(),
                 submitted_by: STATE.user.device,
                 ai_check_result: 'passed',
-                ai_confidence: aiResult.confidence_score || null
+                ai_confidence: aiResult.confidence_score || null,
+                is_fixed: false
             };
             
             s.machines.unshift(newMachine);
@@ -12419,18 +12811,25 @@ function toast(msg, color) {
 // 站內通知系統
 // ============================================================
 async function addNotification(type, message) {
-    if (!CLOUD_ON || !STATE.user.is_bound || !STATE.user.user_id) return;
+    if (!CLOUD_ON) return;
     
     try {
+        var payload = {
+            type: type,
+            message: message,
+            is_read: false,
+            created_at: new Date().toISOString()
+        };
+        
+        if (STATE.user.is_bound && STATE.user.user_id) {
+            payload.user_id = STATE.user.user_id;
+        } else {
+            payload.device_id = STATE.user.device;
+        }
+        
         await supabaseClientInstance
             .from('user_notifications')
-            .insert({
-                user_id: STATE.user.user_id,
-                type: type,
-                message: message,
-                is_read: false,
-                created_at: new Date().toISOString()
-            });
+            .insert(payload);
     } catch (e) {
         console.warn('⚠️ 通知寫入失敗:', e.message);
     }
@@ -13153,8 +13552,9 @@ const UserFocus = {
 // 啟動應用
 // ============================================================
 (async function initApp() {
-  showSplashAd();
+  showSplashAd();  // ✅ 保留啟動廣告
   console.log('🚀 爪爪情報站啟動中...');
+  await loadAppConfig();  // ✅ 新增配置載入
   await loadCloud();
   await checkUserBanStatus();
   await loadMalls();
@@ -14058,6 +14458,40 @@ function searchBrand(query) {
     }
     
     return results;
+}
+
+// ============================================================
+// 動態配置
+// ============================================================
+var APP_CONFIG = {};
+
+async function loadAppConfig() {
+    try {
+        var result = await supabaseClientInstance
+            .from('app_config')
+            .select('config_key, config_value');
+        
+        if (!result.error && result.data) {
+            result.data.forEach(function(row) {
+                APP_CONFIG[row.config_key] = row.config_value;
+            });
+            console.log('✅ 配置已載入:', Object.keys(APP_CONFIG).length, '項');
+        }
+    } catch (e) {
+        console.warn('⚠️ 配置載入失敗:', e.message);
+    }
+}
+
+function getConfig(key, defaultValue) {
+    return APP_CONFIG[key] !== undefined ? APP_CONFIG[key] : defaultValue;
+}
+
+function getConfigInt(key, defaultValue) {
+    return parseInt(getConfig(key, defaultValue));
+}
+
+function getConfigFloat(key, defaultValue) {
+    return parseFloat(getConfig(key, defaultValue));
 }
 </script>
 </script>
