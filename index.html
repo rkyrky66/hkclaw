@@ -11843,7 +11843,6 @@ async function aiCheckClawStore(photoUrl) {
 // ============================================================
 async function submitIntel() {
     if (!acquireSubmitLock('submitIntel')) return;
-    // ✅ 不需登入（AI/GPS 把關）
     if (isUserBanned()) {
         showBannedMessage();
         return;
@@ -11877,7 +11876,6 @@ async function submitIntel() {
             return;
         }
         
-        // ✅ 關閉彈窗前保存 GPS 到局部變數
         var capturedLat = _finalGpsLat;
         var capturedLng = _finalGpsLng;
         
@@ -11912,7 +11910,9 @@ async function submitIntel() {
             try {
                 var file = new File([photoBlob], "store_" + Date.now() + ".jpg", { type: 'image/jpeg' });
                 photoUrl = await uploadImage(file, 'stores');
+                console.log('✅ 照片上傳成功:', photoUrl);
             } catch (e) {
+                console.error('❌ 照片上傳失敗:', e);
                 toast('圖片上傳失敗', 'pink');
                 enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
                 return;
@@ -11921,25 +11921,33 @@ async function submitIntel() {
             photoUrl = window._camPreview?.nt || '';
         }
         
-        // ✅ 本地先顯示成功
         toast('📤 已提交，AI 審核中...', 'gold');
         closeModal();
         
-        // ✅ AI 判定（背景執行，最多重試 5 次）
+        // AI 判定（最多 5 次重試）
         var aiResult = null;
         var aiAttempts = 0;
         var MAX_AI_ATTEMPTS = 5;
         
+        console.log('🤖 開始 AI 判定照片...');
+        
         while (aiAttempts < MAX_AI_ATTEMPTS) {
             aiAttempts++;
+            console.log('🤖 第 ' + aiAttempts + ' 次 AI 判定...');
             aiResult = await aiCheckClawStore(photoUrl);
+            console.log('🤖 AI 結果:', aiResult);
             if (aiResult !== null) break;
             
-            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            if (aiAttempts < MAX_AI_ATTEMPTS) {
+                console.log('⏳ 2 秒後重試...');
+                await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            }
         }
         
         if (aiResult && aiResult.is_claw_store === true) {
-            // ✅ AI 判定成功 → 寫入雲端 + 真 +20 分
+            // ✅ AI 判定成功
+            console.log('✅ AI 判定通過，寫入雲端...');
+            
             var newStore = {
                 name: name,
                 region: selectedRegion,
@@ -11984,9 +11992,12 @@ async function submitIntel() {
                     });
                     
                     if (!insertResponse.ok) {
+                        var errorText = await insertResponse.text();
+                        console.error('❌ 雲端寫入失敗:', insertResponse.status, errorText);
                         toast('雲端寫入失敗，請重試', 'pink');
                         return;
                     }
+                    console.log('✅ 店鋪已寫入雲端');
                     
                     var queryResponse = await fetch(
                         SUPABASE_URL + "/rest/v1/claw_stores?select=id&name=eq." + encodeURIComponent(name) + "&submitted_by_device=eq." + encodeURIComponent(STATE.user.device) + "&order=created_at.desc&limit=1",
@@ -11997,9 +12008,11 @@ async function submitIntel() {
                         if (queryData && queryData.length > 0) {
                             insertedId = String(queryData[0].id);
                             newStore.id = insertedId;
+                            console.log('✅ 取得店鋪 ID:', insertedId);
                         }
                     }
                 } catch (e) {
+                    console.error('❌ 雲端寫入失敗:', e);
                     toast('雲端寫入失敗', 'pink');
                     return;
                 }
@@ -12009,13 +12022,8 @@ async function submitIntel() {
             }
             
             STORES.push(newStore);
-                        // ✅ 寫入自訂樓層記錄
-                                    console.log('🕵️ insertedId:', insertedId);
-            console.log('🕵️ _isCustomFloor:', window._isCustomFloor);
-            console.log('🕵️ selectedFloor:', selectedFloor);
             
-            // ✅ 寫入自訂樓層記錄
-            if (window._isCustomFloor && selectedFloor && insertedId) {
+            // 寫入自訂樓層
             if (window._isCustomFloor && selectedFloor && insertedId) {
                 try {
                     await supabaseClientInstance
@@ -12032,15 +12040,15 @@ async function submitIntel() {
                     console.warn('⚠️ 自訂樓層記錄失敗:', e.message);
                 }
             }
-            save();
             
+            save();
             await addPoints(20, '提交店鋪情報');
             await recordTaskCompletion('submit_store');
             await recordRegionContribution('submit_store', selectedRegion, insertedId);
             updateStreak();
             
             toast('✅ 提交成功 +20 分', 'green');
-                        setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
+            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -12048,7 +12056,8 @@ async function submitIntel() {
             }
             
         } else if (aiResult && aiResult.is_claw_store === false) {
-            // ❌ AI 判定失敗 → 通知用戶
+            // ❌ AI 判定失敗
+            console.log('❌ AI 判定不通過，退回提交');
             toast('❌ 提交不符合要求，已退回（照片不是夾公仔店）', 'pink');
             
             if (STATE.user.is_bound && STATE.user.user_id) {
@@ -12056,26 +12065,11 @@ async function submitIntel() {
             }
             
         } else {
-            // ⚠️ AI 沒回應 → 丟到後台處理
-                        if (CLOUD_ON) {
-                await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
-                    method: 'POST',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_KEY,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify([newStore])
-                });
-            }
-            
-            await addPoints(20, '提交店鋪情報');
-            await recordTaskCompletion('submit_store');
-        }
+            // ⚠️ AI 沒回應 → 寫入後台處理
+            console.log('⚠️ AI 5 次都沒回應，寫入後台處理');
             toast('📤 已提交，等待管理員審核', 'gold');
             
-            var newStore = {
+            var uncheckedStore = {
                 name: name,
                 region: selectedRegion,
                 addr: addr,
@@ -12091,16 +12085,21 @@ async function submitIntel() {
             };
             
             if (CLOUD_ON) {
-                await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
-                    method: 'POST',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_KEY,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify([newStore])
-                });
+                try {
+                    await fetch(SUPABASE_URL + "/rest/v1/claw_stores", {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify([uncheckedStore])
+                    });
+                    console.log('✅ 已寫入（unchecked）');
+                } catch (e) {
+                    console.error('❌ 寫入失敗:', e);
+                }
             }
             
             await addPoints(20, '提交店鋪情報');
