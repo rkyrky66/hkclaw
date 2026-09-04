@@ -6479,13 +6479,17 @@ function loadAppConfigPage() {
                 html += '<div class="section-header">' + groupName + '</div>';
                 
                 groups[groupName].forEach(function(config) {
-                    html += '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-color);">' +
-                        '<div style="flex:1;min-width:150px;">' +
-                            '<div style="font-size:13px;">' + config.config_key + '</div>' +
-                            '<div style="font-size:11px;color:var(--text-muted);">' + (config.description || '') + '</div>' +
+                    html += '<div style="display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--border-color);max-width:500px;margin:0 auto;">' +
+                        '<div style="flex:1;min-width:0;text-align:right;">' +
+                            '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">' + (config.description || config.config_key) + '</div>' +
                         '</div>' +
-                        '<input type="text" id="config-' + config.id + '" value="' + config.config_value + '" style="width:100px;padding:6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-input);color:var(--text-primary);font-size:13px;" />' +
-                        '<button class="btn-sm primary" onclick="saveAppConfig(\'' + config.id + '\', \'' + config.config_key + '\')">💾</button>' +
+                        '<div style="width:120px;text-align:center;flex-shrink:0;">' +
+                            '<div style="font-size:11px;color:var(--text-muted);">' + config.config_key + '</div>' +
+                        '</div>' +
+                        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' +
+                            '<input type="text" id="config-' + config.id + '" value="' + config.config_value + '" style="width:70px;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:14px;text-align:center;" />' +
+                            '<button class="btn-sm primary" onclick="saveAppConfig(\'' + config.id + '\', \'' + config.config_key + '\')">💾</button>' +
+                        '</div>' +
                     '</div>';
                 });
             }

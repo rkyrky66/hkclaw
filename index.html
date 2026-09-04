@@ -2582,20 +2582,26 @@ const CheckinManager = {
       return false;
     }
     
-    var progress = getWeeklyCheckinProgress();
+        var progress = getWeeklyCheckinProgress();
     var daysSigned = progress.count + 1;
-    var bonus = 5;
-    var bonusMsg = '基礎簽到 +5 分';
+    
+    var checkinBasePoints = getConfigInt('checkin_points', 5);
+    var checkinBonus3Days = getConfigInt('checkin_bonus_3_days', 5);
+    var checkinBonus5Days = getConfigInt('checkin_bonus_5_days', 10);
+    var checkinBonus7Days = getConfigInt('checkin_bonus_7_days', 15);
+    
+    var bonus = checkinBasePoints;
+    var bonusMsg = '基礎簽到 +' + checkinBasePoints + ' 分';
     
     if (daysSigned >= 7) {
-        bonus += 15;
-        bonusMsg = '連續 7 天！全勤 +20 分 🎊';
+        bonus += checkinBonus7Days;
+        bonusMsg = '連續 7 天！全勤 +' + (checkinBasePoints + checkinBonus7Days) + ' 分 🎊';
     } else if (daysSigned >= 5) {
-        bonus += 10;
-        bonusMsg = '連續 5 天！+15 分 🔥';
+        bonus += checkinBonus5Days;
+        bonusMsg = '連續 5 天！+' + (checkinBasePoints + checkinBonus5Days) + ' 分 🔥';
     } else if (daysSigned >= 3) {
-        bonus += 5;
-        bonusMsg = '連續 3 天！+10 分 ⭐';
+        bonus += checkinBonus3Days;
+        bonusMsg = '連續 3 天！+' + (checkinBasePoints + checkinBonus3Days) + ' 分 ⭐';
     }
     
     if (CLOUD_ON) {
@@ -3600,8 +3606,9 @@ async function syncUserDataAfterBind(user) {
     await loadTaskProgressFromCloud();
     
     if (isNewUser) {
-      addPoints(20, 'Google 帳號綁定獎勵');
-      toast('✅ 帳號綁定成功！數據已雲端備份 (+20 分)', 'green');
+      var bindBonus = getConfigInt('bind_bonus_points', 20);
+      addPoints(bindBonus, 'Google 帳號綁定獎勵');
+      toast('✅ 帳號綁定成功！數據已雲端備份 (+' + bindBonus + ' 分)', 'green');
     } else {
       toast('✅ 帳號登入成功！數據已合併同步', 'green');
     }
@@ -4737,6 +4744,7 @@ marker.on('click', function(e) {
     if (badge) badge += ' ';
 
     var displayName = badge;
+    var charCount = 0;
 for (var i = 0; i < s.name.length; i++) {
     var isCJK = /[\u4e00-\u9fff]/.test(s.name[i]);
     charCount += isCJK ? 2 : 1;
@@ -7076,8 +7084,9 @@ async function submitVerification(storeId) {
                                 .eq('id', numericStoreId);
                             
                             console.log('✅ AI 核對通過，自動認證成功');
-                            toast('🎉 搶先認證成功！+20 分', 'green');
-                            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
+                            var verifyFirstPoints = getConfigInt('verify_first_points', 20);
+                            toast('🎉 搶先認證成功！+' + verifyFirstPoints + ' 分', 'green');
+                                        setTimeout(function() { showRewardAdAfterSubmit(verifyFirstPoints); }, 500);
                             
                             await supabaseClientInstance
                                 .from('claw_stores')
@@ -7098,8 +7107,9 @@ async function submitVerification(storeId) {
                         
                     } else if (reviewResult === 'verifier_2') {
                         if (aiCheckResult === 'passed') {
-                            toast('🎉 追加認證成功！+10 分', 'green');
-                            setTimeout(function() { showRewardAdAfterSubmit(10); }, 500);
+                            var verifySecondPoints = getConfigInt('verify_second_points', 10);
+                            toast('🎉 追加認證成功！+' + verifySecondPoints + ' 分', 'green');
+                                        setTimeout(function() { showRewardAdAfterSubmit(verifySecondPoints); }, 500);
                         } else if (aiCheckResult === 'failed') {
                             toast('📤 已提交，等待管理員審核', 'gold');
                         } else {
@@ -7125,10 +7135,12 @@ async function submitVerification(storeId) {
             }
             
             // 7. 加分
-            if (reviewResult === 'verifier_1') {
-                await addPoints(20, '搶先認證');
-            } else if (reviewResult === 'verifier_2') {
-                await addPoints(10, '追加認證');
+    if (reviewResult === 'verifier_1') {
+        var verifyFirstPoints = getConfigInt('verify_first_points', 20);
+        await addPoints(verifyFirstPoints, '搶先認證');
+    } else if (reviewResult === 'verifier_2') {
+        var verifySecondPoints = getConfigInt('verify_second_points', 10);
+        await addPoints(verifySecondPoints, '追加認證');
             }
             
             await recordTaskCompletion('verify_store');
@@ -7735,9 +7747,12 @@ function updateSupplementSubmitButton() {
     p2Text = '未填妥';
   }
   
+  var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
+  var supplementPart2Points = getConfigInt('supplement_part2_points', 20);
+  
   var totalPoints = 0;
-  if (p1Ready && !window._supplementPart1Done) totalPoints += 15;
-  if (p2Ready && !window._supplementPart2Done) totalPoints += 20;
+  if (p1Ready && !window._supplementPart1Done) totalPoints += supplementPart1Points;
+  if (p2Ready && !window._supplementPart2Done) totalPoints += supplementPart2Points;
   
   if (totalPoints > 0) {
     btn.className = 'w-full rounded-2xl bg-neongreen py-3 text-sm font-black text-black glow-green';
@@ -7847,10 +7862,11 @@ async function submitSupplementPart1(storeId) {
             }).eq('id', parseInt(storeId));
         }
         save();
-        await addPoints(15, '補充地址');
+        var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
+        await addPoints(supplementPart1Points, '補充地址');
         await recordTaskCompletion('supplement');
         await recordRegionContribution('supplement', s.region, storeId);
-        toast('✅ 地址驗證通過 +15 分', 'green');
+        toast('✅ 地址驗證通過 +' + supplementPart1Points + ' 分', 'green');
 
         
         if (CURRENT === 'map') {
@@ -7979,9 +7995,10 @@ async function submitSupplementPart2(storeId) {
             .eq('id', parseInt(storeId));
     }
     
-    await addPoints(20, '補充店鋪資料');
+    var supplementPart2Points = getConfigInt('supplement_part2_points', 20);
+    await addPoints(supplementPart2Points, '補充店鋪資料');
     await recordTaskCompletion('supplement');
-    toast('✅ 店鋪資料補充成功 +20 分', 'green');
+    toast('✅ 店鋪資料補充成功 +' + supplementPart2Points + ' 分', 'green');
         setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
     closeModal();
 }
@@ -8263,11 +8280,12 @@ async function submitVerifiedAddress(storeId, address, geocodedLat, geocodedLng,
         }
         
         save();
-        await addPoints(15, '補充地址');
+        var supplementPart1Points = getConfigInt('supplement_part1_points', 15);
+        await addPoints(supplementPart1Points, '補充地址');
         await recordRegionContribution('supplement', s.region, storeId);
         await recordTaskCompletion('supplement');
         
-        toast('✅ 地址已補充！+15 分', 'green');
+        toast('✅ 地址已補充！+' + supplementPart1Points + ' 分', 'green');
         closeModal();
         setTimeout(function() { openStore(storeId); }, 300);
         
@@ -8629,9 +8647,10 @@ async function submitPlayerPost() {
         await syncLivePost(post);
         
         if (isFree) {
-            await addPoints(10, '發布出貨戰報');
+            var postPoints = getConfigInt('post_points', 10);
+            await addPoints(postPoints, '發布出貨戰報');
         } else {
-           await addPoints(-POST_COST, '發布戰報（超過免費次數）');
+           await addPoints(-postCost, '發布戰報（超過免費次數）');
         }
         
         dailyData.live = postCount + 1;
@@ -8766,7 +8785,8 @@ async function submitOwnerPost() {
         await syncLivePost(post);
         
         if (!plan) {
-            await addPoints(5, '發布台主宣傳');
+            var postPoints = getConfigInt('post_points', 10);
+            await addPoints(postPoints, '發布台主宣傳');
         }
         
         updateStreak();
@@ -8774,7 +8794,7 @@ async function submitOwnerPost() {
         // 記錄任務進度 (分享戰績)
         await recordTaskCompletion('share');
         await recordRegionContribution('post', store.region, storeId);
-        toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+5 分', 'green');
+    toast(plan ? '✅ 宣傳發布成功！連結已啟用 (' + plan.days + '天)' : '✅ 宣傳發布成功！+' + postPoints + ' 分', 'green');
         closeModal();
         showView('live');
     } finally {
@@ -9739,8 +9759,9 @@ async function claimSubmitterReward(storeId) {
         store.submitter_reward_claimed = true;
         save();
         
-        await addPoints(30, '提交店鋪通過認證追加獎勵');
-        toast('🎉 領取 30 積分成功！', 'green');
+        var extraPoints = getConfigInt('submitter_extra_points', 30);
+        await addPoints(extraPoints, '提交店鋪通過認證追加獎勵');
+        toast('🎉 領取 ' + extraPoints + ' 積分成功！', 'green');
         showView('task');
     } catch (e) {
         toast('❌ 領取失敗: ' + e.message, 'pink');
@@ -10795,9 +10816,10 @@ async function submitMachine(sid) {
             }
             
             save();
-            await addPoints(10, '機台更新');
+            var machinePoints = getConfigInt('machine_points', 10);
+            await addPoints(machinePoints, '機台更新');
             await recordTaskCompletion('machine_checkin');
-            toast('✅ 機台更新成功 +10 分', 'green');
+            toast('✅ 機台更新成功 +' + machinePoints + ' 分', 'green');
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -10936,9 +10958,10 @@ var canEarnPoints = progress['checkin'] < checkinTask.limit;
             console.warn('⚠️ 投票流程失敗:', e.message);
         }
         
-          if (canEarnPoints) {
-            await addPoints(5, '打卡');
-            toast('✅ 在「' + s.name + '」打卡成功！+5 分', 'green');
+        if (canEarnPoints) {
+            var checkinPoints = getConfigInt('checkin_points', 5);
+            await addPoints(checkinPoints, '打卡');
+            toast('✅ 在「' + s.name + '」打卡成功！+' + checkinPoints + ' 分', 'green');
         } else {
             // 第 4 次起：不加分、不顯示加分
             toast('📍 已打卡（今日加分次數已達上限）', 'gold');
@@ -11897,6 +11920,8 @@ async function submitIntel() {
     var submitBtn = disableSubmitButton('nt-submit-btn', '⏳ 提交中...');
     
     try {
+var submitPoints = getConfigInt('submit_points', 20);
+
         if (!await checkDailySubmitLimit()) {
             enableSubmitButton(submitBtn, '✅ 提交（+20 積分）');
             return;
@@ -12088,13 +12113,13 @@ async function submitIntel() {
             }
             
             save();
-            await addPoints(20, '提交店鋪情報');
+            await addPoints(submitPoints, '提交店鋪情報');
             await recordTaskCompletion('submit_store');
             await recordRegionContribution('submit_store', selectedRegion, insertedId);
             updateStreak();
             
-            toast('✅ 提交成功 +20 分', 'green');
-            setTimeout(function() { showRewardAdAfterSubmit(20); }, 500);
+            toast('✅ 提交成功 +' + submitPoints + ' 分', 'green');
+            setTimeout(function() { showRewardAdAfterSubmit(submitPoints); }, 500);
             
             if (CURRENT === 'map') {
                 updateMapMarkers();
@@ -12148,7 +12173,7 @@ async function submitIntel() {
                 }
             }
             
-            await addPoints(20, '提交店鋪情報');
+            await addPoints(submitPoints, '提交店鋪情報');
             await recordTaskCompletion('submit_store');
         }
         
